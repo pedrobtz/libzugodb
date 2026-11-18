@@ -883,26 +883,11 @@ public:
         slots_.clear();
         slots_.resize(num_rgs_);
         workers_spawned_ = false;
-        columns_checked_ = false;
     }
 
     void SetRowLimit(idx_t n) override { row_limit_ = n; }
 
-    // zuslothdb: refuse a projected column the reader cannot decode
-    // faithfully, here on the query's thread: thrown in a decode worker it
-    // would terminate the process.
-    void CheckReadableColumns() {
-        if (columns_checked_ || !reader_sp_) return;
-        idx_t n = static_cast<idx_t>(GetTypes().size());
-        for (idx_t c = 0; c < n; c++) {
-            if (!projection_.empty() && c < projection_.size() && !projection_[c]) continue;
-            reader_sp_->CheckReadable(c);
-        }
-        columns_checked_ = true;
-    }
-
     bool GetData(DataChunk &result) override {
-        CheckReadableColumns();
         if (!workers_spawned_) SpawnWorkers();
 
         if (result.ColumnCount() != GetTypes().size()) result.Initialize(GetTypes());
@@ -1040,7 +1025,6 @@ public:
     // Called by fused scan+aggregate paths (skip DataChunk materialization).
     // Safe to mix with GetData() - both drive the same slot queue.
     std::unique_ptr<RGWork> PullNextRG(idx_t &rg_idx_out) {
-        CheckReadableColumns();
         if (!workers_spawned_) SpawnWorkers();
         if (next_emit_ >= num_rgs_) return nullptr;
         std::unique_ptr<RGWork> work;
@@ -1085,7 +1069,6 @@ public:
     void RequestStop() { stop_.store(true); }
 
     int RunParallelRGs(int num_threads_hint = 0) {
-        CheckReadableColumns();
         // Lazy-start: ignore any slot-mode workers; consumer-mode runs its own.
         StopWorkers();
         auto _rp_t0 = std::chrono::steady_clock::now();
@@ -1451,7 +1434,6 @@ private:
     std::vector<bool> skip_str_data_; // per-column hint
     std::vector<bool> str_lengths_only_; // per-column hint: lengths-only decode
     std::vector<bool> str_dict_used_only_;   // per-column hint: dict-presence bitmap
-    bool columns_checked_ = false; // zuslothdb
     std::vector<bool> projection_;
     std::vector<PushdownFilter> pushdown_filters_; // zone-map row-group skip
     // Two-phase decode (selection-vector pushdown). When set, the
