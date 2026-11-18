@@ -1,5 +1,14 @@
 # Changelog
 
+## libzugodb 0.1.1
+
+- Parquet decode workers no longer read the worker list while the main
+  thread is still appending to it. `WorkerLoop` read `workers_.size()` as
+  the workers started, a data race that ThreadSanitizer reports on every
+  multi-threaded Parquet scan, and that libstdc++ 15 under UBSan stops as
+  "execution reached an unreachable program point". The count is now set
+  before the first worker starts.
+
 ## libzugodb 0.1.0
 
 The first release as libzugodb: SlothDB at `8180f21` (v0.2.7+) with these
