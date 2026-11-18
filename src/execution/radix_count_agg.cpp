@@ -1,4 +1,5 @@
 #include "slothdb/execution/radix_count_agg.hpp"
+#include "slothdb/common/profile_log.hpp"
 
 #include <algorithm>
 #include <array>
@@ -560,7 +561,7 @@ void RadixHashCountStr::Finalize() {
         for (auto& t : ws) if (t.joinable()) t.join();
     }
     if (_pf) {
-        fprintf(stderr, "[SLOTH_PROFILE] RadixHashCountStr::Finalize %.0fms\n",
+        slothdb::ProfileLog("[SLOTH_PROFILE] RadixHashCountStr::Finalize %.0fms\n",
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - _t0).count() / 1e6);
     }
@@ -700,7 +701,7 @@ std::vector<RadixCountStrResult> RadixHashCountStr::EmitTopK(int k) const {
     }
     if (k > 0) std::reverse(result.begin(), result.end());
     if (_pf) {
-        fprintf(stderr, "[SLOTH_PROFILE] RadixHashCountStr::EmitTopK %.0fms\n",
+        slothdb::ProfileLog("[SLOTH_PROFILE] RadixHashCountStr::EmitTopK %.0fms\n",
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - _t0).count() / 1e6);
     }

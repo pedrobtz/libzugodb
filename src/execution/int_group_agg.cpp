@@ -1,4 +1,5 @@
 #include "slothdb/execution/int_group_agg.hpp"
+#include "slothdb/common/profile_log.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -269,7 +270,7 @@ std::vector<IntGroupAgg::Group> IntGroupAgg::MergeAll() {
         }
     }
     if (_pf) {
-        fprintf(stderr, "[SLOTH_PROFILE] IntGroupAgg::MergeAll %.0fms\n",
+        slothdb::ProfileLog("[SLOTH_PROFILE] IntGroupAgg::MergeAll %.0fms\n",
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - _t0).count() / 1e6);
     }

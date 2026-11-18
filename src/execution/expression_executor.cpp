@@ -15,9 +15,18 @@
 #include <ctime>
 #include <limits>
 #include <optional>
+#include <random>
 #include <regex>
 
 namespace slothdb {
+
+// zuslothdb: RANDOM() and UUID() draw from this rather than rand(), which a
+// package must not call (CRAN's compiled-code check). One generator per
+// thread, seeded once from std::random_device.
+static std::mt19937_64 &SlothRng() {
+    thread_local std::mt19937_64 rng{std::random_device{}()};
+    return rng;
+}
 
 static bool LikeMatch(const std::string &str, const std::string &pattern);
 
@@ -3124,7 +3133,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
 
     if (name == "RANDOM" || name == "RAND") {
         for (idx_t i = 0; i < count; i++) {
-            result.GetData<double>()[i] = static_cast<double>(std::rand()) / RAND_MAX;
+            result.GetData<double>()[i] = std::uniform_real_distribution<double>(0.0, 1.0)(SlothRng());
         }
         return;
     }
@@ -3942,7 +3951,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         static const char hex[] = "0123456789abcdef";
         for (idx_t i = 0; i < count; i++) {
             unsigned char b[16];
-            for (int k = 0; k < 16; k++) b[k] = static_cast<unsigned char>(rand() & 0xff);
+            for (int k = 0; k < 16; k++) b[k] = static_cast<unsigned char>(SlothRng()() & 0xff);
             b[6] = (b[6] & 0x0f) | 0x40; // version 4
             b[8] = (b[8] & 0x3f) | 0x80; // variant 1
             char buf[37];

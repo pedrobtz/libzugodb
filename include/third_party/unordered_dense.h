@@ -135,13 +135,13 @@ namespace detail {
 #    else
 
 [[noreturn]] inline void on_error_key_not_found() {
-    abort();
+    throw std::out_of_range("ankerl::unordered_dense::map::at(): key not found");
 }
 [[noreturn]] inline void on_error_bucket_overflow() {
-    abort();
+    throw std::overflow_error("ankerl::unordered_dense: reached max bucket size, cannot increase size");
 }
 [[noreturn]] inline void on_error_too_many_elements() {
-    abort();
+    throw std::out_of_range("ankerl::unordered_dense::map::replace(): too many elements");
 }
 
 #    endif

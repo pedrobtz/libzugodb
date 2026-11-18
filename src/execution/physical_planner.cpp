@@ -1,4 +1,5 @@
 #include "slothdb/execution/physical_planner.hpp"
+#include "slothdb/common/profile_log.hpp"
 #include "slothdb/execution/expression_executor.hpp"
 #include "slothdb/execution/agg_emit_helpers.hpp"
 #include "slothdb/execution/dict_histogram.hpp"
@@ -1119,7 +1120,7 @@ public:
             double p1 = slothdb::g_pq_profile.agg_pass1_ns.load() / 1e6;
             double p2 = slothdb::g_pq_profile.agg_pass2_ns.load() / 1e6;
             unsigned long long dsum = slothdb::g_pq_profile.agg_dict_sum.load();
-            fprintf(stderr,
+            slothdb::ProfileLog(
                 "[SLOTH_PROFILE] RunParallelRGs wall=%.0fms nt=%u pages=%llu | "
                 "per-thread: rgdecode=%.0fms (decomp=%.0fms pagedecode=%.0fms other=%.0fms) "
                 "consume=%.0fms (agg_p1=%.0fms agg_p2=%.0fms) | acct=%.0fms dict_sum=%llu "
@@ -10245,7 +10246,7 @@ private:
                 }
             }
             if (merge_profile_on) {
-                fprintf(stderr, "[SLOTH_PROFILE] varchar-group merge %.0fms\n",
+                slothdb::ProfileLog("[SLOTH_PROFILE] varchar-group merge %.0fms\n",
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::steady_clock::now() - merge_profile_t0).count()
                         / 1e6);
