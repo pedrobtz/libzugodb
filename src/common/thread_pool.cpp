@@ -1,11 +1,11 @@
 #include "slothdb/common/thread_pool.hpp"
+#include "slothdb/common/parallel.hpp"
 
 namespace slothdb {
 
 ThreadPool::ThreadPool(unsigned int num_threads) {
     if (num_threads == 0) {
-        num_threads = std::thread::hardware_concurrency();
-        if (num_threads == 0) num_threads = 4; // fallback
+        num_threads = HWThreads();
     }
 
     for (unsigned int i = 0; i < num_threads; i++) {

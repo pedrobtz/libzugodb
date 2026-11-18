@@ -1,10 +1,22 @@
 #pragma once
 
+#include <atomic>
 #include <cstdlib>
 #include <thread>
 #include <vector>
 
 namespace slothdb {
+
+// zuslothdb: one process-wide cap on the engine's threads, 2 unless the R
+// glue sets it from dbConnect(threads = ) (design D5), so a check on CRAN's
+// two cores is not oversubscribed. Every pool size and parallel split reads
+// it through HWThreads(); upstream's SLOTHDB_MAX_THREADS is not read.
+inline std::atomic<unsigned int> &ThreadCapRef() {
+    static std::atomic<unsigned int> cap{2};
+    return cap;
+}
+inline unsigned int ThreadCap() { return ThreadCapRef().load(); }
+inline void SetThreadCap(unsigned int n) { ThreadCapRef().store(n == 0 ? 1 : n); }
 
 // Returns the number of hardware threads available, clamped to 1 on
 // single-threaded WASM (Emscripten without pthreads). Std::thread's
@@ -20,17 +32,8 @@ inline unsigned int HWThreads() {
 #else
     unsigned int n = std::thread::hardware_concurrency();
     if (n == 0) n = 4;
-#if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable: 4996)
-#endif
-    if (const char *cap = std::getenv("SLOTHDB_MAX_THREADS")) {
-        unsigned int c = (unsigned int)std::atoi(cap);
-        if (c > 0 && c < n) n = c;
-    }
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
+    unsigned int cap = ThreadCap();
+    if (cap < n) n = cap;
     return n;
 #endif
 }

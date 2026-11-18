@@ -1,5 +1,6 @@
 #include "slothdb/execution/dict_histogram.hpp"
 #include "slothdb/storage/parquet.hpp"
+#include "slothdb/common/parallel.hpp"
 
 #include <atomic>
 #include <thread>
@@ -26,8 +27,7 @@ bool TryDictHistogramAgg(ParquetReader &reader, idx_t col_idx,
         if (cmeta.dict_page_offset < 0) return false;
     }
 
-    unsigned int hw = std::thread::hardware_concurrency();
-    if (hw == 0) hw = 4;
+    unsigned int hw = HWThreads();
     if (hw > 8) hw = 8;
     unsigned int nt = hw;
     if ((idx_t)nt > num_rgs) nt = static_cast<unsigned int>(num_rgs);
