@@ -16,8 +16,9 @@ a project of its own. Defects found here are reported upstream
   reader cannot decode, JSON its readers would misread, SlothDB's private
   Arrow format, the SQLite, Excel and Avro readers, `ROLLBACK` (there is no
   undo), `STRFTIME` without a format.
-- **It is offline.** A remote path (`http://`, `https://`, `s3://`) is an
-  error.
+- **It is offline and loads no code.** A remote path (`http://`, `https://`,
+  `s3://`) is an error, and the HTTP client, the extension loader and the
+  natural-language `ask` module (which downloads a model) are removed.
 - **It is quiet and bounded.** Nothing is written to `stderr`, nothing calls
   `abort()` or `rand()`, and one process-wide cap limits every thread pool.
 - **It builds with MinGW-w64**, as R's Rtools uses on Windows.

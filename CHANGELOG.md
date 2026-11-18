@@ -22,6 +22,9 @@ changes, in order. Their reasons are in the commit messages.
 - Refuse Arrow IPC: SlothDB's Arrow format is its own.
 - Refuse the SQLite, Excel and Avro readers.
 - Rename the C++ namespace from `slothdb::` to `zugodb::`.
+- Remove the HTTP client, the extension loader and the `ask` module, with
+  their tests and the shell's `.ask` command: the engine is offline and
+  loads no code (378 doctest cases remain).
 
 ## SlothDB
 
