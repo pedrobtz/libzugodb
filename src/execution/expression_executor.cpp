@@ -18,7 +18,7 @@
 #include <random>
 #include <regex>
 
-namespace slothdb {
+namespace zugodb {
 
 // zuslothdb: RANDOM() and UUID() draw from this rather than rand(), which a
 // package must not call (CRAN's compiled-code check). One generator per
@@ -5086,4 +5086,4 @@ void ExpressionExecutor::ExecuteSubquery(const BoundSubqueryExpression &expr,
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

@@ -14,7 +14,7 @@
 #include <chrono>
 #include <cstdlib>
 
-namespace slothdb {
+namespace zugodb {
 
 // Decode profiling (SLOTH_PROFILE=1). Nanosecond accumulators summed across
 // parquet worker threads. Diagnostic only - one predicted-false branch per
@@ -337,4 +337,4 @@ private:
     void *mmap_handle_ = nullptr; // Windows: HANDLE; POSIX: unused
 };
 
-} // namespace slothdb
+} // namespace zugodb

@@ -12,7 +12,7 @@
 
 #include "slothdb/common/types/string_type.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // Returns the per-RG count for COUNT(*) WHERE <varchar> LIKE '%needle%'
 // (or NOT LIKE when like_negated) against a dict-encoded VARCHAR column.
@@ -38,4 +38,4 @@ std::int64_t CountPlainLikeContains(
     const char* needle, std::size_t nlen,
     bool like_negated);
 
-}  // namespace slothdb
+}  // namespace zugodb

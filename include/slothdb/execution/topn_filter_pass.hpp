@@ -16,7 +16,7 @@
 
 #include "slothdb/storage/parquet.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // Forward declarations to avoid pulling physical_planner.cpp internals.
 struct SimplePredicate;
@@ -30,4 +30,4 @@ struct TopNCandidate {
     bool is_null;
 };
 
-}  // namespace slothdb
+}  // namespace zugodb

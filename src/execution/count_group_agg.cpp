@@ -14,7 +14,7 @@
 
 #include "third_party/unordered_dense.h"
 
-namespace slothdb {
+namespace zugodb {
 
 namespace {
 
@@ -226,4 +226,4 @@ std::vector<std::vector<Value>> RunCountGroupAggregate(
     return rows;
 }
 
-} // namespace slothdb
+} // namespace zugodb

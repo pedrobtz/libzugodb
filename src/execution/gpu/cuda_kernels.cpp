@@ -33,7 +33,7 @@
 
 #include <cuda_runtime.h>
 
-namespace slothdb {
+namespace zugodb {
 namespace cuda {
 
 // ---- Filter kernel ----
@@ -66,6 +66,6 @@ __global__ void sum_int32_kernel(const int *data, long long *output, int n) {
 // actual implementation which would use cub::DeviceRadixSort.
 
 } // namespace cuda
-} // namespace slothdb
+} // namespace zugodb
 
 #endif // SLOTHDB_CUDA

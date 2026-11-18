@@ -2,7 +2,7 @@
 #include "slothdb/catalog/catalog.hpp"
 #include "slothdb/common/exception.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("Catalog - default schema exists") {
     Catalog catalog;

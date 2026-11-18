@@ -3,7 +3,7 @@
 #include "slothdb/common/constants.hpp"
 #include <memory>
 
-namespace slothdb {
+namespace zugodb {
 
 class SelectionVector {
 public:
@@ -31,4 +31,4 @@ private:
     std::unique_ptr<sel_t[]> owned_data_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

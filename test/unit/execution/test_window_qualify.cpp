@@ -2,7 +2,7 @@
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 static void setup_window_data(Connection &conn) {
     conn.Query("CREATE TABLE sales (name VARCHAR, dept VARCHAR, amount INTEGER)");

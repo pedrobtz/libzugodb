@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "slothdb/storage/compression/compression.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 // ============================================================================
 // Round-trip tests for each codec

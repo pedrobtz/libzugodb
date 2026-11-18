@@ -14,7 +14,7 @@
 
 #include "slothdb/execution/radix_count_agg.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 struct StringDedupState {
     std::unique_ptr<RadixHashCountStr> agg;
@@ -33,4 +33,4 @@ inline void string_dedup_emplace(StringDedupState& st, int tid,
 // Finalize the build and return the number of distinct values.
 std::int64_t string_dedup_total(StringDedupState& st);
 
-} // namespace slothdb
+} // namespace zugodb

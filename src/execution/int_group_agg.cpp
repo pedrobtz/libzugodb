@@ -14,7 +14,7 @@
 #include "slothdb/execution/simple_i64_set.hpp"
 #include "slothdb/storage/parquet.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 namespace {
 
@@ -270,11 +270,11 @@ std::vector<IntGroupAgg::Group> IntGroupAgg::MergeAll() {
         }
     }
     if (_pf) {
-        slothdb::ProfileLog("[SLOTH_PROFILE] IntGroupAgg::MergeAll %.0fms\n",
+        zugodb::ProfileLog("[SLOTH_PROFILE] IntGroupAgg::MergeAll %.0fms\n",
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - _t0).count() / 1e6);
     }
     return out;
 }
 
-}  // namespace slothdb
+}  // namespace zugodb

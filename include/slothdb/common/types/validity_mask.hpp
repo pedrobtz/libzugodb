@@ -4,7 +4,7 @@
 #include <cstring>
 #include <memory>
 
-namespace slothdb {
+namespace zugodb {
 
 class ValidityMask {
 public:
@@ -75,4 +75,4 @@ private:
     idx_t words_ = STANDARD_MASK_SIZE;
 };
 
-} // namespace slothdb
+} // namespace zugodb

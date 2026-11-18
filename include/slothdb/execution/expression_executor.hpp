@@ -4,7 +4,7 @@
 #include "slothdb/common/types/data_chunk.hpp"
 #include "slothdb/common/types/vector.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // Evaluates bound expressions against an input DataChunk,
 // writing results into a target Vector.
@@ -59,4 +59,4 @@ private:
                                 Vector &result, idx_t count);
 };
 
-} // namespace slothdb
+} // namespace zugodb

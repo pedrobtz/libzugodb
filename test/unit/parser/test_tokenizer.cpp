@@ -2,7 +2,7 @@
 #include "slothdb/parser/tokenizer.hpp"
 #include "slothdb/common/exception.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("Tokenizer - basic SELECT") {
     Tokenizer t("SELECT a, b FROM t1");

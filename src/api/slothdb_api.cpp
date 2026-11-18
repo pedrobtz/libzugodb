@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-using namespace slothdb;
+using namespace zugodb;
 
 struct slothdb_database {
     std::unique_ptr<Database> db;

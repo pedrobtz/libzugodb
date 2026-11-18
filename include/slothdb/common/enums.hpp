@@ -3,7 +3,7 @@
 #include <cstdint>
 #include "slothdb/common/constants.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // PhysicalType represents the actual C++ storage type used in vectors.
 // Multiple LogicalTypes can map to the same PhysicalType.
@@ -32,4 +32,4 @@ enum class PhysicalType : uint8_t {
 // Returns 0 for variable-size types (VARCHAR, STRUCT, LIST, ARRAY).
 idx_t GetTypeIdSize(PhysicalType type);
 
-} // namespace slothdb
+} // namespace zugodb

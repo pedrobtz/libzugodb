@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "slothdb/common/types/data_chunk.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("DataChunk - initialize and basic properties") {
     DataChunk chunk;

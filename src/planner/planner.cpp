@@ -1,7 +1,7 @@
 #include "slothdb/planner/planner.hpp"
 #include "slothdb/common/exception.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 namespace {
 
@@ -688,4 +688,4 @@ LogicalOpPtr Planner::PlanDelete(const BoundDeleteStatement &stmt) {
     return std::make_unique<LogicalDeleteOp>(stmt.table, std::move(ms.where_clause));
 }
 
-} // namespace slothdb
+} // namespace zugodb

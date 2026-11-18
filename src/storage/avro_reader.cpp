@@ -4,7 +4,7 @@
 #include <fstream>
 #include <cstring>
 
-namespace slothdb {
+namespace zugodb {
 
 static const uint8_t AVRO_MAGIC[4] = {'O', 'b', 'j', 0x01};
 
@@ -558,4 +558,4 @@ void AvroReader::ReadIntoChunks(std::vector<DataChunk> &chunks,
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

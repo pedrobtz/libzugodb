@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Registered extension function.
 struct ExtensionFunction {
@@ -72,4 +72,4 @@ private:
     std::unordered_map<std::string, ExtensionFunction> functions_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

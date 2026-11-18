@@ -15,7 +15,7 @@
 
 #include "third_party/unordered_dense.h"
 
-namespace slothdb {
+namespace zugodb {
 
 class SimpleI64CountMap {
 public:
@@ -108,4 +108,4 @@ private:
     int64_t zero_count_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

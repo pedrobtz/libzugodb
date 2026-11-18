@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Query result: holds the result of a SQL query.
 //
@@ -126,4 +126,4 @@ private:
     Transaction *active_txn_ = nullptr;
 };
 
-} // namespace slothdb
+} // namespace zugodb

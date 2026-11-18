@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "slothdb/ask/nl_to_sql.hpp"
 
-using namespace slothdb::ask;
+using namespace zugodb::ask;
 
 namespace {
 Schema SalesSchema() {

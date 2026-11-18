@@ -21,7 +21,7 @@
 #include "llama.h"
 #endif
 
-namespace slothdb {
+namespace zugodb {
 namespace ask {
 
 namespace {
@@ -1041,4 +1041,4 @@ EmbeddedResult GenerateSQLLocal(const Schema &, const std::string &) {
 #endif
 
 } // namespace ask
-} // namespace slothdb
+} // namespace zugodb

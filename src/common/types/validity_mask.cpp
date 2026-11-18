@@ -7,7 +7,7 @@ static int popcount64(uint64_t x) { return static_cast<int>(__popcnt64(x)); }
 static int popcount64(uint64_t x) { return __builtin_popcountll(x); }
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 ValidityMask::ValidityMask(idx_t count) : mask_(nullptr) {
     Initialize(count);
@@ -132,4 +132,4 @@ void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

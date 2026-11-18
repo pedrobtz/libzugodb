@@ -3,7 +3,7 @@
 #include "slothdb/main/connection.hpp"
 #include "slothdb/optimizer/optimizer.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("Optimizer - constant folding preserves correctness") {
     Database db;

@@ -3,7 +3,7 @@
 #include "slothdb/main/connection.hpp"
 #include "slothdb/common/exception.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("Transaction - BEGIN and COMMIT") {
     Database db;

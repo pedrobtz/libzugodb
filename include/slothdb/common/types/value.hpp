@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // A single typed value. Used for constants, parameters, and catalog defaults.
 class Value {
@@ -114,4 +114,4 @@ private:
     std::vector<Value> list_value_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

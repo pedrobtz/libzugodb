@@ -13,7 +13,7 @@
 #include <string>
 
 namespace fs = std::filesystem;
-using namespace slothdb;
+using namespace zugodb;
 
 static fs::path tmp_arrow(const std::string &tag, const std::string &ext = ".arrow") {
     auto p = fs::temp_directory_path() / ("slothdb_arrow_" + tag + ext);

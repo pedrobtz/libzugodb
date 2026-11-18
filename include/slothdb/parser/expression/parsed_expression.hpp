@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 class SelectStatement; // Forward declaration for subquery expressions.
 
@@ -240,4 +240,4 @@ public:
     ParsedExprPtr filter;
 };
 
-} // namespace slothdb
+} // namespace zugodb

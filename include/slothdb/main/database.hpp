@@ -5,7 +5,7 @@
 #include <memory>
 #include <string>
 
-namespace slothdb {
+namespace zugodb {
 
 // Configuration for a SlothDB database instance.
 struct DatabaseConfig {
@@ -36,4 +36,4 @@ private:
     std::unique_ptr<TransactionManager> txn_mgr_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

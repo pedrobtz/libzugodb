@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class LogicalTypeId : uint8_t {
     INVALID,
@@ -167,4 +167,4 @@ private:
 // Returns string name of a LogicalTypeId.
 std::string LogicalTypeIdToString(LogicalTypeId id);
 
-} // namespace slothdb
+} // namespace zugodb

@@ -26,7 +26,7 @@
 #include <unistd.h>
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 // Parse a double from [start, end). Apple's libc++ doesn't implement
 // `std::from_chars` for floating point, so we can't use it portably - fall
@@ -1251,4 +1251,4 @@ void JSONWriter::Finish() {
     file_.flush();
 }
 
-} // namespace slothdb
+} // namespace zugodb

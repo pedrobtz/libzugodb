@@ -1,7 +1,7 @@
 #include "slothdb/catalog/catalog.hpp"
 #include "slothdb/common/exception.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 Catalog::Catalog() {
     // Create the default "main" schema.
@@ -59,4 +59,4 @@ bool Catalog::DropTable(const std::string &name, const std::string &schema) {
     return it->second->DropTable(name);
 }
 
-} // namespace slothdb
+} // namespace zugodb

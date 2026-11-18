@@ -10,7 +10,7 @@
 #include <unistd.h>
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 static bool FileExists(const std::string &path) {
     return access(path.c_str(), F_OK) == 0;
@@ -53,4 +53,4 @@ Database::~Database() {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

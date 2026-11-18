@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Query optimizer: applies transformation passes to the logical plan.
 class Optimizer {
@@ -31,4 +31,4 @@ private:
     static Value EvaluateConstant(const BoundExpression &expr);
 };
 
-} // namespace slothdb
+} // namespace zugodb

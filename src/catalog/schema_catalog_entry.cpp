@@ -1,7 +1,7 @@
 #include "slothdb/catalog/schema_catalog_entry.hpp"
 #include "slothdb/common/exception.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 SchemaCatalogEntry::SchemaCatalogEntry(const std::string &name)
     : CatalogEntry(CatalogEntryType::SCHEMA, name) {}
@@ -40,4 +40,4 @@ std::vector<std::string> SchemaCatalogEntry::GetTableNames() const {
     return names;
 }
 
-} // namespace slothdb
+} // namespace zugodb

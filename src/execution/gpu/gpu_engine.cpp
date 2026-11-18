@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <cstring>
 
-namespace slothdb {
+namespace zugodb {
 
 // ============================================================================
 // CPU Fallback Engine
@@ -179,4 +179,4 @@ std::unique_ptr<GPUEngine> GPUEngine::Create() {
 #endif
 }
 
-} // namespace slothdb
+} // namespace zugodb

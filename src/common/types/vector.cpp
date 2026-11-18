@@ -3,7 +3,7 @@
 #include "slothdb/common/exception.hpp"
 #include <cstring>
 
-namespace slothdb {
+namespace zugodb {
 
 // --- VectorStringBuffer ---
 
@@ -265,4 +265,4 @@ VectorStringBuffer &Vector::GetStringBuffer() {
     return static_cast<VectorStringBuffer &>(*auxiliary_);
 }
 
-} // namespace slothdb
+} // namespace zugodb

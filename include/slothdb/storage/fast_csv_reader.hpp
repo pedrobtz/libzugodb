@@ -16,7 +16,7 @@
 #include <intrin.h>
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 class DataTable;
 
@@ -154,4 +154,4 @@ idx_t FastCSVReader::ForEachVarcharCol(idx_t col_idx, idx_t num_cols, Fn &&fn) {
     return count;
 }
 
-} // namespace slothdb
+} // namespace zugodb

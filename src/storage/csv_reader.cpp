@@ -4,7 +4,7 @@
 #include "slothdb/common/string_util.hpp"
 #include <sstream>
 
-namespace slothdb {
+namespace zugodb {
 
 // ============================================================================
 // CSV Reader
@@ -347,4 +347,4 @@ void CSVWriter::Flush() {
     file_.flush();
 }
 
-} // namespace slothdb
+} // namespace zugodb

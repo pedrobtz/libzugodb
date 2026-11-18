@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <sstream>
 
-namespace slothdb {
+namespace zugodb {
 
 // zuslothdb (pedrobtz/zuslothdb#55): read against a file Python's sqlite3
 // wrote, this parser read a REAL 0 as uninitialised memory, summed a REAL
@@ -398,4 +398,4 @@ void SQLiteScanner::ScanTableIntoChunks(std::vector<DataChunk> &chunks,
     flush();
 }
 
-} // namespace slothdb
+} // namespace zugodb

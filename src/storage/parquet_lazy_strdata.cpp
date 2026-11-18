@@ -1,6 +1,6 @@
 #include "slothdb/storage/parquet_lazy_strdata.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 void MaterialiseStrDataLazy(ParquetColumnData &out,
                             const char *const *dict_ptr,
@@ -19,4 +19,4 @@ void MaterialiseStrDataLazy(ParquetColumnData &out,
     out.str_data_skipped = false;
 }
 
-}  // namespace slothdb
+}  // namespace zugodb

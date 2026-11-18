@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 class DataTable;
 
@@ -72,4 +72,4 @@ private:
     CSVOptions options_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

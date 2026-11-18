@@ -1,7 +1,7 @@
 #include "slothdb/execution/dictionary_vector.hpp"
 #include <unordered_set>
 
-namespace slothdb {
+namespace zugodb {
 
 void DictionaryVector::Build(const std::vector<Value> &values) {
     dictionary_.clear();
@@ -99,4 +99,4 @@ DictionaryEncoder::TryEncode(const std::vector<Value> &values) {
     return dv;
 }
 
-} // namespace slothdb
+} // namespace zugodb

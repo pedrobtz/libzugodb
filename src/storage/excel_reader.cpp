@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <cstdlib>
 
-namespace slothdb {
+namespace zugodb {
 
 // zuslothdb (pedrobtz/zuslothdb#55): read against files openxlsx wrote,
 // this parser returned garbage for every column after the first and
@@ -271,4 +271,4 @@ std::vector<std::vector<Value>> ExcelReader::ReadAll() {
     return rows_;
 }
 
-} // namespace slothdb
+} // namespace zugodb

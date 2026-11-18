@@ -6,7 +6,7 @@
 #include <cstring>
 #include <string>
 
-namespace slothdb {
+namespace zugodb {
 
 // Shortest decimal string that parses back to the original value, used
 // to render FLOAT / DOUBLE. A portable stand-in for std::to_chars on
@@ -475,4 +475,4 @@ bool Value::operator<(const Value &other) const {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

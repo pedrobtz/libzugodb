@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class CompressionType : uint8_t {
     UNCOMPRESSED = 0,
@@ -73,4 +73,4 @@ public:
     static ZoneMap ComputeZoneMap(const std::vector<Value> &values);
 };
 
-} // namespace slothdb
+} // namespace zugodb

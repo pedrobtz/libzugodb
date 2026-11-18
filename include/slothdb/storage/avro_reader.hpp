@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Avro file reader.
 // Avro format: [magic "Obj\x01"][file header (JSON schema + codec + sync marker)]
@@ -67,4 +67,4 @@ private:
                           LogicalType &out_logical_type);
 };
 
-} // namespace slothdb
+} // namespace zugodb

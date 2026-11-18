@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <fstream>
 
-using namespace slothdb;
+using namespace zugodb;
 
 static const char *TEST_CSV = "test_data.csv";
 static const char *TEST_OUT_CSV = "test_output.csv";

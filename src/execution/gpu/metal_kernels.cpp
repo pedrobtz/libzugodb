@@ -36,7 +36,7 @@
 #import <Metal/Metal.h>
 #import <Foundation/Foundation.h>
 
-namespace slothdb {
+namespace zugodb {
 namespace metal {
 
 // Metal shader source (MSL).
@@ -72,6 +72,6 @@ kernel void sum_int32(
 // It creates MTLDevice, compiles shaders, dispatches compute commands.
 
 } // namespace metal
-} // namespace slothdb
+} // namespace zugodb
 
 #endif // SLOTHDB_METAL

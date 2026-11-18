@@ -26,7 +26,7 @@
 #include <cstdio>
 #include <filesystem>
 
-namespace slothdb {
+namespace zugodb {
 
 // Bulk-load rows into a DataTable using chunked appends (VECTOR_SIZE rows per chunk).
 // This avoids creating one DataChunk per row, which is the primary bottleneck.
@@ -3146,4 +3146,4 @@ std::string QueryResult::ToString() const {
     return ss.str();
 }
 
-} // namespace slothdb
+} // namespace zugodb

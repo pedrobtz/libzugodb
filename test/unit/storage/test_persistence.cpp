@@ -3,7 +3,7 @@
 #include "slothdb/main/connection.hpp"
 #include <cstdio>
 
-using namespace slothdb;
+using namespace zugodb;
 
 static const char *TEST_DB_PATH = "test_slothdb.db";
 

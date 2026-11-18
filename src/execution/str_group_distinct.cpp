@@ -8,7 +8,7 @@
 
 #include "third_party/unordered_dense.h"
 
-namespace slothdb {
+namespace zugodb {
 
 namespace {
 template <typename AggT, bool HAS_FILTER, bool ALL_VALID>
@@ -297,4 +297,4 @@ MergeStrGroupIntDistinct(
     return out;
 }
 
-}  // namespace slothdb
+}  // namespace zugodb

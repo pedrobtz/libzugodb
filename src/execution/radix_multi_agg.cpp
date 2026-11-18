@@ -6,7 +6,7 @@
 
 #include "third_party/unordered_dense.h"
 
-namespace slothdb {
+namespace zugodb {
 
 namespace {
 
@@ -401,4 +401,4 @@ size_t RadixMultiAggBigKey::TotalGroups() const {
     return total;
 }
 
-}  // namespace slothdb
+}  // namespace zugodb

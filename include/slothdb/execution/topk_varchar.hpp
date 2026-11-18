@@ -16,7 +16,7 @@
 
 #include "slothdb/common/types/string_type.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // Output: top-K (smallest if ascending else largest) non-skipped dict
 // strings whose dict_idx is referenced at least once by dict_indices.
@@ -46,4 +46,4 @@ std::vector<std::string> TopKVarcharFromDictUsed(
     std::uint32_t skip_di,
     bool ascending, std::size_t k);
 
-}  // namespace slothdb
+}  // namespace zugodb

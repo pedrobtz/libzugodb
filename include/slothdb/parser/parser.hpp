@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Recursive-descent SQL parser. No external dependencies.
 class Parser {
@@ -80,4 +80,4 @@ private:
     static constexpr int MAX_EXPR_DEPTH = 256;
 };
 
-} // namespace slothdb
+} // namespace zugodb

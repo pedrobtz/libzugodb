@@ -8,7 +8,7 @@
 
 #include <cstdlib>
 
-using namespace slothdb;
+using namespace zugodb;
 
 // These tests hit the real network. They are gated on the environment variable
 // SLOTHDB_HTTPFS_ONLINE so offline CI skips them cleanly. To run locally:

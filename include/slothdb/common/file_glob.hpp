@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Cross-platform file globbing.
 // Supports * (match any sequence) and ? (match single char) in filename.
@@ -36,4 +36,4 @@ public:
     static std::string JoinPath(const std::string &dir, const std::string &file);
 };
 
-} // namespace slothdb
+} // namespace zugodb

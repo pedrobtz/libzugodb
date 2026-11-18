@@ -7,7 +7,7 @@
 #include "slothdb/storage/parquet.hpp" // zuslothdb: CheckReadable
 #include <functional>
 
-namespace slothdb {
+namespace zugodb {
 
 static bool ContainsAggregate(const BoundExpression &expr);
 // Returns true if `expr` contains a column reference that is neither
@@ -2266,4 +2266,4 @@ bool Binder::IsAggregateFunction(const std::string &name) const {
            name == "MEDIAN" || name == "BOOL_AND" || name == "BOOL_OR";
 }
 
-} // namespace slothdb
+} // namespace zugodb

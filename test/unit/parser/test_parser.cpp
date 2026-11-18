@@ -2,7 +2,7 @@
 #include "slothdb/parser/parser.hpp"
 #include "slothdb/common/exception.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("Parser - simple SELECT *") {
     auto stmts = Parser::Parse("SELECT * FROM t1");

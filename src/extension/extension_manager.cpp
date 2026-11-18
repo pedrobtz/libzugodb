@@ -11,17 +11,17 @@
 
 // Value wrapper for the C ABI - defined at global scope to match the C header.
 struct slothdb_ext_value {
-    slothdb::Value val;
+    zugodb::Value val;
     std::string str_cache;
 };
 
 // Extension info - stores a pointer back to the ExtensionManager.
 struct slothdb_ext_info {
-    slothdb::ExtensionManager *manager;
+    zugodb::ExtensionManager *manager;
     std::string extension_name;
 };
 
-namespace slothdb {
+namespace zugodb {
 
 // ============================================================================
 // C ABI implementation (called by extensions)
@@ -313,4 +313,4 @@ ExtensionManager &ExtensionManager::GetInstance() {
     return *global_ext_manager;
 }
 
-} // namespace slothdb
+} // namespace zugodb

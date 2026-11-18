@@ -2,7 +2,7 @@
 #include "slothdb/common/exception.hpp"
 #include <cstring>
 
-namespace slothdb {
+namespace zugodb {
 
 void BlockManager::CreateFile(const std::string &path) {
     path_ = path;
@@ -56,4 +56,4 @@ void BlockManager::Sync() {
     file_.Sync();
 }
 
-} // namespace slothdb
+} // namespace zugodb

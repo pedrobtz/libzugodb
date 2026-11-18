@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // zuslothdb: one process-wide cap on the engine's threads, 2 unless the R
 // glue sets it from dbConnect(threads = ) (design D5), so a check on CRAN's
@@ -24,7 +24,7 @@ inline void SetThreadCap(unsigned int n) { ThreadCapRef().store(n == 0 ? 1 : n);
 // that environment, so callers must check the return value before
 // spawning. With this helper, callers can uniformly do:
 //
-//   unsigned int nt = slothdb::HWThreads();
+//   unsigned int nt = zugodb::HWThreads();
 //   if (nt > 1) { ...spawn... } else { ...inline... }
 inline unsigned int HWThreads() {
 #if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
@@ -61,4 +61,4 @@ inline void ParallelFor(unsigned int nt, Fn &&fn) {
 #endif
 }
 
-} // namespace slothdb
+} // namespace zugodb

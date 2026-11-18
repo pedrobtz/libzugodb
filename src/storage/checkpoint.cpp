@@ -3,7 +3,7 @@
 #include "slothdb/common/types/value.hpp"
 #include <cstring>
 
-namespace slothdb {
+namespace zugodb {
 
 // ============================================================================
 // Serialization helpers
@@ -311,4 +311,4 @@ void Checkpoint::Load(Catalog &catalog, const std::string &path) {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

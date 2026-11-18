@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <sstream>
 
-namespace slothdb {
+namespace zugodb {
 
 std::string StringUtil::Upper(const std::string &str) {
     std::string result = str;
@@ -92,4 +92,4 @@ std::string StringUtil::Trim(const std::string &str) {
     return str.substr(start, end - start + 1);
 }
 
-} // namespace slothdb
+} // namespace zugodb

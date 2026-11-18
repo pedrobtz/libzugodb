@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class EmitAggKind : uint8_t {
     Other = 0,
@@ -77,4 +77,4 @@ struct EmitAggView {
 bool EmitAggValue(const EmitAggDesc& desc, const EmitAggView& view,
                   std::vector<Value>& out_row);
 
-} // namespace slothdb
+} // namespace zugodb

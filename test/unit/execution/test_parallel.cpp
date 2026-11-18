@@ -5,7 +5,7 @@
 #include "slothdb/main/connection.hpp"
 #include <atomic>
 
-using namespace slothdb;
+using namespace zugodb;
 
 // ============================================================================
 // Thread Pool

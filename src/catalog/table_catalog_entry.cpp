@@ -4,7 +4,7 @@
 #include "slothdb/common/exception.hpp"
 #include <unordered_set>
 
-namespace slothdb {
+namespace zugodb {
 
 TableCatalogEntry::TableCatalogEntry(const std::string &schema, const std::string &name,
                                      std::vector<ColumnDefinition> columns)
@@ -73,4 +73,4 @@ void TableCatalogEntry::CheckPrimaryKeyForChunk(DataChunk &chunk) const {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

@@ -1,6 +1,6 @@
 #include "slothdb/execution/string_dedup.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 StringDedupState::StringDedupState(int max_threads)
     : agg(std::make_unique<RadixHashCountStr>(max_threads)) {}
@@ -12,4 +12,4 @@ std::int64_t string_dedup_total(StringDedupState& st) {
     return st.agg->CountDistinctGroups();
 }
 
-} // namespace slothdb
+} // namespace zugodb

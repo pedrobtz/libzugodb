@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Arrow IPC (Feather v2) reader/writer.
 // Simplified implementation for flat (non-nested) columnar data.
@@ -60,4 +60,4 @@ private:
     void Parse();
 };
 
-} // namespace slothdb
+} // namespace zugodb

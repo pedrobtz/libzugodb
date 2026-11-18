@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstring>
 
-namespace slothdb {
+namespace zugodb {
 
 data_ptr_t Allocator::AllocateData(idx_t size) {
     auto result = static_cast<data_ptr_t>(std::malloc(size));
@@ -66,4 +66,4 @@ void ArenaAllocator::Reset() {
     current_ = nullptr;
 }
 
-} // namespace slothdb
+} // namespace zugodb

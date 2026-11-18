@@ -3,7 +3,7 @@
 #include "slothdb/execution/expression_executor.hpp"
 #include <cmath>
 
-namespace slothdb {
+namespace zugodb {
 
 std::vector<std::string> Optimizer::applied_optimizations_;
 
@@ -225,4 +225,4 @@ LogicalOpPtr Optimizer::TopNOptimization(LogicalOpPtr plan) {
     return plan;
 }
 
-} // namespace slothdb
+} // namespace zugodb

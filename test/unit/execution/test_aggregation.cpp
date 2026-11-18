@@ -2,7 +2,7 @@
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 static void setup_employees(Connection &conn) {
     conn.Query("CREATE TABLE emp (name VARCHAR, dept VARCHAR, salary INTEGER)");

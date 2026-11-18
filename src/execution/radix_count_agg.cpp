@@ -13,7 +13,7 @@
 #include "third_party/unordered_dense.h"
 #include "slothdb/storage/parquet.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 RadixCountAgg::RadixCountAgg(int max_threads)
     : max_threads_(max_threads),
@@ -561,7 +561,7 @@ void RadixHashCountStr::Finalize() {
         for (auto& t : ws) if (t.joinable()) t.join();
     }
     if (_pf) {
-        slothdb::ProfileLog("[SLOTH_PROFILE] RadixHashCountStr::Finalize %.0fms\n",
+        zugodb::ProfileLog("[SLOTH_PROFILE] RadixHashCountStr::Finalize %.0fms\n",
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - _t0).count() / 1e6);
     }
@@ -701,7 +701,7 @@ std::vector<RadixCountStrResult> RadixHashCountStr::EmitTopK(int k) const {
     }
     if (k > 0) std::reverse(result.begin(), result.end());
     if (_pf) {
-        slothdb::ProfileLog("[SLOTH_PROFILE] RadixHashCountStr::EmitTopK %.0fms\n",
+        zugodb::ProfileLog("[SLOTH_PROFILE] RadixHashCountStr::EmitTopK %.0fms\n",
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - _t0).count() / 1e6);
     }
@@ -1364,4 +1364,4 @@ RadixCount2ColIntStr::EmitTopKDistinctByStrKey(int k) const {
     return out;
 }
 
-}  // namespace slothdb
+}  // namespace zugodb

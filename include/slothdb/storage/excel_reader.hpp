@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Excel (.xlsx) reader.
 // XLSX is a ZIP containing XML files:
@@ -52,4 +52,4 @@ private:
     bool parsed_ = false;
 };
 
-} // namespace slothdb
+} // namespace zugodb

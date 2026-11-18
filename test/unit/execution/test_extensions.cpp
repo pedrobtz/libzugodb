@@ -2,7 +2,7 @@
 #include "slothdb/extension/extension_manager.hpp"
 #include "slothdb/extension/extension_api.h"
 
-using namespace slothdb;
+using namespace zugodb;
 
 // ============================================================================
 // Built-in extension function for testing (no DLL loading needed).

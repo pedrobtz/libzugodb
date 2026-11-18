@@ -9,7 +9,7 @@
 #include <mutex>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Result collector: thread-safe accumulation of result rows.
 class ParallelResultCollector {
@@ -37,4 +37,4 @@ public:
         unsigned int num_threads = 0);
 };
 
-} // namespace slothdb
+} // namespace zugodb

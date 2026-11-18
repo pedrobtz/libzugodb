@@ -6,7 +6,7 @@
 #include "slothdb/common/types/data_chunk.hpp"
 #include "slothdb/common/types/vector.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 PhysicalLiteralEmitFilter::PhysicalLiteralEmitFilter(
     std::vector<LogicalType> types, Value literal,
@@ -60,4 +60,4 @@ bool PhysicalLiteralEmitFilter::GetData(DataChunk &result) {
     return true;
 }
 
-}  // namespace slothdb
+}  // namespace zugodb

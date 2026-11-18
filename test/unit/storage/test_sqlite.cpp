@@ -15,7 +15,7 @@
 #include <string>
 
 namespace fs = std::filesystem;
-using namespace slothdb;
+using namespace zugodb;
 
 static std::string tmp_file(const std::string &name, const char *bytes, size_t n) {
     auto p = fs::temp_directory_path() / ("slothdb_refused_" + name);

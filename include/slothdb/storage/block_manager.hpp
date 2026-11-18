@@ -6,7 +6,7 @@
 #include <memory>
 #include <string>
 
-namespace slothdb {
+namespace zugodb {
 
 // File format constants.
 static constexpr uint32_t SLOTHDB_MAGIC = 0x534C4442; // "LTDB"
@@ -62,4 +62,4 @@ private:
     std::string path_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

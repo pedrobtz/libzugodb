@@ -9,7 +9,7 @@
 #define MKDIR(path) mkdir(path, 0755)
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 std::unordered_map<std::string, std::string>
 HivePartition::ExtractPartitions(const std::string &path) {
@@ -103,4 +103,4 @@ std::string HivePartition::MakePartitionPath(
     return path;
 }
 
-} // namespace slothdb
+} // namespace zugodb

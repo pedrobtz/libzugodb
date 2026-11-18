@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace slothdb {
+namespace zugodb {
 
 EmitAggKind ResolveEmitAggKind(const std::string& n) {
     if (n == "COUNT") return EmitAggKind::Count;
@@ -164,4 +164,4 @@ bool EmitAggValue(const EmitAggDesc& desc, const EmitAggView& view,
     return false;
 }
 
-} // namespace slothdb
+} // namespace zugodb

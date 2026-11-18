@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class PhysicalOperatorType : uint8_t {
     TABLE_SCAN,
@@ -66,4 +66,4 @@ private:
 
 using PhysicalOpPtr = std::unique_ptr<PhysicalOperator>;
 
-} // namespace slothdb
+} // namespace zugodb

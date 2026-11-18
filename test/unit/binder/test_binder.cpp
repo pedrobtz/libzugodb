@@ -4,7 +4,7 @@
 #include "slothdb/common/exception.hpp"
 #include "slothdb/storage/data_table.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 // Helper: create a catalog with a test table.
 static std::unique_ptr<Catalog> make_catalog() {

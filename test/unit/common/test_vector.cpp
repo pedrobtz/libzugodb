@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "slothdb/common/types/vector.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("Vector - INTEGER set/get") {
     Vector vec(LogicalType::INTEGER());

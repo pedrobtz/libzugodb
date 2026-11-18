@@ -20,7 +20,7 @@
 #include <unistd.h>
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 HTTPClient::URLParts HTTPClient::ParseURL(const std::string &url) {
     URLParts parts;
@@ -460,4 +460,4 @@ HTTPResponse S3Client::GetObject(const std::string &s3_url) {
     return HTTPClient::Get(https_url);
 }
 
-} // namespace slothdb
+} // namespace zugodb

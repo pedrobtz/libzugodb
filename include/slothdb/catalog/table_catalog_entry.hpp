@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 class DataTable;
 class ParquetReader;
@@ -145,4 +145,4 @@ private:
     std::shared_ptr<ParquetReader> cached_parquet_reader_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

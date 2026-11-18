@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class TokenType : uint8_t {
     // Literals
@@ -240,4 +240,4 @@ private:
     uint32_t column_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

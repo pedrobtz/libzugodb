@@ -7,7 +7,7 @@
 #include <vector>
 #include <unordered_map>
 
-namespace slothdb {
+namespace zugodb {
 
 struct JSONOptions {
     bool array_format = true;  // true=JSON array, false=NDJSON (one object per line)
@@ -98,4 +98,4 @@ private:
     std::vector<std::string> columns_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

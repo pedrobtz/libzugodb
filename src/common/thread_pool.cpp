@@ -1,7 +1,7 @@
 #include "slothdb/common/thread_pool.hpp"
 #include "slothdb/common/parallel.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 ThreadPool::ThreadPool(unsigned int num_threads) {
     if (num_threads == 0) {
@@ -75,4 +75,4 @@ void ThreadPool::SetGlobalThreadCount(unsigned int count) {
     global_pool.reset(); // Force re-creation on next access.
 }
 
-} // namespace slothdb
+} // namespace zugodb

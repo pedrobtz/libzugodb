@@ -4,7 +4,7 @@
 #include "slothdb/storage/parquet.hpp"
 #include <cstdio>
 
-using namespace slothdb;
+using namespace zugodb;
 
 static const char *TEST_PARQUET = "test_data.parquet";
 

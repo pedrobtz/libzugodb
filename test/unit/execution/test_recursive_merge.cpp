@@ -2,7 +2,7 @@
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 // ============================================================================
 // Recursive CTEs

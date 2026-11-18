@@ -3,7 +3,7 @@
 #include "slothdb/planner/logical_operator.hpp"
 #include "slothdb/binder/bound_statement.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // Converts bound statements into logical operator trees.
 class Planner {
@@ -19,4 +19,4 @@ private:
     static LogicalOpPtr PlanDelete(const BoundDeleteStatement &stmt);
 };
 
-} // namespace slothdb
+} // namespace zugodb

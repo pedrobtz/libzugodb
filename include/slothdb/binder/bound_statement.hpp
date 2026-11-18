@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class BoundStatementType : uint8_t {
     SELECT,
@@ -133,4 +133,4 @@ public:
     BoundExprPtr where_clause;
 };
 
-} // namespace slothdb
+} // namespace zugodb

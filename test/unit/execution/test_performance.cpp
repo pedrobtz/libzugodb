@@ -5,7 +5,7 @@
 #include "slothdb/main/connection.hpp"
 #include <chrono>
 
-using namespace slothdb;
+using namespace zugodb;
 
 // ============================================================================
 // Dictionary Encoding

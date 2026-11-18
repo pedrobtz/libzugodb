@@ -26,7 +26,7 @@
 #include <memory>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 struct RadixMultiAggResult {
     uint64_t key;
@@ -103,4 +103,4 @@ private:
     std::unique_ptr<RadixMultiAggBigImpl> impl_;
 };
 
-}  // namespace slothdb
+}  // namespace zugodb

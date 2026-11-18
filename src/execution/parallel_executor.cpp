@@ -1,7 +1,7 @@
 #include "slothdb/execution/parallel_executor.hpp"
 #include "slothdb/common/exception.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 void ParallelResultCollector::AddChunk(const DataChunk &chunk) {
     std::lock_guard<std::mutex> guard(lock_);
@@ -98,4 +98,4 @@ std::vector<std::vector<Value>> ParallelExecutor::ParallelScanFilter(
     return collector.GetRows();
 }
 
-} // namespace slothdb
+} // namespace zugodb

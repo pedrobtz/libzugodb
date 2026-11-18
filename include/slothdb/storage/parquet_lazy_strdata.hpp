@@ -7,7 +7,7 @@
 
 #include "slothdb/storage/parquet.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 void MaterialiseStrDataLazy(ParquetColumnData &out,
                             const char *const *dict_ptr,
@@ -15,4 +15,4 @@ void MaterialiseStrDataLazy(ParquetColumnData &out,
                             uint32_t dict_size,
                             idx_t row_offset);
 
-}  // namespace slothdb
+}  // namespace zugodb

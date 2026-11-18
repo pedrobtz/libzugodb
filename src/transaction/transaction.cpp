@@ -1,7 +1,7 @@
 #include "slothdb/transaction/transaction.hpp"
 #include "slothdb/common/exception.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 TransactionManager::TransactionManager() = default;
 
@@ -71,4 +71,4 @@ size_t TransactionManager::ActiveTransactionCount() const {
     return active_transactions_.size();
 }
 
-} // namespace slothdb
+} // namespace zugodb

@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class LogicalOperatorType : uint8_t {
     GET,
@@ -220,4 +220,4 @@ public:
     LogicalDummyScan() : LogicalOperator(LogicalOperatorType::DUMMY_SCAN, {}) {}
 };
 
-} // namespace slothdb
+} // namespace zugodb

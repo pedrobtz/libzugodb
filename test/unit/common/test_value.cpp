@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "slothdb/common/types/value.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("Value - NULL") {
     Value v;

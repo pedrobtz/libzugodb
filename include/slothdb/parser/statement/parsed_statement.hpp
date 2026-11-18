@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class StatementType : uint8_t {
     SELECT,
@@ -297,4 +297,4 @@ public:
     std::string table_name;   // for SHOW COLUMNS FROM <table>
 };
 
-} // namespace slothdb
+} // namespace zugodb

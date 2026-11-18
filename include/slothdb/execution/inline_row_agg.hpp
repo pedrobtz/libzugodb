@@ -22,7 +22,7 @@
 #include <memory>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 template <int NumAggs>
 struct InlineRowAggResult {
@@ -119,4 +119,4 @@ private:
     std::unique_ptr<InlineRowAggBigImpl<NumAggs>> impl_;
 };
 
-}  // namespace slothdb
+}  // namespace zugodb

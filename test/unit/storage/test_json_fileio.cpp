@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <fstream>
 
-using namespace slothdb;
+using namespace zugodb;
 
 static void cleanup_files() {
     std::remove("test.json");

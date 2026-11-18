@@ -3,7 +3,7 @@
 #include "slothdb/common/string_util.hpp"
 #include <unordered_map>
 
-namespace slothdb {
+namespace zugodb {
 
 static const std::unordered_map<std::string, TokenType> KEYWORDS = {
     {"SELECT", TokenType::KW_SELECT}, {"FROM", TokenType::KW_FROM},
@@ -425,4 +425,4 @@ const char *TokenTypeToString(TokenType type) {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

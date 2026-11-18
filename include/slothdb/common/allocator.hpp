@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <memory>
 
-namespace slothdb {
+namespace zugodb {
 
 class Allocator {
 public:
@@ -48,4 +48,4 @@ private:
     ArenaBlock *current_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

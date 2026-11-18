@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 class Catalog;
 struct TableRef;
@@ -23,4 +23,4 @@ std::shared_ptr<DataTable> MaterializeSelectIntoTable(
 void MaterializeFromSubqueries(Catalog &catalog, TableRef &tref,
                                std::vector<std::string> &created);
 
-} // namespace slothdb
+} // namespace zugodb

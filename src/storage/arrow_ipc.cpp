@@ -3,7 +3,7 @@
 #include <fstream>
 #include <cstring>
 
-namespace slothdb {
+namespace zugodb {
 
 // Simple Arrow IPC file format (Feather v2 compatible).
 // This is a simplified format that stores our own metadata + columnar data.
@@ -382,4 +382,4 @@ void ArrowIPCReader::ReadIntoChunks(std::vector<DataChunk> &chunks,
     flush();
 }
 
-} // namespace slothdb
+} // namespace zugodb

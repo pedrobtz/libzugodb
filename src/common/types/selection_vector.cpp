@@ -1,6 +1,6 @@
 #include "slothdb/common/types/selection_vector.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 SelectionVector::SelectionVector(idx_t count) : sel_data_(nullptr) {
     Initialize(count);
@@ -14,4 +14,4 @@ void SelectionVector::Initialize(idx_t count) {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

@@ -2,42 +2,49 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main]
+    tags: ['v*']
   pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-windows:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-gcc, os: ubuntu-24.04, flags: '' }
+          - { name: linux-asan-ubsan, os: ubuntu-24.04, flags: '-DSLOTHDB_SANITIZERS=ON' }
+          - { name: macos-clang, os: macos-latest, flags: '' }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSLOTHDB_BUILD_SHELL=ON ${{ matrix.flags }}
+      - name: Build
+        run: cmake --build build -j4
+      - name: Test
+        run: build/test/slothdb_tests
+
+  mingw:
+    name: windows-mingw (UCRT64, as R's Rtools)
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
     steps:
-    - uses: actions/checkout@v4
-    - name: Configure
-      run: cmake -B build -DSLOTHDB_BUILD_SHELL=ON
-    - name: Build
-      run: cmake --build build --config Release
-    - name: Test
-      run: ctest --test-dir build -C Release --output-on-failure
-
-  build-linux:
-    runs-on: ubuntu-24.04
-    steps:
-    - uses: actions/checkout@v4
-    - name: Configure
-      run: cmake -B build -DSLOTHDB_BUILD_SHELL=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=20
-    - name: Build
-      run: cmake --build build -j$(nproc)
-    - name: Test
-      run: ctest --test-dir build --output-on-failure
-
-  build-macos:
-    # macos-13 is the x86_64 runner; SlothDB targets x86-64 (the analytics
-    # core uses AVX2/BMI2 intrinsics). macos-14+ is Apple Silicon.
-    runs-on: macos-13
-    steps:
-    - uses: actions/checkout@v4
-    - name: Configure
-      run: cmake -B build -DSLOTHDB_BUILD_SHELL=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=20
-    - name: Build
-      run: cmake --build build -j$(sysctl -n hw.ncpu)
-    - name: Test
-      run: ctest --test-dir build --output-on-failure
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: build/test/slothdb_tests.exe

@@ -1,7 +1,7 @@
 #include "slothdb/storage/file_handle.hpp"
 #include "slothdb/common/exception.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 FileHandle::~FileHandle() {
     Close();
@@ -88,4 +88,4 @@ void FileHandle::Close() {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

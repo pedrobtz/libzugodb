@@ -6,7 +6,7 @@
 
 #include "third_party/unordered_dense.h"
 
-namespace slothdb {
+namespace zugodb {
 
 namespace {
 
@@ -516,4 +516,4 @@ template class InlineRowAggBigKey<2>;
 template class InlineRowAggBigKey<3>;
 template class InlineRowAggBigKey<4>;
 
-}  // namespace slothdb
+}  // namespace zugodb

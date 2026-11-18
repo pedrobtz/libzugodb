@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 bool FileGlob::Match(const std::string &pattern, const std::string &str) {
     size_t pi = 0, si = 0;
@@ -159,4 +159,4 @@ std::vector<std::string> FileGlob::Glob(const std::string &pattern) {
     return results;
 }
 
-} // namespace slothdb
+} // namespace zugodb

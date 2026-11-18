@@ -3,7 +3,7 @@
 #include <string>
 #include <cstdint>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class CatalogEntryType : uint8_t {
     SCHEMA,
@@ -32,4 +32,4 @@ private:
     std::string name_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

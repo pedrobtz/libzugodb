@@ -7,7 +7,7 @@
 #include <vector>
 #include <memory>
 
-namespace slothdb {
+namespace zugodb {
 
 // GPU backend type.
 enum class GPUBackend : uint8_t {
@@ -109,4 +109,4 @@ public:
     AggResult HashAggregate(const int32_t *keys, const int32_t *values, idx_t count) override;
 };
 
-} // namespace slothdb
+} // namespace zugodb

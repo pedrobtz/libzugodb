@@ -5,7 +5,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace slothdb {
+namespace zugodb {
 namespace ask {
 
 namespace {
@@ -952,4 +952,4 @@ Result Translate(const std::string &nl, const Schema &schema) {
 }
 
 } // namespace ask
-} // namespace slothdb
+} // namespace zugodb

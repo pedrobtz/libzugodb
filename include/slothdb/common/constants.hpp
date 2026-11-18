@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 
-namespace slothdb {
+namespace zugodb {
 
 using idx_t = uint64_t;
 using sel_t = uint32_t;
@@ -20,4 +20,4 @@ static constexpr idx_t BLOCK_SIZE = 262144; // 256 KB
 
 static constexpr idx_t INVALID_INDEX = static_cast<idx_t>(-1);
 
-} // namespace slothdb
+} // namespace zugodb

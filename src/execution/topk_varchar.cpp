@@ -4,7 +4,7 @@
 #include <queue>
 #include <string_view>
 
-namespace slothdb {
+namespace zugodb {
 
 std::vector<std::string> TopKVarcharFromDictUsed(
     const string_t* dict_values, std::size_t dict_size,
@@ -101,4 +101,4 @@ std::vector<std::string> TopKVarcharFromDict(
     return out;
 }
 
-}  // namespace slothdb
+}  // namespace zugodb

@@ -3,7 +3,7 @@
 #include "slothdb/common/types/value.hpp"
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 class PhysicalOperator;
 
@@ -43,4 +43,4 @@ std::vector<std::vector<Value>> RunCountGroupAggregate(
     bool topn_ascending,
     idx_t topn_limit);
 
-} // namespace slothdb
+} // namespace zugodb

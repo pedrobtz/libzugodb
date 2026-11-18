@@ -6,7 +6,7 @@
 #include <fstream>
 #include <thread>
 
-using namespace slothdb;
+using namespace zugodb;
 
 namespace {
 // Write a full file replacing its previous contents. Used by LIVE VIEW

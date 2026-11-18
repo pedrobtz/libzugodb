@@ -57,7 +57,7 @@
 #define SLOTHDB_PP_HAS_AVX2 1
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 // Forward declarations - classes that reference each other across definitions.
 class PhysicalHashJoin;
@@ -1072,7 +1072,7 @@ public:
         // Lazy-start: ignore any slot-mode workers; consumer-mode runs its own.
         StopWorkers();
         auto _rp_t0 = std::chrono::steady_clock::now();
-        if (slothdb::PqProfileOn()) slothdb::g_pq_profile.Reset();
+        if (zugodb::PqProfileOn()) zugodb::g_pq_profile.Reset();
         unsigned int nt = (unsigned int)num_threads_hint;
         bool had_hint = (nt != 0);
         if (nt == 0) nt = HWThreads();
@@ -1109,28 +1109,28 @@ public:
             workers_.clear();
         }
         consumer_mode_ = false;
-        if (slothdb::PqProfileOn()) {
+        if (zugodb::PqProfileOn()) {
             double wall = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - _rp_t0).count() / 1e6;
             double d = (nt ? nt : 1);
-            double dc = slothdb::g_pq_profile.decomp_ns.load() / 1e6;
-            double pd = slothdb::g_pq_profile.pagedecode_ns.load() / 1e6;
-            double rd = slothdb::g_pq_profile.rgdecode_ns.load() / 1e6;
-            double cs = slothdb::g_pq_profile.consume_ns.load() / 1e6;
-            double p1 = slothdb::g_pq_profile.agg_pass1_ns.load() / 1e6;
-            double p2 = slothdb::g_pq_profile.agg_pass2_ns.load() / 1e6;
-            unsigned long long dsum = slothdb::g_pq_profile.agg_dict_sum.load();
-            slothdb::ProfileLog(
+            double dc = zugodb::g_pq_profile.decomp_ns.load() / 1e6;
+            double pd = zugodb::g_pq_profile.pagedecode_ns.load() / 1e6;
+            double rd = zugodb::g_pq_profile.rgdecode_ns.load() / 1e6;
+            double cs = zugodb::g_pq_profile.consume_ns.load() / 1e6;
+            double p1 = zugodb::g_pq_profile.agg_pass1_ns.load() / 1e6;
+            double p2 = zugodb::g_pq_profile.agg_pass2_ns.load() / 1e6;
+            unsigned long long dsum = zugodb::g_pq_profile.agg_dict_sum.load();
+            zugodb::ProfileLog(
                 "[SLOTH_PROFILE] RunParallelRGs wall=%.0fms nt=%u pages=%llu | "
                 "per-thread: rgdecode=%.0fms (decomp=%.0fms pagedecode=%.0fms other=%.0fms) "
                 "consume=%.0fms (agg_p1=%.0fms agg_p2=%.0fms) | acct=%.0fms dict_sum=%llu "
                 "| branches skipdi=%llu dictrg=%llu perrow=%llu\n",
-                wall, nt, (unsigned long long)slothdb::g_pq_profile.npages.load(),
+                wall, nt, (unsigned long long)zugodb::g_pq_profile.npages.load(),
                 rd / d, dc / d, pd / d, (rd - dc - pd) / d, cs / d, p1 / d, p2 / d,
                 (rd + cs) / d, dsum,
-                (unsigned long long)slothdb::g_pq_profile.c_skipdi.load(),
-                (unsigned long long)slothdb::g_pq_profile.c_dictrg.load(),
-                (unsigned long long)slothdb::g_pq_profile.c_perrow.load());
+                (unsigned long long)zugodb::g_pq_profile.c_skipdi.load(),
+                (unsigned long long)zugodb::g_pq_profile.c_dictrg.load(),
+                (unsigned long long)zugodb::g_pq_profile.c_perrow.load());
         }
         return (int)nt;
     }
@@ -1292,7 +1292,7 @@ private:
                 // is per-RG (~95×), not per-row — the 2-col GROUP BY hot
                 // path stays on the single-pass DecodeRowGroupInto when
                 // two-phase isn't set.
-                bool _prof = slothdb::PqProfileOn();
+                bool _prof = zugodb::PqProfileOn();
                 auto _d0 = _prof ? std::chrono::steady_clock::now()
                                  : std::chrono::steady_clock::time_point{};
                 if (HasTwoPhaseDecode()) {
@@ -1305,10 +1305,10 @@ private:
                 if (rg_consumer_) rg_consumer_(consumer_work, rg, thread_id);
                 if (_prof) {
                     auto _d2 = std::chrono::steady_clock::now();
-                    slothdb::g_pq_profile.rgdecode_ns.fetch_add(
+                    zugodb::g_pq_profile.rgdecode_ns.fetch_add(
                         (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(
                             _d1 - _d0).count(), std::memory_order_relaxed);
-                    slothdb::g_pq_profile.consume_ns.fetch_add(
+                    zugodb::g_pq_profile.consume_ns.fetch_add(
                         (uint64_t)std::chrono::duration_cast<std::chrono::nanoseconds>(
                             _d2 - _d1).count(), std::memory_order_relaxed);
                 }
@@ -2341,13 +2341,13 @@ private:
                     std::vector<std::string> winners;
                     if (kcol.str_dict_used_only &&
                         !kcol.str_dict_used.empty()) {
-                        winners = slothdb::TopKVarcharFromDictUsed(
+                        winners = zugodb::TopKVarcharFromDictUsed(
                             kcol.str_dict_values.data(),
                             kcol.str_dict_values.size(),
                             kcol.str_dict_used.data(),
                             skip_di, ascending, (size_t)k);
                     } else {
-                        winners = slothdb::TopKVarcharFromDict(
+                        winners = zugodb::TopKVarcharFromDict(
                             kcol.str_dict_values.data(),
                             kcol.str_dict_values.size(),
                             kcol.str_dict_indices.data(), nrows,
@@ -6090,7 +6090,7 @@ private:
         bool bool_and = true;       // for BOOL_AND
         bool bool_or = false;       // for BOOL_OR
         std::unordered_set<std::string> distinct_set; // for COUNT(DISTINCT VARCHAR / mixed)
-        slothdb::SimpleI64Set distinct_int_set; // INT/BIGINT fast path
+        zugodb::SimpleI64Set distinct_int_set; // INT/BIGINT fast path
     };
 
     struct AggState {
@@ -7352,7 +7352,7 @@ private:
                         bool hc_take = hc_ne_empty || !single_has_filter_fused;
                         if (hc_take) {
                             const bool hc_skip_empty = hc_ne_empty;
-                            slothdb::RadixHashCountStr hagg(RADIX_COUNT_THREADS);
+                            zugodb::RadixHashCountStr hagg(RADIX_COUNT_THREADS);
                             pq->SetRGConsumer(
                                 [&, hc_skip_empty](const PhysicalParquetScan::RGWork &work,
                                     idx_t rg_idx, int tid) {
@@ -7405,7 +7405,7 @@ private:
                             }
                             return;
                         }
-                        slothdb::RadixCountAggStr str_agg(RADIX_COUNT_THREADS);
+                        zugodb::RadixCountAggStr str_agg(RADIX_COUNT_THREADS);
                         pq->SetRGConsumer(
                             [&](const PhysicalParquetScan::RGWork &work,
                                 idx_t rg_idx, int tid) {
@@ -7456,7 +7456,7 @@ private:
                                     idx_t dsz = gcol.str_dict_values.size();
                                     if (single_pred_skip) {
                                         // Skip-di fast path: no keep_mask alloc.
-                                        slothdb::g_pq_profile.c_skipdi.fetch_add(1, std::memory_order_relaxed);
+                                        zugodb::g_pq_profile.c_skipdi.fetch_add(1, std::memory_order_relaxed);
                                         str_agg.IncrementByDictRGSkipDi(
                                             t, di, (uint32_t)nrows, dv,
                                             (uint32_t)dsz,
@@ -7465,7 +7465,7 @@ private:
                                             skip_di);
                                     } else if (!single_has_filter_fused || tk_active) {
                                         // Bulk dict-aware: O(D) map ops vs O(N).
-                                        slothdb::g_pq_profile.c_dictrg.fetch_add(1, std::memory_order_relaxed);
+                                        zugodb::g_pq_profile.c_dictrg.fetch_add(1, std::memory_order_relaxed);
                                         str_agg.IncrementByDictRG(
                                             t, di, (uint32_t)nrows, dv,
                                             (uint32_t)dsz,
@@ -7473,7 +7473,7 @@ private:
                                                 : gcol.validity.data(),
                                             tk_active ? tk.data() : nullptr);
                                     } else {
-                                        slothdb::g_pq_profile.c_perrow.fetch_add(1, std::memory_order_relaxed);
+                                        zugodb::g_pq_profile.c_perrow.fetch_add(1, std::memory_order_relaxed);
                                         for (idx_t r = 0; r < nrows; r++) {
                                             if (!EvalSimplePredicates(
                                                     single_preds, work.cols, r))
@@ -7487,7 +7487,7 @@ private:
                                         }
                                     }
                                 } else if (!gcol.str_data.empty()) {
-                                    slothdb::g_pq_profile.c_perrow.fetch_add(1, std::memory_order_relaxed);
+                                    zugodb::g_pq_profile.c_perrow.fetch_add(1, std::memory_order_relaxed);
                                     const string_t *gs = gcol.str_data.data();
                                     for (idx_t r = 0; r < nrows; r++) {
                                         if (tk_active) {
@@ -7505,7 +7505,7 @@ private:
                             });
                         pq->RunParallelRGs(RADIX_COUNT_THREADS);
                         std::vector<std::thread> mts;
-                        for (int s = 1; s < slothdb::RadixCountAggStr::N_RADIX; s++) {
+                        for (int s = 1; s < zugodb::RadixCountAggStr::N_RADIX; s++) {
                             mts.emplace_back([&str_agg, s]() {
                                 str_agg.MergeShard(s);
                             });
@@ -7534,7 +7534,7 @@ private:
                     }
                     if (int_count_shape) {
                         constexpr int RADIX_COUNT_INT_THREADS = 8;
-                        slothdb::RadixCountAgg radix_agg(RADIX_COUNT_INT_THREADS);
+                        zugodb::RadixCountAgg radix_agg(RADIX_COUNT_INT_THREADS);
                         // Reserve based on parquet total rows. Filter cuts
                         // it down but reserve isn't tight either way.
                         idx_t total_rows = 0;
@@ -7581,7 +7581,7 @@ private:
                         // contention). Run all but radix 0 in parallel
                         // threads; main thread does radix 0.
                         std::vector<std::thread> mts;
-                        for (int r = 1; r < slothdb::RadixCountAgg::N_RADIX; r++) {
+                        for (int r = 1; r < zugodb::RadixCountAgg::N_RADIX; r++) {
                             mts.emplace_back([&radix_agg, r]() {
                                 radix_agg.MergeRadix(r);
                             });
@@ -7899,7 +7899,7 @@ private:
                     sh.int_groups.reserve(per_shard_est);
                     sh.int_order.reserve(per_shard_est);
                 }
-                slothdb::ParallelFor(MERGE_SHARDS, [&](unsigned int s) {
+                zugodb::ParallelFor(MERGE_SHARDS, [&](unsigned int s) {
                     auto &out = int_merge_shards[s];
                     for (int t = 0; t < nt; t++) {
                         auto &tl = tls[t];
@@ -8306,7 +8306,7 @@ private:
                                 if (col.decoded && col.all_valid &&
                                     col.str_dict_encoded &&
                                     !col.str_dict_indices.empty()) {
-                                    int64_t local = slothdb::CountDictLikeContains(
+                                    int64_t local = zugodb::CountDictLikeContains(
                                         col.str_dict_values.data(),
                                         col.str_dict_values.size(),
                                         col.str_dict_indices.data(),
@@ -8326,7 +8326,7 @@ private:
                                     !col.str_dict_encoded &&
                                     !col.str_data.empty() &&
                                     col.str_data.size() >= nrows) {
-                                    int64_t local = slothdb::CountPlainLikeContains(
+                                    int64_t local = zugodb::CountPlainLikeContains(
                                         col.str_data.data(), nrows,
                                         p.sval.data(), p.sval.size(),
                                         p.like_negated);
@@ -9443,18 +9443,18 @@ private:
                 // low 4 bits of ankerl hash so the merge phase needs no rehash.
                 std::array<std::vector<int64_t>, 16> scatter;
                 ankerl::unordered_dense::map<int64_t,
-                    slothdb::SimpleI64Set> int_g_int_d;
+                    zugodb::SimpleI64Set> int_g_int_d;
                 ankerl::unordered_dense::map<int64_t,
                     ankerl::unordered_dense::set<std::string>> int_g_str_d;
                 std::unordered_map<std::string,
-                    slothdb::SimpleI64Set> str_g_int_d;
+                    zugodb::SimpleI64Set> str_g_int_d;
                 std::unordered_map<std::string,
                     ankerl::unordered_dense::set<std::string>> str_g_str_d;
                 // 2-col grouped variant: composite key = bytewise concat of
                 // (col1 || \xFF || col2), with the original (Value, Value)
                 // pair stashed alongside for emit.
                 std::unordered_map<std::string,
-                    slothdb::SimpleI64Set> g2_int_d;
+                    zugodb::SimpleI64Set> g2_int_d;
                 std::unordered_map<std::string,
                     ankerl::unordered_dense::set<std::string>> g2_str_d;
                 std::unordered_map<std::string, std::vector<Value>> g2_key_parts;
@@ -9698,7 +9698,7 @@ private:
                          (t1 == LogicalTypeId::VARCHAR && g1_di)) &&
                         (t2 == LogicalTypeId::INTEGER ||
                          (t2 == LogicalTypeId::VARCHAR && g2_di));
-                    ankerl::unordered_dense::map<uint64_t, slothdb::SimpleI64Set*> rg_pair_int;
+                    ankerl::unordered_dense::map<uint64_t, zugodb::SimpleI64Set*> rg_pair_int;
                     ankerl::unordered_dense::map<uint64_t,
                         ankerl::unordered_dense::set<std::string>*> rg_pair_str;
                     auto pair_key = [&](idx_t r) -> uint64_t {
@@ -9716,11 +9716,11 @@ private:
                     // duplicate is essentially free.
                     uint64_t prev_pkey = UINT64_MAX;
                     int64_t prev_v_int = 0;
-                    slothdb::SimpleI64Set *prev_sp_int = nullptr;
+                    zugodb::SimpleI64Set *prev_sp_int = nullptr;
                     for (idx_t r = 0; r < nrows; r++) {
                         if (!keep_row(r)) continue;
                         if (!acol.all_valid && !acol.validity[r]) continue;
-                        slothdb::SimpleI64Set *sp = nullptr;
+                        zugodb::SimpleI64Set *sp = nullptr;
                         ankerl::unordered_dense::set<std::string> *strset = nullptr;
                         uint64_t pkey = 0;
                         bool packed = can_pack_pair;
@@ -9752,7 +9752,7 @@ private:
                                         value_for(r, t1, g1_i64, g1_i32, g1_di, g1_dv, g1_dsz, g1_str),
                                         value_for(r, t2, g2_i64, g2_i32, g2_di, g2_dv, g2_dsz, g2_str)};
                                     tl.g2_key_parts.emplace(k, std::move(kv));
-                                    it = tl.g2_int_d.emplace(k, slothdb::SimpleI64Set()).first;
+                                    it = tl.g2_int_d.emplace(k, zugodb::SimpleI64Set()).first;
                                 }
                                 sp = &it->second;
                                 if (packed) rg_pair_int.emplace(pkey, sp);
@@ -9816,7 +9816,7 @@ private:
                 // gint × int distinct
                 if (gint && !agg_is_varchar) {
                     int64_t prev_g = 0;
-                    slothdb::SimpleI64Set *cached = nullptr;
+                    zugodb::SimpleI64Set *cached = nullptr;
                     for (idx_t r = 0; r < nrows; r++) {
                         if (!keep_row(r)) continue;
                         if (!acol.all_valid && !acol.validity[r]) continue;
@@ -9869,7 +9869,7 @@ private:
                 // typed-keep-mask) still falls through to the legacy
                 // EvalSimplePredicates loop below.
                 if (gstr && !agg_is_varchar && dict_skip_active && g_dict_idx) {
-                    slothdb::IngestRGGstrIntDistinctDictSkipDi(
+                    zugodb::IngestRGGstrIntDistinctDictSkipDi(
                         tl.str_g_int_d, g_dict_idx, g_dict_val, g_dsz,
                         a_i64, a_i32,
                         acol.all_valid,
@@ -9881,14 +9881,14 @@ private:
                     (!dpd_has_filter || tk_active)) {
                     const uint8_t *km = tk_active ? tk.data() : nullptr;
                     if (g_dict_idx) {
-                        slothdb::IngestRGGstrIntDistinctDict(
+                        zugodb::IngestRGGstrIntDistinctDict(
                             tl.str_g_int_d, g_dict_idx, g_dict_val, g_dsz,
                             a_i64, a_i32,
                             acol.all_valid,
                             acol.all_valid ? nullptr : acol.validity.data(),
                             km, dpd_has_filter, nrows);
                     } else if (g_str) {
-                        slothdb::IngestRGGstrIntDistinctPlain(
+                        zugodb::IngestRGGstrIntDistinctPlain(
                             tl.str_g_int_d, g_str, a_i64, a_i32,
                             acol.all_valid,
                             acol.all_valid ? nullptr : acol.validity.data(),
@@ -9900,7 +9900,7 @@ private:
                 // (rare; keeps the per-row EvalSimplePredicates fallback).
                 if (gstr && !agg_is_varchar) {
                     if (g_dict_idx) {
-                        std::vector<slothdb::SimpleI64Set *>
+                        std::vector<zugodb::SimpleI64Set *>
                             di_to_set(g_dsz, nullptr);
                         for (idx_t r = 0; r < nrows; r++) {
                             if (!keep_row(r)) continue;
@@ -9918,7 +9918,7 @@ private:
                         }
                     } else if (g_str) {
                         string_t prev_s; bool have_prev = false;
-                        slothdb::SimpleI64Set *cached = nullptr;
+                        zugodb::SimpleI64Set *cached = nullptr;
                         for (idx_t r = 0; r < nrows; r++) {
                             if (!keep_row(r)) continue;
                             if (!acol.all_valid && !acol.validity[r]) continue;
@@ -9979,7 +9979,7 @@ private:
             // (more threads regressed throughput — SMT/Snappy oversubscription).
             pq->RunParallelRGs((!has_group && agg_is_varchar) ? 12 : 0);
 
-            bool merge_profile_on = slothdb::PqProfileOn();
+            bool merge_profile_on = zugodb::PqProfileOn();
             auto merge_profile_t0 = merge_profile_on ? std::chrono::steady_clock::now()
                                   : std::chrono::steady_clock::time_point{};
             // Merge phase.
@@ -9998,7 +9998,7 @@ private:
                     std::array<size_t, NSHARDS> shard_sz{};
                     std::vector<std::thread> mts;
                     auto run_shard = [&](int s) {
-                        slothdb::SimpleI64Set out;
+                        zugodb::SimpleI64Set out;
                         out.reserve(512 * 1024);
                         for (int t = 0; t < MAX_THREADS; t++) {
                             for (int64_t v : tls[t].scatter[s]) out.insert(v);
@@ -10021,7 +10021,7 @@ private:
                 // 2-col merge: composite key collected across threads, then
                 // per-key disjoint parallel union of the distinct sets.
                 std::unordered_map<std::string,
-                    slothdb::SimpleI64Set> merged_int;
+                    zugodb::SimpleI64Set> merged_int;
                 std::unordered_map<std::string,
                     ankerl::unordered_dense::set<std::string>> merged_str;
                 std::unordered_map<std::string, std::vector<Value>> merged_keys;
@@ -10103,14 +10103,14 @@ private:
                 // workers, each worker unions per-group sets for its keys.
                 if (group_tid != LogicalTypeId::VARCHAR) {
                     ankerl::unordered_dense::map<int64_t,
-                        slothdb::SimpleI64Set> merged_int;
+                        zugodb::SimpleI64Set> merged_int;
                     ankerl::unordered_dense::map<int64_t,
                         ankerl::unordered_dense::set<std::string>> merged_str;
                     std::vector<int64_t> all_keys;
                     for (int t = 0; t < MAX_THREADS; t++) {
                         for (auto &kv : tls[t].int_g_int_d) {
                             if (merged_int.emplace(kv.first,
-                                slothdb::SimpleI64Set()).second)
+                                zugodb::SimpleI64Set()).second)
                                 all_keys.push_back(kv.first);
                         }
                         for (auto &kv : tls[t].int_g_str_d) {
@@ -10187,14 +10187,14 @@ private:
                         // (iPad, ~1M distinct UserIDs) the single-worker
                         // long pole. See str_group_distinct.cpp.
                         std::vector<std::unordered_map<std::string,
-                            slothdb::SimpleI64Set>*> per_thread;
+                            zugodb::SimpleI64Set>*> per_thread;
                         per_thread.reserve(MAX_THREADS);
                         for (int t = 0; t < MAX_THREADS; t++)
                             per_thread.push_back(&tls[t].str_g_int_d);
                         // 12 = all logical procs. The merge is compute-only
                         // (no parquet decode), so the 8-thread decode cap
                         // (Snappy/SMT oversubscription) does not apply.
-                        auto counts = slothdb::MergeStrGroupIntDistinct(
+                        auto counts = zugodb::MergeStrGroupIntDistinct(
                             per_thread, 12);
                         for (auto &kv : counts) {
                             auto &states = group_states[kv.first];
@@ -10261,7 +10261,7 @@ private:
                 }
             }
             if (merge_profile_on) {
-                slothdb::ProfileLog("[SLOTH_PROFILE] varchar-group merge %.0fms\n",
+                zugodb::ProfileLog("[SLOTH_PROFILE] varchar-group merge %.0fms\n",
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::steady_clock::now() - merge_profile_t0).count()
                         / 1e6);
@@ -10617,13 +10617,13 @@ private:
                         }
                         if (!legacy_override && sa_n >= 1 && sa_n <= 4) {
                             switch (sa_n) {
-                            case 1: { slothdb::InlineRowAgg<1> a(INT_PAIR_AGG_THREADS); a.ReserveExpectedRows(intpair_reserve_estimate); run_intpair_agg(a); break; }
-                            case 2: { slothdb::InlineRowAgg<2> a(INT_PAIR_AGG_THREADS); a.ReserveExpectedRows(intpair_reserve_estimate); run_intpair_agg(a); break; }
-                            case 3: { slothdb::InlineRowAgg<3> a(INT_PAIR_AGG_THREADS); a.ReserveExpectedRows(intpair_reserve_estimate); run_intpair_agg(a); break; }
-                            case 4: { slothdb::InlineRowAgg<4> a(INT_PAIR_AGG_THREADS); a.ReserveExpectedRows(intpair_reserve_estimate); run_intpair_agg(a); break; }
+                            case 1: { zugodb::InlineRowAgg<1> a(INT_PAIR_AGG_THREADS); a.ReserveExpectedRows(intpair_reserve_estimate); run_intpair_agg(a); break; }
+                            case 2: { zugodb::InlineRowAgg<2> a(INT_PAIR_AGG_THREADS); a.ReserveExpectedRows(intpair_reserve_estimate); run_intpair_agg(a); break; }
+                            case 3: { zugodb::InlineRowAgg<3> a(INT_PAIR_AGG_THREADS); a.ReserveExpectedRows(intpair_reserve_estimate); run_intpair_agg(a); break; }
+                            case 4: { zugodb::InlineRowAgg<4> a(INT_PAIR_AGG_THREADS); a.ReserveExpectedRows(intpair_reserve_estimate); run_intpair_agg(a); break; }
                             }
                         } else {
-                            slothdb::RadixMultiAggI64Key a(INT_PAIR_AGG_THREADS, sa_n);
+                            zugodb::RadixMultiAggI64Key a(INT_PAIR_AGG_THREADS, sa_n);
                             run_intpair_agg(a);
                         }
                         return;
@@ -10891,13 +10891,13 @@ private:
                         }
                         if (!bk_legacy_override && bk_sa_n >= 1 && bk_sa_n <= 4) {
                             switch (bk_sa_n) {
-                            case 1: { slothdb::InlineRowAggBigKey<1> a(BK_THREADS); a.ReserveExpectedRows(bk_reserve_estimate); run_bigkey_agg(a); break; }
-                            case 2: { slothdb::InlineRowAggBigKey<2> a(BK_THREADS); a.ReserveExpectedRows(bk_reserve_estimate); run_bigkey_agg(a); break; }
-                            case 3: { slothdb::InlineRowAggBigKey<3> a(BK_THREADS); a.ReserveExpectedRows(bk_reserve_estimate); run_bigkey_agg(a); break; }
-                            case 4: { slothdb::InlineRowAggBigKey<4> a(BK_THREADS); a.ReserveExpectedRows(bk_reserve_estimate); run_bigkey_agg(a); break; }
+                            case 1: { zugodb::InlineRowAggBigKey<1> a(BK_THREADS); a.ReserveExpectedRows(bk_reserve_estimate); run_bigkey_agg(a); break; }
+                            case 2: { zugodb::InlineRowAggBigKey<2> a(BK_THREADS); a.ReserveExpectedRows(bk_reserve_estimate); run_bigkey_agg(a); break; }
+                            case 3: { zugodb::InlineRowAggBigKey<3> a(BK_THREADS); a.ReserveExpectedRows(bk_reserve_estimate); run_bigkey_agg(a); break; }
+                            case 4: { zugodb::InlineRowAggBigKey<4> a(BK_THREADS); a.ReserveExpectedRows(bk_reserve_estimate); run_bigkey_agg(a); break; }
                             }
                         } else {
-                            slothdb::RadixMultiAggBigKey a(BK_THREADS, bk_sa_n);
+                            zugodb::RadixMultiAggBigKey a(BK_THREADS, bk_sa_n);
                             run_bigkey_agg(a);
                         }
                         return;
@@ -10967,7 +10967,7 @@ private:
                         // 12 decode shards: this path is parquet-decode-bound and
                         // scales to all 12 logical procs (see RunParallelRGs).
                         constexpr int RADIX_COUNT_2COL_THREADS = 12;
-                        slothdb::RadixCount2ColIntStr agg2(RADIX_COUNT_2COL_THREADS);
+                        zugodb::RadixCount2ColIntStr agg2(RADIX_COUNT_2COL_THREADS);
                         // Pre-reserve shard maps (high-card
                         // (int, str) pairs). Without reserve each shard
                         // grows 8 -> 16 -> ... -> 8K through ~10 rehashes
@@ -11116,7 +11116,7 @@ private:
                         pq->RunParallelRGs(RADIX_COUNT_2COL_THREADS);
                         std::vector<std::thread> mts;
                         for (int s = 1;
-                             s < slothdb::RadixCount2ColIntStr::N_RADIX; s++) {
+                             s < zugodb::RadixCount2ColIntStr::N_RADIX; s++) {
                             mts.emplace_back([&agg2, s]() {
                                 agg2.MergeShard(s);
                             });
@@ -11374,13 +11374,13 @@ private:
                 pq->GetTypes()[group_col_indices[0]].id() ==
                     LogicalTypeId::INTEGER) {
                 bool int_group_ok = true;
-                std::vector<slothdb::IntGroupAggKind> int_group_kinds((size_t)num_aggs);
+                std::vector<zugodb::IntGroupAggKind> int_group_kinds((size_t)num_aggs);
                 std::vector<bool> int_group_big((size_t)num_aggs, false);
                 std::vector<idx_t> int_group_col((size_t)num_aggs, INVALID_INDEX);
                 for (idx_t a = 0; a < num_aggs && int_group_ok; a++) {
                     auto &info = agg_infos[a];
                     if (kinds[a] == AK::CountStar) {
-                        int_group_kinds[a] = slothdb::IntGroupAggKind::CountStar;
+                        int_group_kinds[a] = zugodb::IntGroupAggKind::CountStar;
                     } else if (kinds[a] == AK::Sum ||
                                kinds[a] == AK::CountDistinctInt) {
                         if (info.col_idx == INVALID_INDEX) {
@@ -11392,8 +11392,8 @@ private:
                             int_group_ok = false; break;
                         }
                         int_group_kinds[a] = (kinds[a] == AK::Sum)
-                            ? slothdb::IntGroupAggKind::Sum
-                            : slothdb::IntGroupAggKind::CountDistinct;
+                            ? zugodb::IntGroupAggKind::Sum
+                            : zugodb::IntGroupAggKind::CountDistinct;
                         int_group_big[a] = (ct == LogicalTypeId::BIGINT);
                         int_group_col[a] = info.col_idx;
                     } else {
@@ -11403,7 +11403,7 @@ private:
                 if (int_group_ok) {
                     constexpr int INT_GROUP_AGG_THREADS = 8;
                     idx_t int_group_gci = group_col_indices[0];
-                    slothdb::IntGroupAgg int_group_agg(INT_GROUP_AGG_THREADS, int_group_kinds);
+                    zugodb::IntGroupAgg int_group_agg(INT_GROUP_AGG_THREADS, int_group_kinds);
                     pq->SetRGConsumer(
                         [&](const PhysicalParquetScan::RGWork &work,
                             idx_t rg_idx, int tid) {
@@ -11424,7 +11424,7 @@ private:
                             bool ok = true;
                             for (idx_t a = 0; a < num_aggs; a++) {
                                 if (int_group_kinds[a] ==
-                                    slothdb::IntGroupAggKind::CountStar) continue;
+                                    zugodb::IntGroupAggKind::CountStar) continue;
                                 const auto &ac = work.cols[int_group_col[a]];
                                 if (!ac.decoded) { ok = false; break; }
                                 if (int_group_big[a]) ai64[a] = ac.i64_data.data();
@@ -12296,7 +12296,7 @@ private:
                     topn_active_ &&
                     topn_col_idx_ >= group_col_indices.size() &&
                     topn_col_idx_ < group_col_indices.size() + num_aggs;
-                result_rows_ = slothdb::RunCountGroupAggregate(
+                result_rows_ = zugodb::RunCountGroupAggregate(
                     children[0].get(), group_col_indices, num_aggs,
                     topn_active_, topn_count_order, topn_ascending_,
                     topn_limit_);
@@ -14460,7 +14460,7 @@ static bool TryComputeVarcharGroupDistinctTopN(
     pq->Init();
 
     constexpr int STAGE_THREADS = 8;
-    slothdb::RadixCount2ColIntStr stage1(STAGE_THREADS);
+    zugodb::RadixCount2ColIntStr stage1(STAGE_THREADS);
     // Pre-size the stage-1 pair maps to limit rehashing during ingest.
     // Distinct (group, value) pairs cannot exceed the row count; with no
     // distinct-count statistics available, pre-size to a fraction of the
@@ -14562,7 +14562,7 @@ static bool TryComputeVarcharGroupDistinctTopN(
     // Merge Stage 1 shards in parallel.
     std::vector<std::thread> mts;
     for (int s = 1;
-         s < slothdb::RadixCount2ColIntStr::N_RADIX; s++) {
+         s < zugodb::RadixCount2ColIntStr::N_RADIX; s++) {
         mts.emplace_back([&stage1, s]() { stage1.MergeShard(s); });
     }
     stage1.MergeShard(0);
@@ -14586,4 +14586,4 @@ static bool TryComputeVarcharGroupDistinctTopN(
     return true;
 }
 
-} // namespace slothdb
+} // namespace zugodb

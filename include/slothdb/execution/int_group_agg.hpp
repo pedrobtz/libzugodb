@@ -20,7 +20,7 @@
 #include <memory>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class IntGroupAggKind : uint8_t { CountStar, Sum, CountDistinct };
 
@@ -62,4 +62,4 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace slothdb
+}  // namespace zugodb

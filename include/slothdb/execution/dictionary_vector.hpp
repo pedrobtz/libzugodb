@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Dictionary-encoded column: stores values as integer codes into a dictionary.
 // Used for low-cardinality string columns to accelerate GROUP BY, JOIN, filter.
@@ -95,4 +95,4 @@ public:
     static std::unique_ptr<DictionaryVector> TryEncode(const std::vector<Value> &values);
 };
 
-} // namespace slothdb
+} // namespace zugodb

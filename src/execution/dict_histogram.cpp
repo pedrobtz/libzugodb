@@ -6,7 +6,7 @@
 #include <thread>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 bool TryDictHistogramAgg(ParquetReader &reader, idx_t col_idx,
                          int64_t &out_count, double &out_sum) {
@@ -77,4 +77,4 @@ bool TryDictHistogramAgg(ParquetReader &reader, idx_t col_idx,
     return true;
 }
 
-} // namespace slothdb
+} // namespace zugodb

@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace slothdb {
+namespace zugodb {
 
 // The top-level catalog. Manages schemas, tables, and other metadata.
 // Thread-safe via mutex.
@@ -37,4 +37,4 @@ private:
     std::unordered_map<std::string, std::unique_ptr<SchemaCatalogEntry>> schemas_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

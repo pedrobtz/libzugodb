@@ -7,7 +7,7 @@
 #include <memory>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Stores a single column's data within a RowGroup.
 // Data is stored as a contiguous buffer of the physical type,
@@ -55,4 +55,4 @@ private:
     idx_t TypeSize() const;
 };
 
-} // namespace slothdb
+} // namespace zugodb

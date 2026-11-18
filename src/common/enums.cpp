@@ -1,7 +1,7 @@
 #include "slothdb/common/enums.hpp"
 #include <stdexcept>
 
-namespace slothdb {
+namespace zugodb {
 
 idx_t GetTypeIdSize(PhysicalType type) {
     switch (type) {
@@ -36,4 +36,4 @@ idx_t GetTypeIdSize(PhysicalType type) {
     return 0;
 }
 
-} // namespace slothdb
+} // namespace zugodb

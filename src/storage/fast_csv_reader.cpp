@@ -137,7 +137,7 @@ static inline const char *find_char3_simd(const char *p, const char *end,
 #include <unistd.h>
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 FastCSVReader::FastCSVReader(const std::string &path, char delimiter, bool has_header)
     : FastCSVReader(path, delimiter, has_header, 0) {}
@@ -801,4 +801,4 @@ void FastCSVReader::ReadIntoChunks(std::vector<DataChunk> &out,
     pos_ = end;
 }
 
-} // namespace slothdb
+} // namespace zugodb

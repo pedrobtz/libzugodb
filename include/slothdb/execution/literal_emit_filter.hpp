@@ -8,7 +8,7 @@
 #include "slothdb/common/types/value.hpp"
 #include "slothdb/execution/physical_operator.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 class PhysicalLiteralEmitFilter : public PhysicalOperator {
 public:
@@ -25,4 +25,4 @@ private:
     int64_t emitted_ = 0;
 };
 
-}  // namespace slothdb
+}  // namespace zugodb

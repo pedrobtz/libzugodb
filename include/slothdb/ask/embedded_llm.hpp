@@ -3,7 +3,7 @@
 #include "slothdb/ask/nl_to_sql.hpp"
 #include <string>
 
-namespace slothdb {
+namespace zugodb {
 namespace ask {
 
 struct EmbeddedResult {
@@ -70,4 +70,4 @@ EmbeddedResult GenerateSQLLocal(const Schema &schema,
                                 const std::string &question);
 
 } // namespace ask
-} // namespace slothdb
+} // namespace zugodb

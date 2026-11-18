@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace slothdb {
+namespace zugodb {
 
 // A schema (namespace) in the catalog. Owns table entries.
 class SchemaCatalogEntry : public CatalogEntry {
@@ -33,4 +33,4 @@ private:
     std::unordered_map<std::string, std::unique_ptr<TableCatalogEntry>> tables_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

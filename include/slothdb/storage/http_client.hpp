@@ -4,7 +4,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace slothdb {
+namespace zugodb {
 
 struct HTTPResponse {
     int status_code = 0;
@@ -60,4 +60,4 @@ public:
     static std::string S3ToHTTPS(const std::string &s3_url);
 };
 
-} // namespace slothdb
+} // namespace zugodb

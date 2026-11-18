@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class BoundExpressionType : uint8_t {
     COLUMN_REF,
@@ -225,4 +225,4 @@ public:
     BoundExprPtr filter;
 };
 
-} // namespace slothdb
+} // namespace zugodb

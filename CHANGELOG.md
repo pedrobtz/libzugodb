@@ -1,6 +1,31 @@
 # Changelog
 
-All notable changes to SlothDB are documented here.
+## libzugodb 0.1.0
+
+The first release as libzugodb: SlothDB at `8180f21` (v0.2.7+) with these
+changes, in order. Their reasons are in the commit messages.
+
+- Take the Windows branch under MinGW, not only MSVC.
+- Write nothing to stderr, never abort, use no rand().
+- Refuse remote paths: offline only.
+- Cap every thread pool with one process-wide limit.
+- Refuse STRFTIME with one argument.
+- Fix two warnings R CMD check counts.
+- Add a read-only database mode.
+- Set stop flags under the mutex their waiters use.
+- Keep the Parquet decoder's scratch out of thread_local.
+- Size validity masks by their holder's capacity.
+- Update seven doctests to DATE as days since 1970.
+- Make ROLLBACK say that nothing was undone.
+- Refuse Parquet columns the reader cannot decode faithfully, when bound.
+- Refuse JSON the readers would misread, and decode \u escapes.
+- Refuse Arrow IPC: SlothDB's Arrow format is its own.
+- Refuse the SQLite, Excel and Avro readers.
+- Rename the C++ namespace from `slothdb::` to `zugodb::`.
+
+## SlothDB
+
+The entries below are SlothDB's own.
 
 ## 0.2.3
 

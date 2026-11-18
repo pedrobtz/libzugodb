@@ -6,7 +6,7 @@
 #include <vector>
 #include <unordered_map>
 
-namespace slothdb {
+namespace zugodb {
 
 // Hive partitioning: key=value directory structure.
 class HivePartition {
@@ -36,4 +36,4 @@ public:
         const std::vector<std::pair<std::string, std::string>> &partitions);
 };
 
-} // namespace slothdb
+} // namespace zugodb

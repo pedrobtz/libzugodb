@@ -10,7 +10,7 @@
 #include <thread>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // A simple thread pool for parallel query execution.
 // Uses a task queue with worker threads that pull and execute tasks.
@@ -62,4 +62,4 @@ private:
     std::condition_variable wait_cv_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

@@ -4,7 +4,7 @@
 #include "slothdb/common/types/string_type.hpp"
 #include <cstring>
 
-namespace slothdb {
+namespace zugodb {
 
 ColumnData::ColumnData(const LogicalType &type, idx_t capacity)
     : type_(type), capacity_(capacity), count_(0) {
@@ -127,4 +127,4 @@ void ColumnData::Scan(Vector &target, idx_t start, idx_t scan_count) const {
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

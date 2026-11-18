@@ -1,7 +1,7 @@
 #include "slothdb/common/types/logical_type.hpp"
 #include "slothdb/common/exception.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // --- ExtraTypeInfo Equals implementations ---
 
@@ -189,4 +189,4 @@ std::string LogicalTypeIdToString(LogicalTypeId id) {
     return "UNKNOWN";
 }
 
-} // namespace slothdb
+} // namespace zugodb

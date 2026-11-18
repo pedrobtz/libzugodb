@@ -4,7 +4,7 @@
 #include <cstring>
 #include <string>
 
-namespace slothdb {
+namespace zugodb {
 
 // 16-byte inline string representation.
 // Strings <= 12 bytes are stored entirely inline.
@@ -95,4 +95,4 @@ struct string_t {
 
 static_assert(sizeof(string_t) == 16, "string_t must be 16 bytes");
 
-} // namespace slothdb
+} // namespace zugodb

@@ -9,7 +9,7 @@
 #include <vector>
 #include <memory>
 
-namespace slothdb {
+namespace zugodb {
 
 // Scan state for iterating over a DataTable.
 struct TableScanState {
@@ -69,4 +69,4 @@ private:
     mutable std::mutex lock_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

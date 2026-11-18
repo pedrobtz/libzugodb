@@ -1,7 +1,7 @@
 #include "slothdb/storage/data_table.hpp"
 #include <algorithm>
 
-namespace slothdb {
+namespace zugodb {
 
 DataTable::DataTable(const std::vector<LogicalType> &types)
     : types_(types), total_rows_(0) {
@@ -97,4 +97,4 @@ bool DataTable::ParallelScan(ParallelScanState &state, DataChunk &result) const 
     }
 }
 
-} // namespace slothdb
+} // namespace zugodb

@@ -2,7 +2,7 @@
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 static void setup_join_tables(Connection &conn) {
     conn.Query("CREATE TABLE orders (id INTEGER, customer_id INTEGER, amount DOUBLE)");

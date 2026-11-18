@@ -5,7 +5,7 @@
 #include <string>
 #include <memory>
 
-namespace slothdb {
+namespace zugodb {
 
 // Cross-platform file I/O abstraction.
 class FileHandle {
@@ -43,4 +43,4 @@ private:
     std::string path_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace slothdb {
+namespace zugodb {
 
 // Bind context: tracks which columns are available during binding.
 struct BindContext {
@@ -76,4 +76,4 @@ private:
     Catalog &catalog_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

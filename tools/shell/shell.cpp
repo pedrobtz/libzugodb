@@ -148,16 +148,16 @@ static bool run_query(slothdb_connection *conn, const std::string &sql) {
 // Straight ports the catalog contents into the engine's Schema struct;
 // each string is copied immediately since the API's returned pointers
 // only live until the next call to the same function.
-static slothdb::ask::Schema build_ask_schema(slothdb_connection *conn) {
-    slothdb::ask::Schema schema;
+static zugodb::ask::Schema build_ask_schema(slothdb_connection *conn) {
+    zugodb::ask::Schema schema;
     uint64_t n_tables = slothdb_table_count(conn);
     for (uint64_t i = 0; i < n_tables; i++) {
         std::string tname = slothdb_table_name(conn, i);
-        slothdb::ask::Table t;
+        zugodb::ask::Table t;
         t.name = tname;
         uint64_t n_cols = slothdb_table_column_count(conn, i);
         for (uint64_t j = 0; j < n_cols; j++) {
-            slothdb::ask::Column c;
+            zugodb::ask::Column c;
             c.name = slothdb_table_column_name(conn, i, j);
             c.type = slothdb_table_column_type(conn, i, j);
             t.columns.push_back(std::move(c));
@@ -268,9 +268,9 @@ static std::string safe_alias_for_path(const std::string &path) {
     return out;
 }
 
-static slothdb::ask::Table peek_file_schema(slothdb_connection *conn,
+static zugodb::ask::Table peek_file_schema(slothdb_connection *conn,
                                              const std::string &path) {
-    slothdb::ask::Table t;
+    zugodb::ask::Table t;
     t.name = safe_alias_for_path(path);
     t.source_file = path;
     std::string peek_sql = "SELECT * FROM '" + path + "' LIMIT 0";
@@ -279,7 +279,7 @@ static slothdb::ask::Table peek_file_schema(slothdb_connection *conn,
     if (status == SLOTHDB_OK && res) {
         uint64_t n_cols = slothdb_column_count(res);
         for (uint64_t i = 0; i < n_cols; i++) {
-            slothdb::ask::Column c;
+            zugodb::ask::Column c;
             c.name = slothdb_column_name(res, i);
             // No column-type getter on slothdb_result; fall back to
             // VARCHAR as the lowest-common-denominator hint. Qwen
@@ -298,7 +298,7 @@ static slothdb::ask::Table peek_file_schema(slothdb_connection *conn,
 //   "average revenue in events.parquet by region"
 // have the right column names in view.
 static void augment_schema_with_referenced_files(
-        slothdb_connection *conn, slothdb::ask::Schema &schema,
+        slothdb_connection *conn, zugodb::ask::Schema &schema,
         const std::string &question) {
     auto paths = extract_file_paths(question);
     if (paths.empty()) return;
@@ -498,15 +498,15 @@ static bool ask_once(slothdb_connection *conn, const std::string &question) {
     // File-source intents ("load sales.csv", "query events.parquet") work
     // on an empty catalog. Only fall back to the empty-schema message
     // when Translate also refuses.
-    auto r = slothdb::ask::Translate(question, schema);
-    if (r.status == slothdb::ask::Status::OK) {
+    auto r = zugodb::ask::Translate(question, schema);
+    if (r.status == zugodb::ask::Status::OK) {
         return confirm_and_run(conn, r.sql);
     }
     // Explicit refusal from the rules parser: the shape is understood
     // but the engine can't execute it correctly (running totals, top-N
     // per group, etc.). Print the message and stop - do NOT fall back
     // to the LLM, which would produce broken SQL the user might run.
-    if (r.status == slothdb::ask::Status::REFUSE) {
+    if (r.status == zugodb::ask::Status::REFUSE) {
         printf("  %s\n", r.message.c_str());
         return true;
     }
@@ -517,12 +517,12 @@ static bool ask_once(slothdb_connection *conn, const std::string &question) {
         return true;
     }
 
-    if (slothdb::ask::EmbeddedAvailable()) {
-        const auto &picked = slothdb::ask::PickModelForQuestion(question);
+    if (zugodb::ask::EmbeddedAvailable()) {
+        const auto &picked = zugodb::ask::PickModelForQuestion(question);
         printf("-- %s (rules did not match - asking the local model)\n",
                picked.name);
         fflush(stdout);
-        auto er = slothdb::ask::GenerateSQLLocal(schema, question);
+        auto er = zugodb::ask::GenerateSQLLocal(schema, question);
         if (er.ok && !er.sql.empty()) {
             // Model's in-prompt safety valve: when asked for a cumulative
             // / running aggregate (engine can't execute those correctly),
@@ -556,8 +556,8 @@ static void handle_ask(slothdb_connection *conn, const std::string &arg) {
     // the large model is streaming to disk while the user types their
     // first question. Idempotent - already-downloaded or already-in-
     // flight tiers are no-ops.
-    if (slothdb::ask::EmbeddedAvailable()) {
-        slothdb::ask::StartBackgroundDownloads();
+    if (zugodb::ask::EmbeddedAvailable()) {
+        zugodb::ask::StartBackgroundDownloads();
     }
 
     // With an argument: single-shot. Pipeline -> confirm -> run -> return.
@@ -569,9 +569,9 @@ static void handle_ask(slothdb_connection *conn, const std::string &arg) {
     // No argument: interactive NL shell. Each non-empty line runs through
     // the NL pipeline. Blank line / `exit` / Ctrl+D exits back to SQL.
     printf("ask mode: natural language -> SQL, inside the shell.\n");
-    if (slothdb::ask::EmbeddedAvailable()) {
-        const auto &sm = slothdb::ask::SmallModel();
-        const auto &lg = slothdb::ask::LargeModel();
+    if (zugodb::ask::EmbeddedAvailable()) {
+        const auto &sm = zugodb::ask::SmallModel();
+        const auto &lg = zugodb::ask::LargeModel();
         printf("  Models (both lazy-downloaded in parallel on first use):\n");
         printf("    small : %s (~%zu MB) -> simple COUNT/GROUP BY/filter/TOP-N\n",
                sm.name, sm.expected_bytes / (1024ULL * 1024ULL));

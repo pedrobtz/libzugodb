@@ -3,7 +3,7 @@
 #include <cstring>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // Local copy of physical_planner.cpp::FindSubstr — same memchr-anchored
 // memcmp loop, kept here to avoid pulling the planner header into this
@@ -186,4 +186,4 @@ std::int64_t CountPlainLikeContains(
     return local;
 }
 
-}  // namespace slothdb
+}  // namespace zugodb

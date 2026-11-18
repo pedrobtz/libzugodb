@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cstdarg>
 
-namespace slothdb {
+namespace zugodb {
 
 class StringUtil {
 public:
@@ -22,4 +22,4 @@ public:
     static std::string Trim(const std::string &str);
 };
 
-} // namespace slothdb
+} // namespace zugodb

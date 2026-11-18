@@ -9,7 +9,7 @@
 #include <memory>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 enum class VectorType : uint8_t {
     FLAT,
@@ -146,4 +146,4 @@ private:
     std::shared_ptr<VectorBuffer> auxiliary_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

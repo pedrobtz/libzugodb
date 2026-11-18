@@ -5,7 +5,7 @@
 #include "slothdb/storage/data_table.hpp"
 #include <string>
 
-namespace slothdb {
+namespace zugodb {
 
 // Checkpoint: serialize/deserialize the entire database to/from a .slothdb file.
 class Checkpoint {
@@ -39,4 +39,4 @@ private:
     static Value ReadValue(BlockManager &bm, idx_t &offset, const LogicalType &type);
 };
 
-} // namespace slothdb
+} // namespace zugodb

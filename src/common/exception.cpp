@@ -1,6 +1,6 @@
 #include "slothdb/common/exception.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 SlothDBException::SlothDBException(ErrorCategory category, ErrorCode code,
                                      const std::string &message)
@@ -80,4 +80,4 @@ const char *ErrorCodeToString(ErrorCode code) {
     return "UNKNOWN";
 }
 
-} // namespace slothdb
+} // namespace zugodb

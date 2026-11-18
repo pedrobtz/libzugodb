@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <limits>
 
-namespace slothdb {
+namespace zugodb {
 
 const char *CompressionTypeToString(CompressionType type) {
     switch (type) {
@@ -606,4 +606,4 @@ std::vector<Value> CompressionManager::Decompress(const CompressedBuffer &buffer
     throw InternalException("Unknown compression type");
 }
 
-} // namespace slothdb
+} // namespace zugodb

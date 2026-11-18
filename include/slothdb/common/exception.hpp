@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <optional>
 
-namespace slothdb {
+namespace zugodb {
 
 // ============================================================================
 // STRUCTURED ERROR SYSTEM (SlothDB Differentiator #5)
@@ -199,4 +199,4 @@ public:
         : SlothDBException(ErrorCategory::TRANSACTION, code, msg) {}
 };
 
-} // namespace slothdb
+} // namespace zugodb

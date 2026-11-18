@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace slothdb {
+namespace zugodb {
 
 struct hugeint_t {
     int64_t upper;
@@ -44,4 +44,4 @@ struct hugeint_t {
 
 static_assert(sizeof(hugeint_t) == 16, "hugeint_t must be 16 bytes");
 
-} // namespace slothdb
+} // namespace zugodb

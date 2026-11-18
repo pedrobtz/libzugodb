@@ -5,7 +5,7 @@
 #include <vector>
 #include <memory>
 
-namespace slothdb {
+namespace zugodb {
 
 // A RowGroup holds up to ROW_GROUP_SIZE rows of columnar data.
 class RowGroup {
@@ -36,4 +36,4 @@ private:
     std::vector<std::unique_ptr<ColumnData>> columns_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

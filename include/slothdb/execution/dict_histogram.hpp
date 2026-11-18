@@ -19,7 +19,7 @@
 #include "slothdb/common/constants.hpp"
 #include <cstdint>
 
-namespace slothdb {
+namespace zugodb {
 
 class ParquetReader;
 
@@ -34,4 +34,4 @@ class ParquetReader;
 bool TryDictHistogramAgg(ParquetReader &reader, idx_t col_idx,
                          int64_t &out_count, double &out_sum);
 
-} // namespace slothdb
+} // namespace zugodb

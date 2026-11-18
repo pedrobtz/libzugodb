@@ -1,7 +1,7 @@
 #include "doctest.h"
 #include "slothdb/common/types/validity_mask.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 TEST_CASE("ValidityMask - all valid by default") {
     ValidityMask mask;

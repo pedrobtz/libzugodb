@@ -2,7 +2,7 @@
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/string_util.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // ============================================================================
 // Public API
@@ -1960,4 +1960,4 @@ ParsedStmtPtr Parser::ParseMergeStatement() {
     return stmt;
 }
 
-} // namespace slothdb
+} // namespace zugodb

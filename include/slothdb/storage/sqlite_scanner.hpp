@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // SQLite database file scanner.
 // Reads SQLite 3 database files directly without linking to libsqlite3.
@@ -74,4 +74,4 @@ private:
     bool header_read_ = false;
 };
 
-} // namespace slothdb
+} // namespace zugodb

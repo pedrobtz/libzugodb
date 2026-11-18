@@ -4,7 +4,7 @@
 #include "slothdb/planner/logical_operator.hpp"
 #include "slothdb/catalog/catalog.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 class PhysicalPlanner {
 public:
@@ -32,4 +32,4 @@ private:
     Catalog &catalog_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

@@ -29,7 +29,7 @@
 #include "slothdb/common/types/string_type.hpp"
 #include "slothdb/execution/simple_i64_count_map.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 struct RadixCountResult {
     int64_t key;
@@ -346,4 +346,4 @@ private:
     std::vector<SimpleI64CountMap> radix_maps_;
 };
 
-}  // namespace slothdb
+}  // namespace zugodb

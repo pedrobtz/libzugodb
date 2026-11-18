@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 using txn_id_t = uint64_t;
 
@@ -89,4 +89,4 @@ private:
     txn_id_t write_txn_id_ = 0;
 };
 
-} // namespace slothdb
+} // namespace zugodb

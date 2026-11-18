@@ -2,7 +2,7 @@
 #include "slothdb/common/exception.hpp"
 #include <sstream>
 
-namespace slothdb {
+namespace zugodb {
 
 hugeint_t hugeint_t::operator+(const hugeint_t &other) const {
     hugeint_t result;
@@ -129,4 +129,4 @@ hugeint_t hugeint_t::FromString(const std::string &str) {
     return negative ? -result : result;
 }
 
-} // namespace slothdb
+} // namespace zugodb

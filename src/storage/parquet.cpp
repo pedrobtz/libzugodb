@@ -26,7 +26,7 @@
 #include <unistd.h>
 #endif
 
-namespace slothdb {
+namespace zugodb {
 
 static const char PARQUET_MAGIC[4] = {'P', 'A', 'R', '1'};
 
@@ -3309,4 +3309,4 @@ bool ParquetReader::RowGroupMightMatch(idx_t rg_idx, idx_t col_idx,
     return true;
 }
 
-} // namespace slothdb
+} // namespace zugodb

@@ -2,7 +2,7 @@
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 
-using namespace slothdb;
+using namespace zugodb;
 
 // Reference timestamp used throughout this file:
 //   epoch seconds 1710499845 = 2024-03-15 10:50:45 UTC (a Friday).

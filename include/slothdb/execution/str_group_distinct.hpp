@@ -15,7 +15,7 @@
 #include "slothdb/common/types/string_type.hpp"
 #include "slothdb/execution/simple_i64_set.hpp"
 
-namespace slothdb {
+namespace zugodb {
 
 // gstr × int distinct hot loop, dict_fast variant (dict-encoded group
 // column). Per row: keep_row check, validity check, dict_idx fetch, cached
@@ -65,4 +65,4 @@ MergeStrGroupIntDistinct(
         per_thread,
     int n_workers);
 
-}  // namespace slothdb
+}  // namespace zugodb

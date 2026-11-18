@@ -2,7 +2,7 @@
 #include "slothdb/common/exception.hpp"
 #include <algorithm>
 
-namespace slothdb {
+namespace zugodb {
 
 RowGroup::RowGroup(const std::vector<LogicalType> &types, idx_t start_row)
     : start_row_(start_row), count_(0) {
@@ -35,4 +35,4 @@ void RowGroup::Scan(DataChunk &result, idx_t start, idx_t scan_count) const {
     result.SetCardinality(scan_count);
 }
 
-} // namespace slothdb
+} // namespace zugodb

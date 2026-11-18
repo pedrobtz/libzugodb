@@ -22,7 +22,7 @@
 
 #include "third_party/unordered_dense.h"
 
-namespace slothdb {
+namespace zugodb {
 
 class SimpleI64Set {
 public:
@@ -107,4 +107,4 @@ private:
     bool has_zero_;
 };
 
-}  // namespace slothdb
+}  // namespace zugodb

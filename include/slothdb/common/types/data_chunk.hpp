@@ -3,7 +3,7 @@
 #include "slothdb/common/types/vector.hpp"
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 
 // A collection of Vectors (one per column), all with the same row count.
 // This is the unit of data flow through the execution engine.
@@ -54,4 +54,4 @@ private:
     idx_t count_;
 };
 
-} // namespace slothdb
+} // namespace zugodb

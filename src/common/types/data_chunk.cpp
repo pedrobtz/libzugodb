@@ -2,7 +2,7 @@
 #include "slothdb/common/exception.hpp"
 #include <sstream>
 
-namespace slothdb {
+namespace zugodb {
 
 void DataChunk::Initialize(const std::vector<LogicalType> &types, idx_t capacity) {
     data.clear();
@@ -59,4 +59,4 @@ std::string DataChunk::ToString() const {
     return ss.str();
 }
 
-} // namespace slothdb
+} // namespace zugodb

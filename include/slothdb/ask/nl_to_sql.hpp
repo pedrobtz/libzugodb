@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace slothdb {
+namespace zugodb {
 namespace ask {
 
 // Column snapshot for schema resolution. Matches the shape the shell
@@ -56,4 +56,4 @@ struct Result {
 Result Translate(const std::string &nl_query, const Schema &schema);
 
 } // namespace ask
-} // namespace slothdb
+} // namespace zugodb
