@@ -68,12 +68,12 @@ TEST_CASE("Transaction - ROLLBACK") {
     auto r = conn.Query("SELECT COUNT(*) FROM t");
     CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 2);
 
-    conn.Query("ROLLBACK");
-
-    // After rollback, the insert inside the transaction
-    // is still visible because we don't have full MVCC undo yet.
-    // The ROLLBACK successfully completes without error.
+    // zuslothdb: with no undo, ROLLBACK closes the
+    // transaction and says that nothing was undone.
+    CHECK_THROWS_AS(conn.Query("ROLLBACK"), NotImplementedException);
     CHECK_FALSE(conn.InTransaction());
+    auto r2 = conn.Query("SELECT COUNT(*) FROM t");
+    CHECK(r2.GetValue(0, 0).GetValue<int64_t>() == 2);
 }
 
 TEST_CASE("Transaction - multiple connections") {
