@@ -122,5 +122,3 @@ is upstream's published build and not this tree. Stage 6 replaces it.
 hold `#ifdef SLOTHDB_EDGE` blocks, and a few comments still mention the
 C API. Nothing defines `SLOTHDB_EDGE` any more; they are left as they are
 because zugodb vendors `src/` and `include/` byte for byte.
-
-`examples/` holds SlothDB's sample CSV and JSON files.

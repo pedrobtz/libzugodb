@@ -141,8 +141,9 @@ build uses it, `tools/shell/` (a development tool, not a product),
 
 Removed, as SlothDB's product and not the engine: the website and
 playground under `docs/`, `packaging/`, `python/`, `cloudflare/`,
-`assets/`, `install.sh`, `scripts/build-wasm.sh`, `tools/playground/`, the
-benchmarks under `bench/` that run SlothDB's wheel, the `llama.cpp`
+`assets/`, `install.sh`, `scripts/build-wasm.sh`, `tools/playground/`,
+`examples/`, the performance benchmarks under `bench/`
+(`bench/correctness/` stays until Stage 6), the `llama.cpp`
 submodule with `SLOTHDB_ASK_MODEL`, the `SLOTHDB_EDGE` and
 `SLOTHDB_BUILD_SHARED` options, and `TODO-2026-04-29.md`. Git history
 keeps all of it.
@@ -200,16 +201,16 @@ minor version.
   `duckdb` compiles from source on Linux and this repository has no R.
   zugodb keeps R's `duckdb` for its own recorded answers
   (`tools/oracle.R`).
-- **L8 (2026-11-20, Claude's call in Stage 0, not yet agreed).** §6's "the
-  benchmarks under `bench/` that run SlothDB's wheel" is read as every
-  performance benchmark there (`run.py`, `check.py`, `clickbench/`,
-  `sloth16/`, `taxi/`): they time SlothDB's own Windows build against
-  DuckDB, with paths to its author's machine. Only
-  `bench/correctness/sqllogictest/` imports the wheel, and it stays until
-  Stage 6. `examples/`, which §6 neither keeps nor removes, stays: SlothDB's
-  sample files, cheap, and decided with the shell's rename in Stage 12.
-  The `#ifdef SLOTHDB_EDGE` blocks in `src/` stay with the option gone,
-  since removing them would change what zugodb vendors.
+- **L8 (2026-11-20, recommended by an advisor sub-agent, as the
+  maintainer asked for open decisions).** Every performance benchmark
+  under `bench/` goes (`run.py`, `check.py`, `clickbench/`, `sloth16/`,
+  `taxi/`): speed is not a goal (§2), they time SlothDB's own build against
+  DuckDB, and they read files from SQL, which Stage 2 refuses.
+  `bench/correctness/` stays until Stage 6 replaces it. `examples/` goes
+  too: every command in it reads or writes a file from SQL, SlothDB's
+  product demo, and nothing in the build or tests reads it. The
+  `#ifdef SLOTHDB_EDGE` blocks in `src/` stay with the option gone, since
+  removing them would change what zugodb vendors.
 
 ## 9. Open questions
 

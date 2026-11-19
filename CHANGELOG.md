@@ -8,7 +8,7 @@
 - Remove what was SlothDB's product and not the engine: the website and
   WASM playground under `docs/` (`docs/SLOTHDB-README.md` stays),
   `packaging/`, `python/`, `cloudflare/`, `assets/`, `install.sh`,
-  `scripts/build-wasm.sh`, `tools/playground/`, the performance benchmarks
+  `scripts/build-wasm.sh`, `tools/playground/`, `examples/`, the performance benchmarks
   under `bench/` (`bench/correctness/` stays), `.github/codeql/` and
   `TODO-2026-04-29.md`.
 - Remove the `third_party/llama.cpp` submodule and `.gitmodules`, and the
