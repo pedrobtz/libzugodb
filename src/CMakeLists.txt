@@ -12,7 +12,6 @@ file(GLOB_RECURSE SLOTHDB_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/execution/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/transaction/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/optimizer/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/api/*.cpp"
 )
 
 add_library(slothdb_lib STATIC ${SLOTHDB_SOURCES})
@@ -156,6 +155,8 @@ if(SLOTHDB_BUILD_SHELL)
     target_include_directories(slothdb PRIVATE
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/third_party/linenoise)
+    target_compile_definitions(slothdb PRIVATE
+        SLOTHDB_SHELL_VERSION="${PROJECT_VERSION}")
     if(NOT WIN32)
         target_compile_definitions(slothdb PRIVATE SLOTHDB_HAS_LINENOISE=1)
     endif()
