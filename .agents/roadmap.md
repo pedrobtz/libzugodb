@@ -27,7 +27,7 @@ issue closed. zugodb then moves its pin.
 <!-- markdownlint-disable MD013 -->
 | Stage | Title | Version | CI | Issue | Pull request | Done |
 | --- | --- | --- | --- | --- | --- | --- |
-| 0 | [Repository clean-up](#stage-0--repository-clean-up) | 0.2.0 | ci | [#8](https://github.com/pedrobtz/libzugodb/issues/8) | | |
+| 0 | [Repository clean-up](#stage-0--repository-clean-up) | 0.2.0 | ci | [#8](https://github.com/pedrobtz/libzugodb/issues/8) | [#19](https://github.com/pedrobtz/libzugodb/pull/19) | 2026-11-19 |
 | 1 | [Errors on worker threads become query errors](#stage-1--errors-on-worker-threads-become-query-errors) | 0.2.0 | ci | [#3](https://github.com/pedrobtz/libzugodb/issues/3) | | |
 | 2 | [Refuse the CSV, Parquet and JSON table functions](#stage-2--refuse-the-csv-parquet-and-json-table-functions) | 0.2.0 | ci | [#4](https://github.com/pedrobtz/libzugodb/issues/4) | | |
 | 3 | [A checksum for the database file, and format version 1001](#stage-3--a-checksum-for-the-database-file-and-format-version-1001) | 0.2.0 | ci | [#5](https://github.com/pedrobtz/libzugodb/issues/5) | | |
