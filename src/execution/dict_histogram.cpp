@@ -56,12 +56,12 @@ bool TryDictHistogramAgg(ParquetReader &reader, idx_t col_idx,
     if (nt <= 1) {
         worker(0);
     } else {
-        std::vector<std::thread> threads;
+        zugodb::WorkerGroup threads;
         threads.reserve(nt);
         for (unsigned int t = 0; t < nt; t++) {
-            threads.emplace_back(worker, t);
+            threads.Spawn(worker, t);
         }
-        for (auto &th : threads) th.join();
+        threads.Join();
     }
 
     if (abort_flag.load()) return false;

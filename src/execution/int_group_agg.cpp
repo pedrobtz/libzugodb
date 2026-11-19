@@ -1,5 +1,6 @@
 #include "slothdb/execution/int_group_agg.hpp"
 #include "slothdb/common/profile_log.hpp"
+#include "slothdb/common/parallel.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -214,10 +215,10 @@ std::vector<IntGroupAgg::Group> IntGroupAgg::MergeAll() {
                         });
                 }
             };
-            std::vector<std::thread> ts;
-            for (int w = 1; w < W; w++) ts.emplace_back(scatter);
-            scatter();
-            for (auto& t : ts) t.join();
+            zugodb::WorkerGroup ts;
+            for (int w = 1; w < W; w++) ts.Spawn(scatter);
+            ts.RunHere([&] { scatter(); });
+            ts.Join();
         }
 
         // Phase B: one balanced work pool. A task is either a light whole-
@@ -257,10 +258,10 @@ std::vector<IntGroupAgg::Group> IntGroupAgg::MergeAll() {
             }
         };
         if (!tasks.empty()) {
-            std::vector<std::thread> ts;
-            for (int w = 1; w < W; w++) ts.emplace_back(worker);
-            worker();
-            for (auto& t : ts) t.join();
+            zugodb::WorkerGroup ts;
+            for (int w = 1; w < W; w++) ts.Spawn(worker);
+            ts.RunHere([&] { worker(); });
+            ts.Join();
         }
         for (int hi = 0; hi < H; hi++) {
             int64_t tot = 0;

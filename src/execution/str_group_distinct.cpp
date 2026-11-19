@@ -1,4 +1,5 @@
 #include "slothdb/execution/str_group_distinct.hpp"
+#include "slothdb/common/parallel.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -194,10 +195,10 @@ std::int64_t UnionCountParallel(const std::vector<SimpleI64Set*>& sets,
         });
     };
     {
-        std::vector<std::thread> ts;
-        for (int i = 1; i < ns; i++) ts.emplace_back(scatter, i);
-        scatter(0);
-        for (auto& t : ts) t.join();
+        zugodb::WorkerGroup ts;
+        for (int i = 1; i < ns; i++) ts.Spawn(scatter, i);
+        ts.RunHere([&] { scatter(0); });
+        ts.Join();
     }
     // Phase B: worker w unions bucket w from every owner.
     std::vector<std::int64_t> partial((std::size_t)W, 0);
@@ -209,10 +210,10 @@ std::int64_t UnionCountParallel(const std::vector<SimpleI64Set*>& sets,
         partial[(std::size_t)w] = (std::int64_t)acc.size();
     };
     {
-        std::vector<std::thread> ts;
-        for (int w = 1; w < W; w++) ts.emplace_back(unite, w);
-        unite(0);
-        for (auto& t : ts) t.join();
+        zugodb::WorkerGroup ts;
+        for (int w = 1; w < W; w++) ts.Spawn(unite, w);
+        ts.RunHere([&] { unite(0); });
+        ts.Join();
     }
     std::int64_t total = 0;
     for (std::int64_t p : partial) total += p;
@@ -288,10 +289,10 @@ MergeStrGroupIntDistinct(
         if (nw <= 1) {
             do_light(0, 1);
         } else {
-            std::vector<std::thread> ts;
-            for (int w = 1; w < nw; w++) ts.emplace_back(do_light, w, nw);
-            do_light(0, nw);
-            for (auto& t : ts) t.join();
+            zugodb::WorkerGroup ts;
+            for (int w = 1; w < nw; w++) ts.Spawn(do_light, w, nw);
+            ts.RunHere([&] { do_light(0, nw); });
+            ts.Join();
         }
     }
     return out;

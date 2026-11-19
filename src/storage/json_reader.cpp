@@ -1149,17 +1149,17 @@ void JSONReader::ParallelParseToPerThread(
         if (stop < total) stop++;
         ranges[i] = {start, stop};
     }
-    std::vector<std::thread> workers;
+    zugodb::WorkerGroup workers;
     per_thread.clear();
     per_thread.resize(nt);
     workers.reserve(nt);
     for (unsigned int i = 0; i < nt; i++) {
         auto [s, e] = ranges[i];
-        workers.emplace_back([&, s, e, i]() {
+        workers.Spawn([&, s, e, i]() {
             parse_range(data + s, data + e, per_thread[i]);
         });
     }
-    for (auto &t : workers) t.join();
+    workers.Join();
 }
 
 std::vector<std::vector<Value>> JSONReader::ReadAll() {
