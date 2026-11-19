@@ -1,72 +1,55 @@
-# Contributing to SlothDB
+# Contributing to libzugodb
 
-Thank you for your interest in contributing to SlothDB!
+libzugodb is the SQL engine of the R package
+[zugodb](https://github.com/pedrobtz/zugodb). Its design is
+[.agents/design.md](.agents/design.md) and its plan
+[.agents/roadmap.md](.agents/roadmap.md); read both before changing what the
+engine accepts or refuses.
 
-## Getting Started
+## Build and test
 
-1. Fork the repository
-2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/slothdb.git`
-3. Create a branch: `git checkout -b my-feature`
-4. Build: `cmake -B build && cmake --build build --config Release`
-5. Test: `./build/test/Release/slothdb_tests`
-6. Make your changes
-7. Run tests again to verify
-8. Push and create a pull request
-
-## Code Style
-
-- C++20 standard
-- Files: `snake_case.cpp` / `snake_case.hpp`
-- Classes: `PascalCase`
-- Methods: `PascalCase` for public, `camelCase` for private
-- Constants: `UPPER_SNAKE_CASE`
-- Namespace: `slothdb`
-- Headers: `#pragma once`
-- Include paths: `#include "slothdb/subsystem/file.hpp"`
-
-## Architecture
-
-```
-src/
-  common/       - Types, allocator, strings, thread pool
-  catalog/      - Schema metadata (tables, columns)
-  parser/       - SQL tokenizer and recursive descent parser
-  binder/       - Name resolution and type inference
-  planner/      - Logical operator tree construction
-  optimizer/    - Query optimization passes
-  execution/    - Physical operators and expression executor
-  storage/      - Columnar storage, file I/O, compression
-  transaction/  - MVCC transaction management
-  main/         - Database and Connection classes
-  api/          - C API (slothdb.h)
-  extension/    - Extension loading and management
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j8
+build/test/slothdb_tests                    # the whole doctest suite
+build/test/slothdb_tests -tc="*Window*"     # test cases by name
 ```
 
-## Adding a New SQL Function
+`-DSLOTHDB_SANITIZERS=ON` builds with ASan and UBSan, and
+`-DSLOTHDB_BUILD_SHELL=ON` adds the `slothdb` shell from `tools/shell/`.
+CI runs the suite on Linux gcc, Linux with ASan and UBSan, macOS clang and
+MinGW-w64 UCRT64; a change must pass all four.
 
-1. Add the function name to the binder's return type mapping in `src/binder/binder.cpp`
-2. Add execution logic in `src/execution/expression_executor.cpp`
-3. Write a test in `test/unit/execution/`
+## Code
 
-## Adding a New File Format
+- C++20, in the namespace `zugodb::`.
+- Sources are under `src/<step>/`, their headers under
+  `include/slothdb/<step>/`, included as `"slothdb/<step>/<file>.hpp"`.
+  Sources are globbed: after adding a file, re-run the configure step.
+- The engine refuses what it cannot answer right, is offline, writes
+  nothing to `stdout` or `stderr`, and keeps every thread pool under the
+  process-wide cap. `CLAUDE.md` lists these invariants.
 
-1. Create reader/writer in `src/storage/`
-2. Add the format to the parser's table function list in `src/parser/parser.cpp`
-3. Add handling in `src/main/connection.cpp` (table function + COPY support)
-4. Write tests in `test/unit/storage/`
+## Adding a scalar function
 
-## Building Extensions
-
-See the Extension API documentation in `include/slothdb/extension/extension_api.h`.
+1. Its return type in `src/binder/binder.cpp`.
+2. Its evaluation in `src/execution/expression_executor.cpp`.
+3. A test in `test/unit/execution/`.
 
 ## Tests
 
-All changes must pass the existing test suite. Add tests for new features.
+Tests are doctest cases under `test/unit/<step>/`, all linked into
+`slothdb_tests`.
 
-```bash
-# Run all tests
-./build/test/Release/slothdb_tests
+## What zugodb vendors
 
-# Run specific tests
-./build/test/Release/slothdb_tests -tc="YourTest*"
-```
+zugodb copies `LICENSE`, `include/`, `src/` and, from `third_party/`,
+`zstd`, `fastpforlib` and `snappy`, and compiles them without CMake. A
+definition or include path set only in CMake does not reach it, and a path
+moved, added or removed there changes zugodb's build.
+
+## Releases
+
+A release is a `CHANGELOG.md` entry at the top of the file and a tag
+`vX.Y.Z` on `main`; zugodb then moves its pin. A change to the database
+file's format, an include path or a public name is a minor version.

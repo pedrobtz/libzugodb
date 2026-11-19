@@ -1,17 +1,10 @@
 # Build directories
 build/
-build-edge/
-build-wasm/
 cmake-build-*/
 out/
 
 # Local release artifacts
 dist/
-
-# Marketing / distribution drafts — kept locally for reference but not
-# published to the repo (they're prep material, not product).
-docs/marketing/
-.marketing-drafts/
 
 # External correctness benchmark corpora — fetched on demand, not vendored.
 # See bench/correctness/sqllogictest/fetch_corpus.sh.
@@ -51,14 +44,7 @@ desktop.ini
 
 # Build artifacts
 *.parquet
-!docs/playground/data/*.parquet
 
-# npm package build output
-packaging/npm/*.tgz
-packaging/npm/node_modules/
-python/dist/
-python/*.egg-info/
-python/build/
 real-life-testing/sales_10m.csv
 real-life-testing/sloth.parquet
 real-life-testing/sales_10m.parquet
@@ -77,21 +63,8 @@ real-life-testing/
 sloth-test/
 _private/
 
-# Bench data (large CSV/parquet, never commit)
-bench/taxi/data/
-bench/clickbench/data/
-
 # Out-of-tree build directories
-build-ask/
 build-clean/
-build-shared/
-
-# Python build/cache artifacts
-python/dist-ci/
-python/slothdb/__pycache__/
-
-# Cloudflare runtime
-cloudflare/cors-proxy/.wrangler/
 
 # Abandoned experiments (flat/swiss hash sets)
 include/slothdb/util/

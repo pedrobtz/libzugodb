@@ -1,5 +1,21 @@
 # Changelog
 
+## libzugodb 0.2.0 (in development)
+
+- Remove SlothDB's C API, `src/api/` and `include/slothdb/api/`, which
+  served its Python binding. zugodb never vendored it. The `slothdb` shell
+  now uses `Database` and `Connection`.
+- Remove what was SlothDB's product and not the engine: the website and
+  WASM playground under `docs/` (`docs/SLOTHDB-README.md` stays),
+  `packaging/`, `python/`, `cloudflare/`, `assets/`, `install.sh`,
+  `scripts/build-wasm.sh`, `tools/playground/`, `examples/`, the performance benchmarks
+  under `bench/` (`bench/correctness/` stays), `.github/codeql/` and
+  `TODO-2026-04-29.md`.
+- Remove the `third_party/llama.cpp` submodule and `.gitmodules`, and the
+  unused copy of `fastpforlib` at the top of `third_party/`.
+- Remove the CMake options `SLOTHDB_ASK_MODEL`, `SLOTHDB_EDGE` and
+  `SLOTHDB_BUILD_SHARED`.
+
 ## libzugodb 0.1.1
 
 - Parquet decode workers no longer read the worker list while the main

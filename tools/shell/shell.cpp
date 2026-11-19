@@ -6,12 +6,19 @@
  *        slothdb -c "SELECT ..."
  */
 
-#include "slothdb/api/slothdb.h"
+#include "slothdb/main/database.hpp"
+#include "slothdb/main/connection.hpp"
+#include "slothdb/catalog/catalog.hpp"
+#include "slothdb/catalog/schema_catalog_entry.hpp"
+#include "slothdb/catalog/table_catalog_entry.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <exception>
 #include <iostream>
+#include <memory>
+#include <vector>
 
 #ifdef SLOTHDB_HAS_LINENOISE
 extern "C" {
@@ -19,11 +26,39 @@ extern "C" {
 }
 #endif
 
+using zugodb::Connection;
+using zugodb::Database;
+using zugodb::QueryResult;
+
+#ifndef SLOTHDB_SHELL_VERSION
+#define SLOTHDB_SHELL_VERSION "unknown"
+#endif
+
 static const char *kHistoryFile = ".slothdb_history";
 
-static void print_result(slothdb_result *result) {
-    uint64_t cols = slothdb_column_count(result);
-    uint64_t rows = slothdb_row_count(result);
+// An open database and its one connection. An empty path opens an
+// in-memory database.
+struct Session {
+    std::unique_ptr<Database> db;
+    std::unique_ptr<Connection> conn;
+};
+
+static bool open_session(const std::string &path, Session &out) {
+    try {
+        Session s;
+        s.db = path.empty() ? std::make_unique<Database>()
+                            : std::make_unique<Database>(path);
+        s.conn = std::make_unique<Connection>(*s.db);
+        out = std::move(s);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+static void print_result(const QueryResult &result) {
+    uint64_t cols = result.ColumnCount();
+    uint64_t rows = result.RowCount();
 
     if (cols == 0) {
         printf("OK\n");
@@ -32,7 +67,7 @@ static void print_result(slothdb_result *result) {
 
     for (uint64_t c = 0; c < cols; c++) {
         if (c > 0) printf(" | ");
-        printf("%-15s", slothdb_column_name(result, c));
+        printf("%-15s", result.column_names[c].c_str());
     }
     printf("\n");
 
@@ -45,7 +80,8 @@ static void print_result(slothdb_result *result) {
     for (uint64_t r = 0; r < rows; r++) {
         for (uint64_t c = 0; c < cols; c++) {
             if (c > 0) printf(" | ");
-            printf("%-15s", slothdb_value_varchar(result, r, c));
+            auto &val = result.GetValue(r, c);
+            printf("%-15s", val.IsNull() ? "NULL" : val.ToString().c_str());
         }
         printf("\n");
     }
@@ -120,17 +156,15 @@ static void print_help() {
 }
 
 // Run a query string, print its result (or error). Returns true on success.
-static bool run_query(slothdb_connection *conn, const std::string &sql) {
-    slothdb_result *result = nullptr;
-    auto status = slothdb_query(conn, sql.c_str(), &result);
-    if (status == SLOTHDB_OK) {
+static bool run_query(Connection &conn, const std::string &sql) {
+    try {
+        auto result = conn.Query(sql);
         print_result(result);
-        slothdb_free_result(result);
         return true;
+    } catch (const std::exception &e) {
+        fprintf(stderr, "Error: %s\n", e.what());
+        return false;
     }
-    fprintf(stderr, "Error: %s\n", slothdb_result_error(result));
-    slothdb_free_result(result);
-    return false;
 }
 
 
@@ -156,14 +190,15 @@ static bool like_match(const std::string &name, const std::string &pattern) {
     return pi == pattern.size();
 }
 
-// Enumerate tables via the catalog C API - information_schema isn't a real
+// Enumerate tables via the catalog - information_schema isn't a real
 // schema in SlothDB's parser, so SQL-based introspection doesn't work.
-static void handle_tables(slothdb_connection *conn, const std::string &arg) {
+static void handle_tables(Connection &conn, const std::string &arg) {
     std::string pattern = arg;
     if (pattern.size() >= 2 && (pattern.front() == '\'' || pattern.front() == '"')) {
         pattern = pattern.substr(1, pattern.size() - 2);
     }
-    uint64_t n = slothdb_table_count(conn);
+    auto names = conn.GetCatalog().GetSchema().GetTableNames();
+    uint64_t n = names.size();
     if (n == 0) {
         printf("(no tables)\n");
         return;
@@ -172,8 +207,7 @@ static void handle_tables(slothdb_connection *conn, const std::string &arg) {
     printf("--------------------------------\n");
     uint64_t shown = 0;
     for (uint64_t i = 0; i < n; i++) {
-        const char *name = slothdb_table_name(conn, i);
-        std::string sname(name ? name : "");
+        const std::string &sname = names[i];
         if (!pattern.empty() && !like_match(sname, pattern)) continue;
         printf("%-32s\n", sname.c_str());
         shown++;
@@ -182,26 +216,27 @@ static void handle_tables(slothdb_connection *conn, const std::string &arg) {
 }
 
 // Show columns for a specific table (or every table when arg is empty)
-// via the catalog C API.
-static void handle_schema(slothdb_connection *conn, const std::string &arg) {
+// via the catalog.
+static void handle_schema(Connection &conn, const std::string &arg) {
     std::string name = arg;
     if (name.size() >= 2 && (name.front() == '\'' || name.front() == '"')) {
         name = name.substr(1, name.size() - 2);
     }
-    uint64_t n = slothdb_table_count(conn);
+    auto &schema = conn.GetCatalog().GetSchema();
+    auto names = schema.GetTableNames();
+    uint64_t n = names.size();
     if (n == 0) { printf("(no tables)\n"); return; }
 
     auto print_table = [&](uint64_t ti) {
-        const char *tname = slothdb_table_name(conn, ti);
-        if (!tname) return;
-        printf("%s (\n", tname);
-        uint64_t cn = slothdb_table_column_count(conn, ti);
+        auto *tbl = schema.GetTable(names[ti]);
+        if (!tbl) return;
+        printf("%s (\n", names[ti].c_str());
+        auto &columns = tbl->GetColumns();
+        uint64_t cn = columns.size();
         for (uint64_t j = 0; j < cn; j++) {
-            const char *cname = slothdb_table_column_name(conn, ti, j);
-            const char *ctype = slothdb_table_column_type(conn, ti, j);
             printf("  %-24s %s%s\n",
-                   cname ? cname : "",
-                   ctype ? ctype : "",
+                   columns[j].name.c_str(),
+                   columns[j].type.ToString().c_str(),
                    (j + 1 == cn) ? "" : ",");
         }
         printf(");\n");
@@ -212,8 +247,7 @@ static void handle_schema(slothdb_connection *conn, const std::string &arg) {
         return;
     }
     for (uint64_t i = 0; i < n; i++) {
-        const char *tname = slothdb_table_name(conn, i);
-        if (tname && name == tname) { print_table(i); return; }
+        if (name == names[i]) { print_table(i); return; }
     }
     printf("(no table named '%s')\n", name.c_str());
 }
@@ -334,7 +368,7 @@ int main(int argc, char *argv[]) {
             printf("Opens an in-memory database if no path is given.\n");
             return 0;
         } else if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
-            printf("%s\n", slothdb_version());
+            printf("%s\n", SLOTHDB_SHELL_VERSION);
             return 0;
         } else {
             db_path = argv[i];
@@ -342,30 +376,19 @@ int main(int argc, char *argv[]) {
     }
 
     if (!cmd_query) {
-        printf("SlothDB Shell v%s\n", slothdb_version());
+        printf("SlothDB Shell v%s\n", SLOTHDB_SHELL_VERSION);
         printf("Type .help for help, .quit to exit.\n\n");
     }
 
-    slothdb_database *db = nullptr;
-    slothdb_connection *conn = nullptr;
-
-    if (slothdb_open(db_path, &db) != SLOTHDB_OK) {
+    Session session;
+    if (!open_session(db_path, session)) {
         fprintf(stderr, "Failed to open database: %s\n", db_path);
-        return 1;
-    }
-
-    if (slothdb_connect(db, &conn) != SLOTHDB_OK) {
-        fprintf(stderr, "Failed to create connection\n");
-        slothdb_close(db);
         return 1;
     }
 
     // One-shot command: -c "..."
     if (cmd_query) {
-        bool ok = run_query(conn, cmd_query);
-        slothdb_disconnect(conn);
-        slothdb_close(db);
-        return ok ? 0 : 1;
+        return run_query(*session.conn, cmd_query) ? 0 : 1;
     }
 
     if (strlen(db_path) > 0) printf("Connected to: %s\n", db_path);
@@ -396,9 +419,9 @@ int main(int argc, char *argv[]) {
 
             if (cmd == ".quit" || cmd == ".exit") break;
             if (cmd == ".help") { print_help(); continue; }
-            if (cmd == ".version") { printf("%s\n", slothdb_version()); continue; }
-            if (cmd == ".tables") { handle_tables(conn, arg); continue; }
-            if (cmd == ".schema") { handle_schema(conn, arg); continue; }
+            if (cmd == ".version") { printf("%s\n", SLOTHDB_SHELL_VERSION); continue; }
+            if (cmd == ".tables") { handle_tables(*session.conn, arg); continue; }
+            if (cmd == ".schema") { handle_schema(*session.conn, arg); continue; }
             if (cmd == ".clear") { printf("\033[2J\033[H"); fflush(stdout); continue; }
             if (cmd == ".open") {
                 if (arg.empty()) { printf("Usage: .open <path>\n"); continue; }
@@ -407,10 +430,8 @@ int main(int argc, char *argv[]) {
                 // new open, so a failure left the shell with invalid
                 // handles and `return 1`'d the whole process - exiting
                 // the REPL instead of returning to the prompt.
-                slothdb_database   *new_db   = nullptr;
-                slothdb_connection *new_conn = nullptr;
-                if (slothdb_open(arg.c_str(), &new_db) != SLOTHDB_OK ||
-                    slothdb_connect(new_db, &new_conn) != SLOTHDB_OK) {
+                Session next;
+                if (!open_session(arg, next)) {
                     fprintf(stderr, "Failed to open: %s\n", arg.c_str());
                     // Hint if the user handed us what looks like a CSV/Parquet.
                     auto ends_with = [&](const char *suf) {
@@ -426,14 +447,13 @@ int main(int argc, char *argv[]) {
                             "To query a data file, use:\n"
                             "  SELECT * FROM '%s';\n", arg.c_str());
                     }
-                    if (new_db) slothdb_close(new_db);
                     continue;  // back to the prompt, old db still active
                 }
                 // Success - dispose of the old handles and swap.
-                slothdb_disconnect(conn);
-                slothdb_close(db);
-                db = new_db;
-                conn = new_conn;
+                // The connection refers to its database: drop it first.
+                session.conn.reset();
+                session.db.reset();
+                session = std::move(next);
                 printf("Connected to: %s\n", arg.c_str());
                 continue;
             }
@@ -449,7 +469,7 @@ int main(int argc, char *argv[]) {
         if (trimmed.empty()) { buffer.clear(); continue; }
         if (trimmed.back() != ';') continue; // Keep reading multi-line input.
 
-        run_query(conn, buffer);
+        run_query(*session.conn, buffer);
         buffer.clear();
     }
 
@@ -458,7 +478,5 @@ int main(int argc, char *argv[]) {
 #endif
 
     printf("\nBye!\n");
-    slothdb_disconnect(conn);
-    slothdb_close(db);
     return 0;
 }

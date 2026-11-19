@@ -1,7 +1,7 @@
 # libzugodb
 
 A small embedded columnar SQL engine in C++20, the engine of the R package
-[zugodb](https://github.com/pedrobtz/zuslothdb).
+[zugodb](https://github.com/pedrobtz/zugodb).
 
 libzugodb began as a fork of [SlothDB](https://github.com/SouravRoy-ETL/slothdb)
 at commit `8180f21` (v0.2.7+, 2026-06-03), by the SlothDB Contributors, under
@@ -23,6 +23,8 @@ a project of its own. Defects found here are reported upstream
   `abort()` or `rand()`, and one process-wide cap limits every thread pool.
 - **It builds with MinGW-w64**, as R's Rtools uses on Windows.
 - **Its C++ namespace is `zugodb::`.**
+- **It is only the engine.** SlothDB's C API, Python binding, website, WASM
+  playground, packaging and benchmarks are not part of this repository.
 
 `CHANGELOG.md` lists each change. The plan is in the R package's design: the
 file readers move to separate packages linked over Arrow C streams, and other

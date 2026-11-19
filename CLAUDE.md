@@ -42,9 +42,8 @@ Rtools. A change must pass all four.
 The repository, the CMake project and the C++ namespace are `zugodb`.
 Everything else still carries SlothDB's name: the `SLOTHDB_*` CMake options,
 the `slothdb_lib` and `slothdb_tests` targets, the `include/slothdb/` include
-path and the `SLOTHDB_*` macros. `CONTRIBUTING.md` and everything under
-`docs/` are SlothDB's and are out of date (the namespace, the extension API,
-the test path).
+path and the `SLOTHDB_*` macros. `docs/SLOTHDB-README.md` is SlothDB's own
+README, kept as the credit; it is not this repository's documentation.
 
 ## Architecture
 
@@ -59,8 +58,8 @@ statement and expression trees) → `binder/` (names and types) → `planner/`
 
 The public C++ API is `Database` and `Connection` in
 `include/slothdb/main/`; `Connection::Query(sql)` returns a materialised
-`QueryResult`. `src/api/` is a C API for SlothDB's Python binding; the R
-package does not vendor it.
+`QueryResult`. There is no C API: SlothDB's, which served its Python
+binding, is removed.
 
 Where the weight is, which the directory names do not show:
 
@@ -101,7 +100,7 @@ breaks:
 ## What the R package takes
 
 `tools/vendor.yaml` in zugodb copies `LICENSE`, `include/`, `src/` (without
-`src/api/` and the CMake files), and from `third_party/` the zstd
+its CMake file), and from `third_party/` the zstd
 decompressor, `fastpforlib` and `snappy`. It builds them from a generated
 `Makevars`, not from CMake, so:
 
@@ -115,12 +114,11 @@ tag, and a new pin there. Each release gets an entry at the top of
 
 ## Left over from SlothDB
 
-Not built by CI and not vendored: `docs/` (SlothDB's website and WASM
-playground), `packaging/`, `python/`, `cloudflare/`, `assets/`,
-`install.sh`, `tools/playground/`, `scripts/build-wasm.sh`, the
-`third_party/llama.cpp` submodule with its `SLOTHDB_ASK_MODEL` option (the
-`ask` module itself is removed), and `TODO-2026-04-29.md`.
-
 `bench/correctness/sqllogictest/` compares against DuckDB over DataFusion's
 `.slt` corpus, but it drives the engine through `pip install slothdb`, that
-is upstream's published build and not this tree.
+is upstream's published build and not this tree. Stage 6 replaces it.
+
+`src/main/connection.cpp` and `src/execution/physical_planner.cpp` still
+hold `#ifdef SLOTHDB_EDGE` blocks, and a few comments still mention the
+C API. Nothing defines `SLOTHDB_EDGE` any more; they are left as they are
+because zugodb vendors `src/` and `include/` byte for byte.
