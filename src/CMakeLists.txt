@@ -214,64 +214,6 @@ if(SLOTHDB_BUILD_SHARED AND NOT EMSCRIPTEN)
     endif()
 endif()
 
-# WASM playground build (try.slothdb.org). Produces slothdb.wasm + slothdb.js
-# via Emscripten + embind. Single-threaded. No HTTP.
-if(EMSCRIPTEN)
-    # -Oz optimises for size on edge builds; full builds prefer -O3 speed.
-    if(SLOTHDB_EDGE)
-        set(SLOTHDB_WASM_OPT "-Oz")
-    else()
-        set(SLOTHDB_WASM_OPT "-O3")
-    endif()
-
-    # Exceptions must be enabled on every translation unit that could throw.
-    target_compile_options(slothdb_lib PRIVATE "-fexceptions" ${SLOTHDB_WASM_OPT})
-    target_link_options(slothdb_lib INTERFACE "-fexceptions")
-
-    add_executable(slothdb_wasm ${CMAKE_SOURCE_DIR}/tools/playground/wasm_bindings.cpp)
-    target_link_libraries(slothdb_wasm PRIVATE slothdb_lib)
-    set_target_properties(slothdb_wasm PROPERTIES
-        OUTPUT_NAME "slothdb"
-        SUFFIX ".js")
-    target_compile_options(slothdb_wasm PRIVATE "-fexceptions" ${SLOTHDB_WASM_OPT})
-
-    set(SLOTHDB_WASM_LINK_OPTS
-        "-fexceptions"
-        "-lembind"
-        "-sMODULARIZE=1"
-        "-sEXPORT_NAME=createSlothDB"
-        "-sEXPORT_ES6=1"
-        "-sENVIRONMENT=web,node"
-        "-sALLOW_MEMORY_GROWTH=1"
-        "-sINITIAL_MEMORY=67108864"        # 64 MB
-        "-sMAXIMUM_MEMORY=2147483648"      # 2 GB
-        "-sFORCE_FILESYSTEM=1"
-        "-sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap']"
-        "-sSTACK_SIZE=5242880"             # 5 MB — parser recursion headroom
-        ${SLOTHDB_WASM_OPT}
-    )
-    if(SLOTHDB_EDGE)
-        # Strip every byte we don't need when targeting Workers / edge.
-        list(APPEND SLOTHDB_WASM_LINK_OPTS
-            "-sMALLOC=emmalloc"           # smaller than dlmalloc
-            "-sFILESYSTEM=0"              # override FORCE_FILESYSTEM above
-            "-sABORTING_MALLOC=0"
-            "-sDISABLE_EXCEPTION_CATCHING=0"
-            "--closure=1"                 # minify JS glue
-        )
-        # Override the FORCE_FILESYSTEM + EXPORTED_RUNTIME that full build sets —
-        # edge build reads data via fetch/ArrayBuffer, not emscripten's FS.
-        list(REMOVE_ITEM SLOTHDB_WASM_LINK_OPTS
-            "-sFORCE_FILESYSTEM=1"
-            "-sEXPORTED_RUNTIME_METHODS=['FS','ccall','cwrap']"
-        )
-        list(APPEND SLOTHDB_WASM_LINK_OPTS
-            "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-        )
-    endif()
-    target_link_options(slothdb_wasm PRIVATE ${SLOTHDB_WASM_LINK_OPTS})
-endif()
-
 # CLI
 if(SLOTHDB_BUILD_SHELL)
     set(SHELL_SOURCES ${CMAKE_SOURCE_DIR}/tools/shell/shell.cpp)
