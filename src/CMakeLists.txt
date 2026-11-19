@@ -15,18 +15,6 @@ file(GLOB_RECURSE SLOTHDB_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/api/*.cpp"
 )
 
-# Edge build drops the readers Cloudflare Workers / browser widgets don't
-# need. Every excluded source is also #ifdef'd out of its call sites in
-# connection.cpp + physical_planner.cpp, so the final binary has no
-# reference to the stripped types.
-if(SLOTHDB_EDGE)
-    list(FILTER SLOTHDB_SOURCES EXCLUDE REGEX ".*/storage/excel_reader\\.cpp$")
-    list(FILTER SLOTHDB_SOURCES EXCLUDE REGEX ".*/storage/avro_reader\\.cpp$")
-    list(FILTER SLOTHDB_SOURCES EXCLUDE REGEX ".*/storage/arrow_ipc\\.cpp$")
-    list(FILTER SLOTHDB_SOURCES EXCLUDE REGEX ".*/storage/sqlite_scanner\\.cpp$")
-    list(FILTER SLOTHDB_SOURCES EXCLUDE REGEX ".*/storage/miniz\\.c$")
-endif()
-
 add_library(slothdb_lib STATIC ${SLOTHDB_SOURCES})
 set_target_properties(slothdb_lib PROPERTIES OUTPUT_NAME "slothdb")
 
@@ -59,19 +47,6 @@ endif()
 
 if(SLOTHDB_AVX2_FLAGS)
     target_compile_options(slothdb_lib PRIVATE ${SLOTHDB_AVX2_FLAGS})
-endif()
-
-if(SLOTHDB_EDGE)
-    target_compile_definitions(slothdb_lib PUBLIC SLOTHDB_EDGE=1)
-endif()
-
-if(SLOTHDB_ASK_MODEL)
-    target_compile_definitions(slothdb_lib PUBLIC SLOTHDB_ASK_MODEL=1)
-    target_link_libraries(slothdb_lib PRIVATE llama)
-    # llama.cpp public headers live at third_party/llama.cpp/include
-    target_include_directories(slothdb_lib PRIVATE
-        ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/include
-        ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/ggml/include)
 endif()
 
 # miniz is third-party C; suppress warnings-as-errors for it only.
@@ -167,52 +142,6 @@ target_include_directories(slothdb_lib PRIVATE ${SLOTHDB_SNAPPY_DIR})
 target_include_directories(slothdb_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/include
 )
-
-# Shared library variant for Python ctypes / Node / dlopen consumers.
-# Compiles the same sources as a SHARED lib; WINDOWS_EXPORT_ALL_SYMBOLS
-# auto-exports every extern "C" symbol on MSVC (the C API has no
-# __declspec annotations, so without this the DLL would have zero exports).
-if(SLOTHDB_BUILD_SHARED AND NOT EMSCRIPTEN)
-    add_library(slothdb_shared SHARED ${SLOTHDB_SOURCES})
-    set_target_properties(slothdb_shared PROPERTIES
-        OUTPUT_NAME "slothdb"
-        WINDOWS_EXPORT_ALL_SYMBOLS ON
-        POSITION_INDEPENDENT_CODE ON
-    )
-    # WINDOWS_EXPORT_ALL_SYMBOLS scans the .obj files to build the export
-    # table. /GL (whole-program optimization) emits anonymous objects with
-    # no readable symbol table, so the two cannot coexist. Disable /GL for
-    # this target's own sources; slothdb_lib and the CLI keep it. The DLL
-    # stays /O2-optimized, and /LTCG still links the /GL third-party libs.
-    if(MSVC)
-        target_compile_options(slothdb_shared PRIVATE $<$<CONFIG:Release>:/GL->)
-    endif()
-    target_include_directories(slothdb_shared PUBLIC
-        ${CMAKE_SOURCE_DIR}/include
-    )
-    if(SLOTHDB_AVX2_FLAGS)
-        target_compile_options(slothdb_shared PRIVATE ${SLOTHDB_AVX2_FLAGS})
-    endif()
-    # slothdb_shared compiles the same sources as slothdb_lib, so it needs
-    # the same third-party decoders: parquet.cpp includes fastpforlib's
-    # bitpackinghelpers.h, and the snappy / zstd codecs.
-    target_link_libraries(slothdb_shared PRIVATE
-        slothdb_zstd slothdb_fastpfor slothdb_snappy)
-    target_include_directories(slothdb_shared PRIVATE
-        ${SLOTHDB_ZSTD_DIR}
-        ${CMAKE_SOURCE_DIR}/third_party/fastpforlib
-        ${SLOTHDB_SNAPPY_DIR})
-    if(SLOTHDB_EDGE)
-        target_compile_definitions(slothdb_shared PUBLIC SLOTHDB_EDGE=1)
-    endif()
-    if(SLOTHDB_ASK_MODEL)
-        target_compile_definitions(slothdb_shared PUBLIC SLOTHDB_ASK_MODEL=1)
-        target_link_libraries(slothdb_shared PRIVATE llama)
-        target_include_directories(slothdb_shared PRIVATE
-            ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/include
-            ${CMAKE_SOURCE_DIR}/third_party/llama.cpp/ggml/include)
-    endif()
-endif()
 
 # CLI
 if(SLOTHDB_BUILD_SHELL)
