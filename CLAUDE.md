@@ -1,0 +1,126 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+libzugodb is a small embedded columnar SQL engine in C++20: SlothDB at commit
+`8180f21` (v0.2.7+), forked and maintained here as its own project. Its one
+consumer is the R package [zugodb](https://github.com/pedrobtz/zugodb), which
+vendors a tagged release of this repository and compiles it at install.
+
+[.agents/design.md](.agents/design.md) is the engine's design (dialect,
+parser, conformance, what the repository holds) and
+[.agents/roadmap.md](.agents/roadmap.md) its stages, one pull request and
+one issue each. The R package's `.agents/design.md` is the specification
+for what the two share (decisions D9 to D12, §7 on readers, §16 on
+extensions, Q18 on the release bar) and wins where they disagree. Read both
+before changing what the engine accepts or refuses.
+
+## Commands
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j8
+build/test/slothdb_tests                    # the whole doctest suite
+build/test/slothdb_tests -tc="*Window*"     # test cases by name
+build/test/slothdb_tests -sf="*test_joins*" # one source file
+build/test/slothdb_tests -ltc               # list test cases
+```
+
+- `-DSLOTHDB_SANITIZERS=ON` builds with ASan and UBSan (a CI job).
+- `-DSLOTHDB_BUILD_SHELL=ON` adds the `slothdb` shell from `tools/shell/`.
+- Sources are globbed: after adding a `.cpp`, re-run the configure step.
+- Warnings are `-Wall -Wextra -Wpedantic` (`/W4 /WX` under MSVC).
+
+CI (`.github/workflows/ci.yml`) runs the suite on Linux gcc, Linux with
+ASan and UBSan, macOS clang, and MinGW-w64 UCRT64, the toolchain of R's
+Rtools. A change must pass all four.
+
+## Names
+
+The repository, the CMake project and the C++ namespace are `zugodb`.
+Everything else still carries SlothDB's name: the `SLOTHDB_*` CMake options,
+the `slothdb_lib` and `slothdb_tests` targets, the `include/slothdb/` include
+path and the `SLOTHDB_*` macros. `CONTRIBUTING.md` and everything under
+`docs/` are SlothDB's and are out of date (the namespace, the extension API,
+the test path).
+
+## Architecture
+
+A query goes through one pipeline, one directory per step, with headers
+mirrored under `include/slothdb/`:
+
+`parser/` (hand-written tokenizer and recursive-descent parser, to
+statement and expression trees) → `binder/` (names and types) → `planner/`
+(logical operators) → `optimizer/` (a few passes, about 230 lines) →
+`execution/` (physical operators that share one pull interface,
+`PhysicalOperator::GetData(DataChunk &)`).
+
+The public C++ API is `Database` and `Connection` in
+`include/slothdb/main/`; `Connection::Query(sql)` returns a materialised
+`QueryResult`. `src/api/` is a C API for SlothDB's Python binding; the R
+package does not vendor it.
+
+Where the weight is, which the directory names do not show:
+
+- `src/execution/physical_planner.cpp` (14,600 lines) holds the physical
+  operators and many special-case fast paths for specific query shapes; the
+  other files in `execution/` (`radix_count_agg`, `int_group_agg`,
+  `topk_varchar`, ...) are such paths split out of it.
+- `src/execution/expression_executor.cpp` (5,100 lines) is every scalar
+  function and cast. A new function also needs its return type in
+  `src/binder/binder.cpp`.
+- `src/main/connection.cpp` (3,100 lines) does far more than dispatch:
+  DDL, DML, `COPY`, table functions and several rewrites of the parsed
+  statement happen here before or instead of the pipeline.
+- Table function names (`read_csv`, `read_parquet`, ...) are hard-coded in
+  the parser, the tokenizer and `connection.cpp`; there is no registry.
+- `src/storage/` is both the table storage (in memory, with a checkpointed
+  database file) and the file readers. `parquet.cpp` and the CSV and JSON
+  readers are live. The SQLite, Excel, Avro and Arrow IPC readers are still
+  compiled but refused at the call site.
+
+## Invariants
+
+These are what the fork changed, and the R package's checks fail if one
+breaks:
+
+- **Refuse, never guess.** Where the engine cannot give the right answer it
+  raises an error. A wrong value with no error is the worst outcome; an
+  error is acceptable and counted.
+- **Offline, and loads no code.** Remote paths (`http://`, `https://`,
+  `s3://`) are errors. No HTTP client, extension loader or model download.
+- **Quiet.** Nothing writes to `stdout` or `stderr`; nothing calls `abort`,
+  `exit` or `rand`. The R package inspects the shared object's imports.
+- **Bounded threads.** Every thread pool respects the process-wide cap in
+  `include/slothdb/common/parallel.hpp` (`SetThreadCap`).
+- **Builds with MinGW-w64**, not only MSVC, on Windows.
+- **No transactions.** `ROLLBACK` is an error because nothing is undone.
+
+## What the R package takes
+
+`tools/vendor.yaml` in zugodb copies `LICENSE`, `include/`, `src/` (without
+`src/api/` and the CMake files), and from `third_party/` the zstd
+decompressor, `fastpforlib` and `snappy`. It builds them from a generated
+`Makevars`, not from CMake, so:
+
+- moving, renaming or adding a directory under `src/`, `include/` or those
+  three `third_party/` directories changes the R package's build;
+- a compile definition or include path set only in CMake does not reach it.
+
+An engine change reaches the R package as a pull request here, a release
+tag, and a new pin there. Each release gets an entry at the top of
+`CHANGELOG.md`; the entries below the "SlothDB" heading are upstream's.
+
+## Left over from SlothDB
+
+Not built by CI and not vendored: `docs/` (SlothDB's website and WASM
+playground), `packaging/`, `python/`, `cloudflare/`, `assets/`,
+`install.sh`, `tools/playground/`, `scripts/build-wasm.sh`, the
+`third_party/llama.cpp` submodule with its `SLOTHDB_ASK_MODEL` option (the
+`ask` module itself is removed), and `TODO-2026-04-29.md`.
+
+`bench/correctness/sqllogictest/` compares against DuckDB over DataFusion's
+`.slt` corpus, but it drives the engine through `pip install slothdb`, that
+is upstream's published build and not this tree.
