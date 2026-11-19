@@ -200,6 +200,16 @@ minor version.
   `duckdb` compiles from source on Linux and this repository has no R.
   zugodb keeps R's `duckdb` for its own recorded answers
   (`tools/oracle.R`).
+- **L8 (2026-11-20, Claude's call in Stage 0, not yet agreed).** §6's "the
+  benchmarks under `bench/` that run SlothDB's wheel" is read as every
+  performance benchmark there (`run.py`, `check.py`, `clickbench/`,
+  `sloth16/`, `taxi/`): they time SlothDB's own Windows build against
+  DuckDB, with paths to its author's machine. Only
+  `bench/correctness/sqllogictest/` imports the wheel, and it stays until
+  Stage 6. `examples/`, which §6 neither keeps nor removes, stays: SlothDB's
+  sample files, cheap, and decided with the shell's rename in Stage 12.
+  The `#ifdef SLOTHDB_EDGE` blocks in `src/` stay with the option gone,
+  since removing them would change what zugodb vendors.
 
 ## 9. Open questions
 

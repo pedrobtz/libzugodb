@@ -83,6 +83,17 @@ zugodb vendors is unchanged, byte for byte.
 - A fresh clone has no submodule and builds with the README's three
   commands.
 
+**Deviations (2026-11-20).**
+
+- The shell in `tools/shell/` was built on the C API, which the stage did
+  not say. It now uses `Database` and `Connection`.
+- The two `**Tests.**` lines conflict for `src/` and `include/`: the
+  `#ifdef SLOTHDB_EDGE` blocks in `src/main/connection.cpp` and
+  `src/execution/physical_planner.cpp`, and two comments that mention the
+  C API, refer to something removed, and removing them would change what
+  zugodb vendors. The vendored paths win; the grep excludes those lines,
+  and the pull request lists them. Design L8.
+
 **Design.** [§6](design.md#6-what-the-repository-holds) and L5, L6 in
 [§8](design.md#8-decisions).
 
