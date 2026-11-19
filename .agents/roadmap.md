@@ -130,6 +130,20 @@ query, not `std::terminate`.
 - Every `**Tests.**` line exists and was seen to fail.
 - The ASan and UBSan job is green: no leak on the error path.
 
+**Deviations (2026-11-20).**
+
+- No query reaches `ThreadPool`: its one user is
+  `ParallelExecutor::ParallelScanFilter`, which only tests call. Its
+  doctest checks the error at that API, then that the connection answers.
+- The thread-start grep is also a doctest, in the same file, so a later
+  stage that adds an unwrapped thread fails the suite.
+- The Parquet cases read committed fixtures written by DuckDB
+  (`tools/make_parquet_fixtures.py`, design L9), not files written by the
+  engine's `ParquetWriter`: a `GROUP BY` over such a file returns no rows,
+  a wrong answer that this stage does not fix. They reach the reader
+  through `read_parquet()`, which Stage 2 refuses; Stage 2 moves them to
+  the reader's C++ API or an internal path.
+
 **Design.** [zugodb Stage 6][zroadmap] and the assessment's A1.
 
 ## Stage 2 — Refuse the CSV, Parquet and JSON table functions
