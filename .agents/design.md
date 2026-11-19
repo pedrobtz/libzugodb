@@ -191,7 +191,7 @@ minor version.
   nothing is restructured before the bar holds (§6). Proposed by Claude;
   the maintainer said to go ahead.
 
-- **L7 (2026-11-19, proposed by Claude).** No DuckDB runs in CI: the
+- **L7 (2026-11-19, proposed by Claude, agreed by the maintainer).** No DuckDB runs in CI: the
   corpus carries its answers. Where an answer must be recorded for SQL the
   corpus lacks (a doctest for a fix, a listed difference), it comes from
   DuckDB's Python package, pinned with `duckdb==` to the corpus's tag, by
