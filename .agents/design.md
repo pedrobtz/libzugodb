@@ -211,6 +211,19 @@ minor version.
   product demo, and nothing in the build or tests reads it. The
   `#ifdef SLOTHDB_EDGE` blocks in `src/` stay with the option gone, since
   removing them would change what zugodb vendors.
+- **L9 (2026-11-20, Stage 1, Claude's implementation call).** An
+  exception on a worker thread is kept by one mechanism in
+  `include/slothdb/common/parallel.hpp`: `WorkerErrors` (the first
+  `std::exception_ptr`, under a mutex, with an atomic flag workers poll to
+  stop early) and `WorkerGroup` (threads started and joined in one scope,
+  rethrow after the join, a thread that fails to start is an error of the
+  group). Every new thread start uses one of them or `ParallelFor`, and
+  the doctest "every thread start in src/ is a covered kind" fails on any
+  other. The test seam is a process-wide atomic armed only by the tests,
+  so it reaches zugodb's build with no CMake definition. Parquet fixtures
+  for tests are written by DuckDB's Python package, pinned
+  (`duckdb==1.1.3`) in `tools/make_parquet_fixtures.py`, as L7 allows;
+  the pin moves to the corpus's tag when LQ1 settles it.
 
 ## 9. Open questions
 

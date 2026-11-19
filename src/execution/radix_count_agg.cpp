@@ -1,5 +1,6 @@
 #include "slothdb/execution/radix_count_agg.hpp"
 #include "slothdb/common/profile_log.hpp"
+#include "slothdb/common/parallel.hpp"
 
 #include <algorithm>
 #include <array>
@@ -554,11 +555,11 @@ void RadixHashCountStr::Finalize() {
     if (nt <= 1) {
         sort_one(0);
     } else {
-        std::vector<std::thread> ws;
+        zugodb::WorkerGroup ws;
         ws.reserve(nt - 1);
-        for (int t = 1; t < nt; t++) ws.emplace_back(sort_one, t);
-        sort_one(0);
-        for (auto& t : ws) if (t.joinable()) t.join();
+        for (int t = 1; t < nt; t++) ws.Spawn(sort_one, t);
+        ws.RunHere([&] { sort_one(0); });
+        ws.Join();
     }
     if (_pf) {
         zugodb::ProfileLog("[SLOTH_PROFILE] RadixHashCountStr::Finalize %.0fms\n",
@@ -667,11 +668,11 @@ std::vector<RadixCountStrResult> RadixHashCountStr::EmitTopK(int k) const {
             uint64_t hi = last ? 0 : (uint64_t)(w + 1) * span;
             merge_range(lo, hi, last, k, partials[(size_t)w]);
         };
-        std::vector<std::thread> ws;
+        zugodb::WorkerGroup ws;
         ws.reserve((size_t)(P - 1));
-        for (int w = 1; w < P; w++) ws.emplace_back(do_range, w);
-        do_range(0);
-        for (auto& t : ws) if (t.joinable()) t.join();
+        for (int w = 1; w < P; w++) ws.Spawn(do_range, w);
+        ws.RunHere([&] { do_range(0); });
+        ws.Join();
         // Combine the P local top-k lists into the global top-k. The global
         // winners are a subset of the per-range winners (a global top-k
         // member is also among the top-k of its own range).
@@ -750,11 +751,11 @@ int64_t RadixHashCountStr::CountDistinctGroups() const {
     if (P <= 1) {
         do_range(0);
     } else {
-        std::vector<std::thread> ws;
+        zugodb::WorkerGroup ws;
         ws.reserve((size_t)(P - 1));
-        for (int w = 1; w < P; w++) ws.emplace_back(do_range, w);
-        do_range(0);
-        for (auto& t : ws) if (t.joinable()) t.join();
+        for (int w = 1; w < P; w++) ws.Spawn(do_range, w);
+        ws.RunHere([&] { do_range(0); });
+        ws.Join();
     }
     int64_t total = 0;
     for (auto p : partial) total += p;
@@ -1315,11 +1316,11 @@ RadixCount2ColIntStr::EmitTopKDistinctByStrKey(int k) const {
         }
     };
     {
-        std::vector<std::thread> ts;
+        zugodb::WorkerGroup ts;
         for (int s = 1; s < NSHARDS; s++)
-            ts.emplace_back([&, s]() { build_local(s); });
-        build_local(0);
-        for (auto& t : ts) t.join();
+            ts.Spawn([&, s]() { build_local(s); });
+        ts.RunHere([&] { build_local(0); });
+        ts.Join();
     }
     ankerl::unordered_dense::map<std::string_view, int64_t> str_counts;
     size_t total_local = 0;

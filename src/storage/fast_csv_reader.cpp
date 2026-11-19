@@ -464,11 +464,11 @@ idx_t FastCSVReader::CountRows() {
         partial[t] = CountNewlinesRange(s, e);
     };
     if (num_threads > 1) {
-        std::vector<std::thread> threads;
+        zugodb::WorkerGroup threads;
         threads.reserve(num_threads);
         for (unsigned int t = 0; t < num_threads; t++)
-            threads.emplace_back(count_one, t);
-        for (auto &th : threads) th.join();
+            threads.Spawn(count_one, t);
+        threads.Join();
     } else {
         count_one(0);
     }
@@ -786,14 +786,14 @@ void FastCSVReader::ReadIntoChunks(std::vector<DataChunk> &out,
     }
 
     std::vector<std::vector<DataChunk>> per_thread(ranges.size());
-    std::vector<std::thread> threads;
+    zugodb::WorkerGroup threads;
     threads.reserve(ranges.size());
     for (size_t i = 0; i < ranges.size(); i++) {
-        threads.emplace_back([&, i] {
+        threads.Spawn([&, i] {
             parse_range(ranges[i].first, ranges[i].second, per_thread[i]);
         });
     }
-    for (auto &th : threads) th.join();
+    threads.Join();
 
     for (auto &v : per_thread) {
         for (auto &c : v) out.push_back(std::move(c));

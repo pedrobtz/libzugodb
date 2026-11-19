@@ -15,6 +15,14 @@
   unused copy of `fastpforlib` at the top of `third_party/`.
 - Remove the CMake options `SLOTHDB_ASK_MODEL`, `SLOTHDB_EDGE` and
   `SLOTHDB_BUILD_SHARED`.
+- An exception on an engine worker thread is an error of the query, not
+  `std::terminate`: a damaged Parquet page (SouravRoy-ETL/slothdb#33), or
+  an error in any other parallel phase of a reader or an operator. Every
+  thread start in `src/` goes through `WorkerGroup`, `ParallelFor` or
+  `WorkerErrors` in `include/slothdb/common/parallel.hpp`, which keep the
+  first exception and rethrow it on the query's thread after the join;
+  the other workers stop early. `parallel.hpp` also holds a test seam,
+  `ArmWorkerFault`, that costs one relaxed atomic load per worker.
 
 ## libzugodb 0.1.1
 

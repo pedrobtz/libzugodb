@@ -909,7 +909,11 @@ public:
                 slot_ready_cv_.wait(lk, [&] {
                     return stop_.load() || slots_[next_emit_] != nullptr;
                 });
-                if (stop_.load()) return false;
+                if (stop_.load()) {
+                    lk.unlock();
+                    RethrowWorkerError();
+                    return false;
+                }
                 current_work_ = std::move(slots_[next_emit_]);
                 // Wake any worker throttled by max_ahead - one slot just freed.
                 slot_free_cv_.notify_all();
@@ -1035,7 +1039,11 @@ public:
             slot_ready_cv_.wait(lk, [&] {
                 return stop_.load() || slots_[next_emit_] != nullptr;
             });
-            if (stop_.load()) return nullptr;
+            if (stop_.load()) {
+                lk.unlock();
+                RethrowWorkerError();
+                return nullptr;
+            }
             work = std::move(slots_[next_emit_]);
             slot_free_cv_.notify_all();
         }
@@ -1097,6 +1105,7 @@ public:
 
         next_decode_.store(0);
         stop_.store(false);
+        errors_.Reset();
         consumer_mode_ = true;
         if (nt <= 1) {
             // Single-threaded (incl. WASM without pthreads): run inline.
@@ -1105,14 +1114,24 @@ public:
             // Workers read the count, never workers_.size(): the vector is
             // still growing while the first workers run.
             worker_count_ = nt;
-            for (unsigned int t = 0; t < nt; t++) {
-                workers_.emplace_back([this, t] { WorkerLoop((int)t); });
+            try {
+                for (unsigned int t = 0; t < nt; t++) {
+                    workers_.emplace_back([this, t] {
+                        RunWorker(zugodb::WorkerSite::FORK_JOIN, (int)t);
+                    });
+                }
+            } catch (...) {
+                // The consumer reads the caller's frame: join before unwinding.
+                errors_.Capture(std::current_exception());
+                stop_.store(true);
             }
             for (auto &t : workers_) if (t.joinable()) t.join();
             workers_.clear();
             worker_count_ = 0;
         }
         consumer_mode_ = false;
+        // libzugodb: the first exception of a worker, after the join.
+        errors_.Rethrow();
         if (zugodb::PqProfileOn()) {
             double wall = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::steady_clock::now() - _rp_t0).count() / 1e6;
@@ -1359,6 +1378,28 @@ private:
         }
     }
 
+    // libzugodb: every decode worker runs under errors_. The first to fail
+    // stops the others and wakes the consumer, which joins them and
+    // rethrows (RethrowWorkerError) on the query's thread.
+    void RunWorker(zugodb::WorkerSite site, int thread_id) {
+        errors_.Run(site, [&] { WorkerLoop(thread_id); });
+        if (errors_.Failed()) {
+            {
+                std::lock_guard<std::mutex> lk(mu_);
+                stop_.store(true);
+            }
+            slot_ready_cv_.notify_all();
+            slot_free_cv_.notify_all();
+        }
+    }
+
+    // Called by the consumer, without mu_, once stop_ is seen.
+    void RethrowWorkerError() {
+        if (!errors_.Failed()) return;
+        StopWorkers();
+        errors_.Rethrow();
+    }
+
     void SpawnWorkers() {
         workers_spawned_ = true;
         unsigned int nt = HWThreads();
@@ -1372,9 +1413,16 @@ private:
         // nt <= 1: skip spawn. The slot-mode caller path checks
         // `workers_.empty()` and decodes inline (see GetNextWork).
         if (nt <= 1) return;
+        errors_.Reset();
         worker_count_ = nt;
-        for (unsigned int t = 0; t < nt; t++) {
-            workers_.emplace_back([this] { WorkerLoop(); });
+        try {
+            for (unsigned int t = 0; t < nt; t++) {
+                workers_.emplace_back(
+                    [this] { RunWorker(zugodb::WorkerSite::PIPELINE, 0); });
+            }
+        } catch (...) {
+            StopWorkers();
+            throw;
         }
     }
 
@@ -1466,6 +1514,7 @@ private:
     // must not read workers_ while the main thread is appending to it.
     unsigned int worker_count_ = 0;
     std::atomic<bool> stop_{false};
+    zugodb::WorkerErrors errors_; // first exception of a decode worker
     std::mutex mu_;
     std::condition_variable slot_ready_cv_; // main waits on this
     std::condition_variable slot_free_cv_;  // workers wait on this (throttle)
@@ -2601,18 +2650,19 @@ private:
             for (auto &u : units) decode_unit(u);
         } else {
             std::atomic<size_t> next2{0};
-            std::vector<std::thread> ts2;
+            zugodb::WorkerGroup ts2;
             ts2.reserve(p2_threads);
             for (unsigned int t = 0; t < p2_threads; t++) {
-                ts2.emplace_back([&] {
+                ts2.Spawn([&] {
                     while (true) {
+                        if (ts2.Failed()) return;
                         size_t idx = next2.fetch_add(1, std::memory_order_relaxed);
                         if (idx >= units.size()) return;
                         decode_unit(units[idx]);
                     }
                 });
             }
-            for (auto &t : ts2) if (t.joinable()) t.join();
+            ts2.Join();
         }
 
         auto box_typed = [](const ParquetColumnData &col, idx_t row_i) -> Value {
@@ -3095,11 +3145,12 @@ private:
                         eval_one_rg(0);
                         next_rg.store(1, std::memory_order_relaxed);
                     }
-                    std::vector<std::thread> ts;
+                    zugodb::WorkerGroup ts;
                     ts.reserve(nthreads);
                     for (unsigned int t = 0; t < nthreads; t++) {
-                        ts.emplace_back([&] {
+                        ts.Spawn([&] {
                             while (true) {
+                                if (ts.Failed()) return;
                                 if (done.load(std::memory_order_relaxed)) return;
                                 size_t idx = next_rg.fetch_add(1, std::memory_order_relaxed);
                                 if (idx >= rg_order.size()) return;
@@ -3107,7 +3158,7 @@ private:
                             }
                         });
                     }
-                    for (auto &t : ts) if (t.joinable()) t.join();
+                    ts.Join();
                 }
             } else {
                 // No stats available for this column. Fall back to the
@@ -3324,18 +3375,19 @@ private:
                 for (auto &u : units) decode_unit(u);
             } else {
                 std::atomic<size_t> next2{0};
-                std::vector<std::thread> ts2;
+                zugodb::WorkerGroup ts2;
                 ts2.reserve(p2_threads);
                 for (unsigned int t = 0; t < p2_threads; t++) {
-                    ts2.emplace_back([&] {
+                    ts2.Spawn([&] {
                         while (true) {
+                            if (ts2.Failed()) return;
                             size_t idx = next2.fetch_add(1, std::memory_order_relaxed);
                             if (idx >= units.size()) return;
                             decode_unit(units[idx]);
                         }
                     });
                 }
-                for (auto &t : ts2) if (t.joinable()) t.join();
+                ts2.Join();
             }
 
             // Pluck winning rows. Cheap, sequential. Reuses key from
@@ -3730,11 +3782,12 @@ private:
                 eval_one_rg(0);
                 next_rg.store(1, std::memory_order_relaxed);
             }
-            std::vector<std::thread> ts;
+            zugodb::WorkerGroup ts;
             ts.reserve(nthreads);
             for (unsigned int t = 0; t < nthreads; t++) {
-                ts.emplace_back([&] {
+                ts.Spawn([&] {
                     while (true) {
+                        if (ts.Failed()) return;
                         if (done.load(std::memory_order_relaxed)) return;
                         size_t idx = next_rg.fetch_add(1, std::memory_order_relaxed);
                         if (idx >= rg_order.size()) return;
@@ -3742,7 +3795,7 @@ private:
                     }
                 });
             }
-            for (auto &t : ts) if (t.joinable()) t.join();
+            ts.Join();
         }
 
         // Drain merged into sorted (best-first) order, then emit ncols-wide
@@ -5364,18 +5417,19 @@ private:
             if (nthreads > partitions_.size()) nthreads = static_cast<unsigned int>(partitions_.size());
             if (nthreads > 1) {
                 std::atomic<idx_t> next{0};
-                std::vector<std::thread> ts;
+                zugodb::WorkerGroup ts;
                 ts.reserve(nthreads);
                 for (unsigned int t = 0; t < nthreads; t++) {
-                    ts.emplace_back([&] {
+                    ts.Spawn([&] {
                         while (true) {
+                            if (ts.Failed()) return;
                             idx_t p = next.fetch_add(1, std::memory_order_relaxed);
                             if (p >= partitions_.size()) return;
                             SortOnePartition(p);
                         }
                     });
                 }
-                for (auto &t : ts) if (t.joinable()) t.join();
+                ts.Join();
             } else {
                 for (idx_t p = 0; p < partitions_.size(); p++) SortOnePartition(p);
             }
@@ -6736,11 +6790,11 @@ private:
                     }
                 };
             if (num_threads > 1) {
-                std::vector<std::thread> threads;
+                zugodb::WorkerGroup threads;
                 threads.reserve(num_threads);
                 for (unsigned int t = 0; t < num_threads; t++)
-                    threads.emplace_back(worker_fn, t);
-                for (auto &th : threads) th.join();
+                    threads.Spawn(worker_fn, t);
+                threads.Join();
             } else {
                 worker_fn(0);
             }
@@ -6984,11 +7038,11 @@ private:
                     }
                 };
             if (num_threads > 1) {
-                std::vector<std::thread> threads;
+                zugodb::WorkerGroup threads;
                 threads.reserve(num_threads);
                 for (unsigned int t = 0; t < num_threads; t++)
-                    threads.emplace_back(worker_fn2, t);
-                for (auto &th : threads) th.join();
+                    threads.Spawn(worker_fn2, t);
+                threads.Join();
             } else {
                 worker_fn2(0);
             }
@@ -7513,14 +7567,14 @@ private:
                                 }
                             });
                         pq->RunParallelRGs(RADIX_COUNT_THREADS);
-                        std::vector<std::thread> mts;
+                        zugodb::WorkerGroup mts;
                         for (int s = 1; s < zugodb::RadixCountAggStr::N_RADIX; s++) {
-                            mts.emplace_back([&str_agg, s]() {
+                            mts.Spawn([&str_agg, s]() {
                                 str_agg.MergeShard(s);
                             });
                         }
-                        str_agg.MergeShard(0);
-                        for (auto &t : mts) t.join();
+                        mts.RunHere([&] { str_agg.MergeShard(0); });
+                        mts.Join();
                         int top_k = 0;
                         if (topn_active_ && topn_limit_ > 0 &&
                             !topn_ascending_ &&
@@ -7589,14 +7643,14 @@ private:
                         // Phase 2: 16 disjoint radix workers (no
                         // contention). Run all but radix 0 in parallel
                         // threads; main thread does radix 0.
-                        std::vector<std::thread> mts;
+                        zugodb::WorkerGroup mts;
                         for (int r = 1; r < zugodb::RadixCountAgg::N_RADIX; r++) {
-                            mts.emplace_back([&radix_agg, r]() {
+                            mts.Spawn([&radix_agg, r]() {
                                 radix_agg.MergeRadix(r);
                             });
                         }
-                        radix_agg.MergeRadix(0);
-                        for (auto &t : mts) t.join();
+                        mts.RunHere([&] { radix_agg.MergeRadix(0); });
+                        mts.Join();
                         // Phase 3: emit. TopN heap when LIMIT pushdown is
                         // active and orders by count; full materialization
                         // otherwise. All aggs are CountStar so any agg
@@ -9172,11 +9226,11 @@ private:
                         }
                     };
                 if (nt > 1) {
-                    std::vector<std::thread> threads;
+                    zugodb::WorkerGroup threads;
                     threads.reserve(nt);
                     for (unsigned int t = 0; t < nt; t++)
-                        threads.emplace_back(worker_fn3, t);
-                    for (auto &th : threads) th.join();
+                        threads.Spawn(worker_fn3, t);
+                    threads.Join();
                 } else {
                     worker_fn3(0);
                 }
@@ -10005,7 +10059,7 @@ private:
                     // hash, so each shard ingests its mini-arrays without rehash.
                     constexpr int NSHARDS = 16;
                     std::array<size_t, NSHARDS> shard_sz{};
-                    std::vector<std::thread> mts;
+                    zugodb::WorkerGroup mts;
                     auto run_shard = [&](int s) {
                         zugodb::SimpleI64Set out;
                         out.reserve(512 * 1024);
@@ -10014,9 +10068,9 @@ private:
                         }
                         shard_sz[s] = out.size();
                     };
-                    for (int s = 1; s < NSHARDS; s++) mts.emplace_back(run_shard, s);
-                    run_shard(0);
-                    for (auto &m : mts) m.join();
+                    for (int s = 1; s < NSHARDS; s++) mts.Spawn(run_shard, s);
+                    mts.RunHere([&] { run_shard(0); });
+                    mts.Join();
                     int64_t total = 0;
                     for (int s = 0; s < NSHARDS; s++) total += (int64_t)shard_sz[s];
                     emit_int_only(total);
@@ -10082,9 +10136,9 @@ private:
                 };
                 if (merge_w == 1) run(0);
                 else {
-                    std::vector<std::thread> mts;
-                    for (int w = 0; w < merge_w; w++) mts.emplace_back([&, w]() { run(w); });
-                    for (auto &t : mts) t.join();
+                    zugodb::WorkerGroup mts;
+                    for (int w = 0; w < merge_w; w++) mts.Spawn([&, w]() { run(w); });
+                    mts.Join();
                 }
                 // Emit using composite keys for group_states / group_order;
                 // group_keys carries the original [Value, Value] pair.
@@ -10158,9 +10212,9 @@ private:
                     };
                     if (merge_w == 1) run(0);
                     else {
-                        std::vector<std::thread> mts;
-                        for (int w = 0; w < merge_w; w++) mts.emplace_back([&, w]() { run(w); });
-                        for (auto &t : mts) t.join();
+                        zugodb::WorkerGroup mts;
+                        for (int w = 0; w < merge_w; w++) mts.Spawn([&, w]() { run(w); });
+                        mts.Join();
                     }
                     if (!agg_is_varchar) {
                         for (auto &kv : merged_int) {
@@ -10253,10 +10307,10 @@ private:
                         };
                         if (merge_w == 1) run(0);
                         else {
-                            std::vector<std::thread> mts;
+                            zugodb::WorkerGroup mts;
                             for (int w = 0; w < merge_w; w++)
-                                mts.emplace_back([&, w]() { run(w); });
-                            for (auto &t : mts) t.join();
+                                mts.Spawn([&, w]() { run(w); });
+                            mts.Join();
                         }
                         for (auto &kv : merged_str) {
                             auto &states = group_states[kv.first];
@@ -10526,14 +10580,14 @@ private:
                             });
                         pq->RunParallelRGs();
                         using AggT = std::remove_reference_t<decltype(agg)>;
-                        std::vector<std::thread> mts;
+                        zugodb::WorkerGroup mts;
                         for (int s = 1; s < AggT::N_RADIX; s++) {
-                            mts.emplace_back([&agg, s]() {
+                            mts.Spawn([&agg, s]() {
                                 agg.MergeShard(s);
                             });
                         }
-                        agg.MergeShard(0);
-                        for (auto &t : mts) t.join();
+                        mts.RunHere([&] { agg.MergeShard(0); });
+                        mts.Join();
                         // TopN dispatch only for ORDER BY count(*) DESC.
                         // count_star sits at the index of the COUNT(*) agg
                         // in the output.
@@ -10812,14 +10866,14 @@ private:
                             });
                         pq->RunParallelRGs();
                         using BkAggT = std::remove_reference_t<decltype(agg)>;
-                        std::vector<std::thread> mts;
+                        zugodb::WorkerGroup mts;
                         for (int s = 1; s < BkAggT::N_RADIX; s++) {
-                            mts.emplace_back([&agg, s]() {
+                            mts.Spawn([&agg, s]() {
                                 agg.MergeShard(s);
                             });
                         }
-                        agg.MergeShard(0);
-                        for (auto &t : mts) t.join();
+                        mts.RunHere([&] { agg.MergeShard(0); });
+                        mts.Join();
                         int top_k = 0;
                         int count_star_emit_idx = -1;
                         for (idx_t a = 0; a < num_aggs; a++) {
@@ -11123,15 +11177,15 @@ private:
                                 }
                             });
                         pq->RunParallelRGs(RADIX_COUNT_2COL_THREADS);
-                        std::vector<std::thread> mts;
+                        zugodb::WorkerGroup mts;
                         for (int s = 1;
                              s < zugodb::RadixCount2ColIntStr::N_RADIX; s++) {
-                            mts.emplace_back([&agg2, s]() {
+                            mts.Spawn([&agg2, s]() {
                                 agg2.MergeShard(s);
                             });
                         }
-                        agg2.MergeShard(0);
-                        for (auto &t : mts) t.join();
+                        mts.RunHere([&] { agg2.MergeShard(0); });
+                        mts.Join();
                         // TopN dispatch: ORDER BY count DESC LIMIT K. The
                         // count column is at index 2 (int_key, str_key,
                         // count). All aggs are CountStar, so any agg col
@@ -12254,9 +12308,9 @@ private:
             };
             if (merge_w == 1) run_merge(0);
             else {
-                std::vector<std::thread> mts;
-                for (int w = 0; w < merge_w; w++) mts.emplace_back([&, w]() { run_merge(w); });
-                for (auto &th : mts) th.join();
+                zugodb::WorkerGroup mts;
+                for (int w = 0; w < merge_w; w++) mts.Spawn([&, w]() { run_merge(w); });
+                mts.Join();
             }
         } else {
 
@@ -13624,11 +13678,11 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
                     }
                 };
             if (nt > 1) {
-                std::vector<std::thread> threads;
+                zugodb::WorkerGroup threads;
                 threads.reserve(nt);
                 for (unsigned int t = 0; t < nt; t++)
-                    threads.emplace_back(worker_fn4, t);
-                for (auto &th : threads) th.join();
+                    threads.Spawn(worker_fn4, t);
+                threads.Join();
             } else {
                 worker_fn4(0);
             }
@@ -14569,13 +14623,13 @@ static bool TryComputeVarcharGroupDistinctTopN(
     pq->RunParallelRGs();
 
     // Merge Stage 1 shards in parallel.
-    std::vector<std::thread> mts;
+    zugodb::WorkerGroup mts;
     for (int s = 1;
          s < zugodb::RadixCount2ColIntStr::N_RADIX; s++) {
-        mts.emplace_back([&stage1, s]() { stage1.MergeShard(s); });
+        mts.Spawn([&stage1, s]() { stage1.MergeShard(s); });
     }
-    stage1.MergeShard(0);
-    for (auto &mt : mts) mt.join();
+    mts.RunHere([&] { stage1.MergeShard(0); });
+    mts.Join();
 
     // Stage 2 + Top-K: count pairs per str_key. Each pair is unique
     // by (int, str), so |{pairs with str=X}| == |{distinct ints with str=X}|.

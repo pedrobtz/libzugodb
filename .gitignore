@@ -44,6 +44,8 @@ desktop.ini
 
 # Build artifacts
 *.parquet
+# Committed fixtures (tools/make_parquet_fixtures.py writes them)
+!test/fixtures/*.parquet
 
 real-life-testing/sales_10m.csv
 real-life-testing/sloth.parquet

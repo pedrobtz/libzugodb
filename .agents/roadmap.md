@@ -28,7 +28,7 @@ issue closed. zugodb then moves its pin.
 | Stage | Title | Version | CI | Issue | Pull request | Done |
 | --- | --- | --- | --- | --- | --- | --- |
 | 0 | [Repository clean-up](#stage-0--repository-clean-up) | 0.2.0 | ci | [#8](https://github.com/pedrobtz/libzugodb/issues/8) | [#19](https://github.com/pedrobtz/libzugodb/pull/19) | 2026-11-19 |
-| 1 | [Errors on worker threads become query errors](#stage-1--errors-on-worker-threads-become-query-errors) | 0.2.0 | ci | [#3](https://github.com/pedrobtz/libzugodb/issues/3) | | |
+| 1 | [Errors on worker threads become query errors](#stage-1--errors-on-worker-threads-become-query-errors) | 0.2.0 | ci | [#3](https://github.com/pedrobtz/libzugodb/issues/3) | [#20](https://github.com/pedrobtz/libzugodb/pull/20) | 2026-11-20 |
 | 2 | [Refuse the CSV, Parquet and JSON table functions](#stage-2--refuse-the-csv-parquet-and-json-table-functions) | 0.2.0 | ci | [#4](https://github.com/pedrobtz/libzugodb/issues/4) | | |
 | 3 | [A checksum for the database file, and format version 1001](#stage-3--a-checksum-for-the-database-file-and-format-version-1001) | 0.2.0 | ci | [#5](https://github.com/pedrobtz/libzugodb/issues/5) | | |
 | 4 | [Harden Checkpoint::Load, with a fuzz harness in CI](#stage-4--harden-checkpointload-with-a-fuzz-harness-in-ci) | 0.2.0 | + `fuzz` | [#6](https://github.com/pedrobtz/libzugodb/issues/6) | | |
@@ -129,6 +129,20 @@ query, not `std::terminate`.
 
 - Every `**Tests.**` line exists and was seen to fail.
 - The ASan and UBSan job is green: no leak on the error path.
+
+**Deviations (2026-11-20).**
+
+- No query reaches `ThreadPool`: its one user is
+  `ParallelExecutor::ParallelScanFilter`, which only tests call. Its
+  doctest checks the error at that API, then that the connection answers.
+- The thread-start grep is also a doctest, in the same file, so a later
+  stage that adds an unwrapped thread fails the suite.
+- The Parquet cases read committed fixtures written by DuckDB
+  (`tools/make_parquet_fixtures.py`, design L9), not files written by the
+  engine's `ParquetWriter`: a `GROUP BY` over such a file returns no rows,
+  a wrong answer that this stage does not fix. They reach the reader
+  through `read_parquet()`, which Stage 2 refuses; Stage 2 moves them to
+  the reader's C++ API or an internal path.
 
 **Design.** [zugodb Stage 6][zroadmap] and the assessment's A1.
 
