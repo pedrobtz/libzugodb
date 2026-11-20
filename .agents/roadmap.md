@@ -33,7 +33,7 @@ issue closed. zugodb then moves its pin.
 | 3 | [A checksum for the database file, and format version 1001](#stage-3--a-checksum-for-the-database-file-and-format-version-1001) | 0.2.0 | ci | [#5](https://github.com/pedrobtz/libzugodb/issues/5) | [#22](https://github.com/pedrobtz/libzugodb/pull/22) | 2026-11-20 |
 | 4 | [Harden Checkpoint::Load, with a fuzz harness in CI](#stage-4--harden-checkpointload-with-a-fuzz-harness-in-ci) | 0.2.0 | + `fuzz` | [#6](https://github.com/pedrobtz/libzugodb/issues/6) | [#24](https://github.com/pedrobtz/libzugodb/pull/24) | 2026-11-20 |
 | 5 | [ThreadSanitizer in CI](#stage-5--threadsanitizer-in-ci) | 0.2.0 | + `linux-tsan` | [#7](https://github.com/pedrobtz/libzugodb/issues/7) | [#27](https://github.com/pedrobtz/libzugodb/pull/27) | 2026-11-20 |
-| 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | | |
+| 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | [#28](https://github.com/pedrobtz/libzugodb/pull/28) | 2026-11-20 |
 | 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | | |
 | 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | | |
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | | |
@@ -377,6 +377,29 @@ reproducibly, and written down.
 - The `conformance` job is green on Linux and macOS, and finishes in
   under ten minutes.
 - Every `**Tests.**` line exists and was seen to fail.
+
+**Deviations (2026-11-20).**
+
+- Two counts beside §5's six (design L16): unreliable, a wrong or
+  accepted case after a setup statement of its file failed, and not run,
+  the cases after a crash or a hang in their file.
+- The time limit is per case, 30 seconds without progress, not per file,
+  so a slow file is not a hang; a child past 2 GiB of resident memory is
+  killed and its case hung too (L16).
+- The committed counts are those of an ASan and UBSan build: a Release
+  build crashed on different cases from run to run (a use after free in
+  `PhysicalOrderBy`), so its counts could not be committed (L16).
+- Caps 1 and 2 are compared by each case's class, not its values: a value
+  read from uninitialised memory differs from run to run (L16).
+- The counts are committed per platform (`linux-x86_64`, `macos-arm64`):
+  the engine gives three cases a different class on each (L16).
+- A `statement ok` that only sets one of DuckDB's execution settings
+  (`threads`, `debug_*`, optimizer and join thresholds, ...) is not run
+  (L17).
+- A `statement error`'s expected message is not compared: an error is an
+  error.
+- Design L9 moves the Parquet fixtures' `duckdb==` pin to the corpus's tag
+  once LQ1 is settled; the fixtures are not regenerated in this stage.
 
 **Design.** [§5](design.md#5-conformance-and-its-oracles); L1 and L3 in
 [§8](design.md#8-decisions); LQ1 in [§9](design.md#9-open-questions).

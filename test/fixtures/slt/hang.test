@@ -1,0 +1,14 @@
+# Fixture: the runner loops for ever at the second case (a test hook, not the engine).
+
+query I
+SELECT 1
+----
+1
+
+statement ok
+-- zugodb_slt: hang
+
+query I
+SELECT 2
+----
+2

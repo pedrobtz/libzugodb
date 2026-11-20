@@ -1,0 +1,130 @@
+# The conformance runner's own fixture (test/unit/tools/test_slt.cpp): one
+# case of each class, each with the class it must get in a comment above
+# it. Not from DuckDB's corpus.
+
+# passed
+statement ok
+CREATE TABLE t (x INTEGER)
+
+# passed
+statement ok
+INSERT INTO t VALUES (2), (1)
+
+# passed: a statement DuckDB refuses, refused here too
+statement error
+SELECT * FROM no_such_table
+----
+does not exist
+
+# passed: the rows in order
+query I
+SELECT x FROM t ORDER BY x
+----
+1
+2
+
+# passed: rowsort sorts the result before comparing
+query I rowsort
+SELECT x FROM t ORDER BY x DESC
+----
+1
+2
+
+# passed: one row per line, tab-separated
+query II
+SELECT 1, 2
+----
+1	2
+
+# passed: NULL, a boolean recorded as true, and the empty string
+query ITT
+SELECT NULL, 1 = 1, ''
+----
+NULL	true	(empty)
+
+# passed: a double within DuckDB's tolerance of the recorded value
+query R
+SELECT 1.0 / 3
+----
+0.333333
+
+# passed: a hash of the values
+query I
+SELECT x FROM t ORDER BY x
+----
+2 values hashing to 6ddb4095eb719e2a9f0a3f95677d24e0
+
+# wrong: a planted wrong value
+query I
+SELECT 1
+----
+2
+
+# wrong: a wrong type, an integer where DuckDB recorded its DOUBLE text
+query R
+SELECT 1
+----
+1.0
+
+# passed: a DOUBLE where the test records an integer, as DuckDB's runner takes it
+query R
+SELECT CAST(1 AS DOUBLE)
+----
+1
+
+# wrong: the right rows in the wrong order under nosort
+query I nosort
+SELECT x FROM t ORDER BY x DESC
+----
+1
+2
+
+# wrong: a column more than the type string says
+query I
+SELECT 1, 2
+----
+1	2
+
+# wrong: a row fewer than recorded
+query I
+SELECT x FROM t WHERE x > 1
+----
+1
+2
+
+# refused: an error where DuckDB gave a result
+query I
+SELECT * FROM no_such_table
+----
+1
+
+# accepted: a result where DuckDB gave an error
+statement error
+SELECT 1
+----
+some error
+
+# a fresh database: what came before cannot make later cases unreliable
+restart
+
+# refused: a setup statement that fails
+statement ok
+CREATE TABLE u AS SELECT * FROM no_such_table
+
+# refused: and what depends on it
+query I
+SELECT count(*) FROM u
+----
+0
+
+# passed: a case that passes after a failed setup still passes
+query I
+SELECT 42
+----
+42
+
+# unreliable: a wrong value after a failed setup statement
+query I
+SELECT 1
+----
+2
