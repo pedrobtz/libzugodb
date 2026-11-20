@@ -146,7 +146,7 @@ test/sql/aggregate/distinct/test_distinct_order_by.test	run	8	7	1	0	0	0	0	0	0
 test/sql/aggregate/distinct/ungrouped/test_distinct_ungrouped.test	run	17	0	17	0	0	0	0	0	0
 test/sql/aggregate/distinct/ungrouped/test_distinct_ungrouped_shared_input.test	run	2	0	2	0	0	0	0	0	0
 test/sql/aggregate/first_last_nested_vectors.test	run	4	0	4	0	0	0	0	0	0
-test/sql/aggregate/group/group_by_all.test	run	18	9	4	0	0	5	0	0	0
+test/sql/aggregate/group/group_by_all.test	run	18	11	4	0	0	3	0	0	0
 test/sql/aggregate/group/group_by_all_having.test	run	4	3	1	0	0	0	0	0	0
 test/sql/aggregate/group/group_by_all_order.test	run	7	6	1	0	0	0	0	0	0
 test/sql/aggregate/group/group_by_all_window.test	run	7	3	4	0	0	0	0	0	0

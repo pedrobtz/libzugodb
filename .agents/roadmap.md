@@ -686,7 +686,11 @@ chunk boundary.
   API.
 - `v0.3.0` is tagged and released by the maintainer after the merge, not
   in the pull request.
-- The counts: COUNTS_PLACEHOLDER
+- The counts, alike on both platforms: passed 5,733 → 5,735, unreliable
+  386 → 384; refused 14,236, wrong, accepted, crashed and hung 0, as
+  before. The two are `GROUP BY` of `(g+i)%2` in
+  `aggregate/group/group_by_all`, whose NULL key read a stale value (#47).
+  No case moves from passed to refused.
 
 **Design.** [zugodb §4.2][zdesign] and [zugodb Stage 8][zroadmap], L27 in
 [§8](design.md#8-decisions).
