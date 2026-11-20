@@ -3,6 +3,8 @@
 #include "slothdb/storage/block_manager.hpp"
 #include "slothdb/catalog/catalog.hpp"
 #include "slothdb/storage/data_table.hpp"
+#include <cstddef>
+#include <cstdint>
 #include <string>
 
 namespace zugodb {
@@ -13,10 +15,22 @@ public:
     // Write the entire database to a file.
     static void Save(Catalog &catalog, const std::string &path);
 
-    // Load a database from a file.
+    // Load a database from a file. Refuses a file that BlockManager::OpenFile
+    // refuses, then one whose checksum does not match, before reading any
+    // table.
     static void Load(Catalog &catalog, const std::string &path);
 
+    // The checksum of a whole database file image: CRC-32 (Crc32 in
+    // slothdb/common/crc32.hpp) of all `size` bytes, with the 4 bytes at
+    // FILE_CHECKSUM_OFFSET, where the checksum is stored, read as zero.
+    // Save stores it and Load checks it; a fuzz harness recomputes it.
+    static uint32_t ComputeChecksum(const uint8_t *data, size_t size);
+
 private:
+    // ComputeChecksum over the first `size` bytes of an open file, read in
+    // pieces.
+    static uint32_t ChecksumFile(BlockManager &bm, idx_t size);
+
     // Serialization helpers.
     static void WriteString(BlockManager &bm, idx_t &offset, const std::string &str);
     static std::string ReadString(BlockManager &bm, idx_t &offset);

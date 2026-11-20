@@ -1,9 +1,57 @@
 #include "slothdb/storage/checkpoint.hpp"
 #include "slothdb/common/exception.hpp"
+#include "slothdb/common/crc32.hpp"
 #include "slothdb/common/types/value.hpp"
+#include <algorithm>
+#include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace zugodb {
+
+// ============================================================================
+// Checksum and byte order
+// ============================================================================
+
+// Format 1001 is little-endian, and the helpers below copy integers in the
+// host's order, so a big-endian host refuses rather than misreads.
+static void RequireLittleEndianHost() {
+    const uint16_t one = 1;
+    uint8_t first;
+    std::memcpy(&first, &one, 1);
+    if (first != 1) {
+        throw NotImplementedException(
+            "Database files are little-endian; this big-endian host cannot read or write them");
+    }
+}
+
+uint32_t Checkpoint::ComputeChecksum(const uint8_t *data, size_t size) {
+    const size_t begin = static_cast<size_t>(FILE_CHECKSUM_OFFSET);
+    const size_t end = begin + sizeof(uint32_t);
+    const uint8_t zeros[sizeof(uint32_t)] = {0, 0, 0, 0};
+    uint32_t crc = Crc32(data, std::min(size, begin));
+    if (size > begin) crc = Crc32(zeros, std::min(size, end) - begin, crc);
+    if (size > end) crc = Crc32(data + end, size - end, crc);
+    return crc;
+}
+
+uint32_t Checkpoint::ChecksumFile(BlockManager &bm, idx_t size) {
+    static constexpr idx_t PIECE = 1 << 20;
+    std::vector<uint8_t> buf(static_cast<size_t>(std::min<idx_t>(size, PIECE)));
+    uint32_t crc = 0;
+    for (idx_t pos = 0; pos < size;) {
+        auto n = std::min<idx_t>(PIECE, size - pos);
+        bm.ReadData(buf.data(), n, pos);
+        // The bytes of the stored checksum count as zero, wherever the
+        // piece boundaries fall.
+        for (idx_t i = FILE_CHECKSUM_OFFSET; i < FILE_CHECKSUM_OFFSET + sizeof(uint32_t); i++) {
+            if (i >= pos && i < pos + n) buf[i - pos] = 0;
+        }
+        crc = Crc32(buf.data(), n, crc);
+        pos += n;
+    }
+    return crc;
+}
 
 // ============================================================================
 // Serialization helpers
@@ -192,6 +240,7 @@ Value Checkpoint::ReadValue(BlockManager &bm, idx_t &offset, const LogicalType &
 // ============================================================================
 
 void Checkpoint::Save(Catalog &catalog, const std::string &path) {
+    RequireLittleEndianHost();
     BlockManager bm;
     bm.CreateFile(path);
 
@@ -243,6 +292,13 @@ void Checkpoint::Save(Catalog &catalog, const std::string &path) {
     header.catalog_offset = 4096;
     header.catalog_size = offset - 4096;
     header.data_offset = 4096;
+    header.checksum = 0;
+    bm.WriteHeader(header);
+    bm.Sync();
+
+    // The checksum is computed over the bytes read back from the file, so
+    // it covers what was written, and stored last.
+    header.checksum = ChecksumFile(bm, bm.GetFileSize());
     bm.WriteHeader(header);
     bm.Sync();
 }
@@ -252,11 +308,23 @@ void Checkpoint::Save(Catalog &catalog, const std::string &path) {
 // ============================================================================
 
 void Checkpoint::Load(Catalog &catalog, const std::string &path) {
+    RequireLittleEndianHost();
     BlockManager bm;
     bm.OpenFile(path);
 
     auto header = bm.ReadHeader();
     auto file_size = bm.GetFileSize();
+
+    auto computed = ChecksumFile(bm, file_size);
+    if (computed != header.checksum) {
+        char buf[128];
+        std::snprintf(buf, sizeof(buf),
+                      "Damaged database file: checksum 0x%08X stored, 0x%08X computed "
+                      "(format version %u)",
+                      static_cast<unsigned>(header.checksum), static_cast<unsigned>(computed),
+                      static_cast<unsigned>(header.version));
+        throw IOException(ErrorCode::CORRUPT_DATA, buf);
+    }
 
     // Validate header fields.
     if (header.data_offset < sizeof(FileHeader) || header.data_offset > file_size)

@@ -18,14 +18,32 @@ void BlockManager::OpenFile(const std::string &path) {
     path_ = path;
     file_ = FileHandle::Open(path, "r+b");
 
+    auto file_size = GetFileSize();
+    if (file_size < sizeof(FileHeader)) {
+        throw IOException(ErrorCode::CORRUPT_DATA,
+                           "Invalid database file: " + std::to_string(file_size) +
+                           " bytes, smaller than its " + std::to_string(sizeof(FileHeader)) +
+                           "-byte header");
+    }
     auto header = ReadHeader();
     if (header.magic != SLOTHDB_MAGIC) {
         throw IOException(ErrorCode::CORRUPT_DATA,
-                           "Invalid database file: bad magic number");
+                           "Invalid database file: bad magic number (expected \"BDLS\")");
     }
     if (header.version != SLOTHDB_VERSION) {
         throw IOException(ErrorCode::CORRUPT_DATA,
-                           "Unsupported database version: " + std::to_string(header.version));
+                           "Unsupported database file format version " +
+                           std::to_string(header.version) + "; this engine reads version " +
+                           std::to_string(SLOTHDB_VERSION) + " only");
+    }
+    // By subtraction, so a hostile header cannot overflow the sum.
+    if (header.catalog_offset > file_size ||
+        header.catalog_size != file_size - header.catalog_offset) {
+        throw IOException(ErrorCode::CORRUPT_DATA,
+                           "Damaged database file: it is " + std::to_string(file_size) +
+                           " bytes, but its header records " +
+                           std::to_string(header.catalog_size) + " bytes of data at offset " +
+                           std::to_string(header.catalog_offset) + " (truncated or extended)");
     }
 }
 
