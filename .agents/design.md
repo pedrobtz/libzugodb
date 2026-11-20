@@ -231,7 +231,7 @@ minor version.
   removing them would change what zugodb vendors.
 - **L9 (2026-11-20, Stage 1, Claude's implementation call).** An
   exception on a worker thread is kept by one mechanism in
-  `include/slothdb/common/parallel.hpp`: `WorkerErrors` (the first
+  `include/zugodb/common/parallel.hpp`: `WorkerErrors` (the first
   `std::exception_ptr`, under a mutex, with an atomic flag workers poll to
   stop early) and `WorkerGroup` (threads started and joined in one scope,
   rethrow after the join, a thread that fails to start is an error of the
@@ -266,7 +266,7 @@ minor version.
   except that upstream's reserved field at offset 12 holds a CRC-32 of the
   whole file with those 4 bytes read as zero; bytes 48 to 4095 are zero
   and the tables start at 4096. The CRC is zlib's (reflected 0xEDB88320),
-  in `include/slothdb/common/crc32.hpp`, not miniz's `mz_crc32`, which
+  in `include/zugodb/common/crc32.hpp`, not miniz's `mz_crc32`, which
   leaves with the readers. `Checkpoint::ComputeChecksum` computes it over a
   whole file image; Save stores it after reading back the `.tmp` file, and
   Load and the fuzz harness use the same function. Opening checks, in
@@ -335,7 +335,7 @@ minor version.
 - **L14 (2026-11-20, Stage 6, Claude's implementation call).** The
   runner, `tools/slt/`, is a library (`zugodb_slt_lib`, which the doctest
   suite links) and a program (`zugodb_slt`), built by default except on
-  Windows (`SLOTHDB_BUILD_SLT`). It reads DuckDB's sqllogictest dialect
+  Windows (`ZUGODB_BUILD_SLT`). It reads DuckDB's sqllogictest dialect
   as DuckDB's own runner does at the pinned tag (`test/sqlite/
   sqllogic_parser.cpp`, `sqllogic_test_runner.cpp`): records separated
   by empty lines, `statement ok|error|maybe`, `query <types> [nosort|
@@ -394,7 +394,7 @@ minor version.
   resident memory (a statement that grows without end, as #23's); the
   cases after either, in that file, are not run. The committed counts are
   those of the build the `conformance` job uses: RelWithDebInfo with
-  `-DSLOTHDB_SANITIZERS=ON`, so that a use after free is a crash every
+  `-DZUGODB_SANITIZERS=ON`, so that a use after free is a crash every
   time and not by chance (a Release build crashed on different cases from
   run to run); leak checking is off in the runner, since a leak is not a
   case's outcome. The thread comparison is by class: the run at cap 2
@@ -642,7 +642,7 @@ minor version.
     rows that differ were one group, one `DISTINCT` row or one partition,
     set operations that kept rows repeated on their left, and a `PARTITION
     BY` expression ignored (#48), now one key encoding
-    (`include/slothdb/execution/group_key.hpp`); `MERGE` doing other than
+    (`include/zugodb/execution/group_key.hpp`); `MERGE` doing other than
     it was asked (#49), now refused outside the shape it does right
     (`docs/dialect.md`). The Parquet fast paths give no rows or crash on a
     file `ParquetWriter` wrote (#50); no SQL reaches them and Stage 11
@@ -758,7 +758,7 @@ minor version.
     joins the bit-flip and truncation loop. The format is unchanged
     (1001): it is byte for byte `golden_v1001.db`, as is a file the
     shell of this stage writes.
-  - `tools/check_symbols.sh` runs `nm` on `libslothdb.a`, not demangled,
+  - `tools/check_symbols.sh` runs `nm` on `libzugodb.a`, not demangled,
     and fails on a symbol of zstd, snappy, fastpforlib or miniz
     (`ZSTD_`, `HUF_`, `FSE_`, `snappy`, `mz_`, `tinfl_`, `tdefl_`,
     `FastPForLib`, `fastunpack`, `fastpack`), on a library with no engine
@@ -789,7 +789,7 @@ minor version.
     1, 2 and 4. The SQL fuzz target's oracle at caps 1 and 2 is unchanged:
     it runs with no provider, so the regex forms are refused at both caps,
     and the caps differ only where the window sort runs.
-  - The tables are the engine's own: `include/slothdb/main/providers.hpp`,
+  - The tables are the engine's own: `include/zugodb/main/providers.hpp`,
     plain C, `zugodb_regex_v1` and `zugodb_utf8_v1`, each headed
     `{uint32_t abi_version; uint32_t struct_size;}`, with the engine's
     status codes, in a `zugodb_providers` that also holds reserved slots
@@ -846,7 +846,7 @@ minor version.
   semantics, superseding L23's refusal.
   - The order. A NaN equals every NaN, whatever its sign or payload, and
     is greater than every other value, `+inf` included; `-0.0` equals
-    `0.0`. One header, `include/slothdb/common/types/float_order.hpp`,
+    `0.0`. One header, `include/zugodb/common/types/float_order.hpp`,
     holds it (`SqlEq`, `SqlLess`, templates that are the built-in
     operators for any other type), and `Value::operator==` and `<` use
     it, so every path that compares `Value`s (sorts, set operations,
@@ -929,6 +929,41 @@ minor version.
     `test/fixtures/nan/refused.tsv`, and one that starts passing fails
     the test. The SQL fuzzer's tables hold NaN, `-NaN`, the infinities
     and `-0.0`.
+
+- **L31 (2026-11-20, Stage 12, decided with an advisor).** The rename.
+  - The library target is `zugodb` (`libzugodb.a`), the suite
+    `zugodb_tests`, and the shell's target `zugodb_shell`, whose
+    executable is `zugodb`: CMake cannot give two targets one name, and
+    the roadmap's "the shell becomes `zugodb`" is the executable.
+  - The database file keeps its bytes: `SLOTHDB_MAGIC` and
+    `SLOTHDB_VERSION` become `ZUGODB_MAGIC` and `ZUGODB_VERSION` with the
+    same values (`'SLDB'`, on disk `BDLS`, and 1001). So the format is
+    unchanged, no golden file or fuzz corpus is rewritten, and every file
+    written before loads. The shell's `.slothdb` extension, a convention
+    only, is `.zugodb`.
+  - The check is case sensitive, `slothdb|SLOTHDB` as the roadmap
+    writes it, so prose about the origin keeps "SlothDB". What the grep
+    would not catch is renamed by hand: `SlothDBException` is
+    `ZugodbException` (not `Exception`, which `using namespace` would
+    bring next to `std::exception`), the internal `SlothRng` is
+    `EngineRng`, the values of `CURRENT_USER`, `VERSION` and
+    `CURRENT_DATABASE` (refused by the binder) and the `ROLLBACK` message
+    (unreachable since L26) say zugodb, and so do the public headers'
+    comments. The fork's comment tag `zuslothdb:` is `zugodb:`.
+  - `tools/check_names.sh` excludes whole files, with no line lists:
+    `LICENSE`, `docs/SLOTHDB-README.md`, `CHANGELOG.md`, `.agents/`
+    (whose past stages and decisions are history; its references to
+    the present are updated), `tools/make_db_fixtures.sh` (it builds
+    030f7b8 and v0.3.0, whose targets have the old names) and itself.
+    Anywhere else it allows only the upstream repository's name,
+    `SouravRoy-ETL/slothdb`, and the credit's file name.
+  - The symbol comparison is against `main` just before the rename
+    (72352a9), not 0.3.0: Stage 11 removed a third of `src/` after 0.3.0,
+    so 0.3.0's symbols differ by far more than names. Demangled, with
+    `SlothDBException` mapped to `ZugodbException`, the two lists are
+    equal.
+  - Never-defined macros (`SLOTHDB_CUDA`, `SLOTHDB_METAL`) are renamed,
+    not deleted with their code: removing dead code is not this stage's.
 
 ## 9. Open questions
 

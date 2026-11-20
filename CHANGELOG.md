@@ -2,6 +2,41 @@
 
 ## libzugodb 0.4.0 (in development)
 
+- The names become zugodb (Stage 12, #17; design L31). Nothing a user of
+  the library sees is named after SlothDB but the credit (`LICENSE`, the
+  README's origin paragraph, `docs/SLOTHDB-README.md`):
+  - `include/slothdb/` is `include/zugodb/`, so every
+    `#include "slothdb/..."` is `#include "zugodb/..."`;
+  - the `SLOTHDB_*` macros and CMake options are `ZUGODB_*`
+    (`ZUGODB_BUILD_TESTS`, `ZUGODB_BUILD_SHELL`, `ZUGODB_BUILD_SLT`,
+    `ZUGODB_SANITIZERS`, `ZUGODB_TSAN`, `ZUGODB_FUZZ`; the platform,
+    endian and SIMD macros; `ZUGODB_MAGIC` and `ZUGODB_VERSION`, the
+    database file's);
+  - the targets: the library `slothdb_lib` (`libslothdb.a`) is `zugodb`
+    (`libzugodb.a`), the suite `slothdb_tests` is `zugodb_tests`, and the
+    shell `slothdb` is the executable `zugodb` of the target
+    `zugodb_shell`, with the prompt `zugodb>`, `.zugodb_history` and
+    `.zugodb` as the suggested file extension;
+  - the public exception base class `SlothDBException` is
+    `ZugodbException`; every other class and function keeps its name.
+  The database file is unchanged: the same magic bytes (`BDLS`) and
+  format version 1001, so every file written before loads. No result
+  changes: the doctest suite and the conformance counts are the same, and
+  the static library's exported symbols differ from those before the
+  rename only in `ZugodbException`'s. `CURRENT_USER`, `VERSION` and
+  `CURRENT_DATABASE`, which the binder refuses, would now say `zugodb`,
+  as would the unreachable `ROLLBACK` message. `tools/check_names.sh`, a CI
+  step, fails on `slothdb` or `SLOTHDB` outside the credit, this
+  changelog and `.agents/`.
+- For zugodb's vendoring (pedrobtz/zugodb#71): `tools/vendor.yaml`'s
+  `copy` keeps `include` and its `exclude` entry `include/slothdb/api`
+  can go (the directory has not existed since 0.2.0); the glue's
+  `#include "slothdb/..."` lines become `"zugodb/..."`; the generated
+  `Makevars` keeps `-I<v>/include` and gains no definition, since nothing
+  in `include/` or `src/` needs one that CMake sets; and
+  `tools/upstream-tests.sh` names its binary as it likes (`slothdb_tests`
+  there is only a file name).
+
 - NaN with DuckDB's semantics (#42; design L30, superseding L23's
   refusal). A NaN equals every NaN and is greater than `+inf` in
   comparisons, `ORDER BY`, `MIN`/`MAX`, and is one key of `GROUP BY`,

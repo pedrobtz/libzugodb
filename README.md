@@ -25,7 +25,9 @@ a project of its own. Defects found here are reported upstream
 - **It is quiet and bounded.** Nothing is written to `stderr`, nothing calls
   `abort()` or `rand()`, and one process-wide cap limits every thread pool.
 - **It builds with MinGW-w64**, as R's Rtools uses on Windows.
-- **Its C++ namespace is `zugodb::`.**
+- **Its names are zugodb's**: the namespace `zugodb::`, the headers under
+  `include/zugodb/`, the `ZUGODB_*` macros and CMake options, the `zugodb`
+  library and shell.
 - **It is only the engine.** SlothDB's C API, Python binding, website, WASM
   playground, packaging and benchmarks are not part of this repository.
 
@@ -39,12 +41,11 @@ functions.
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
-build/test/slothdb_tests          # the doctest suite
+build/test/zugodb_tests           # the doctest suite
 ```
 
-`-DSLOTHDB_BUILD_SHELL=ON` adds the `slothdb` shell; `-DSLOTHDB_SANITIZERS=ON`
-builds with AddressSanitizer and UBSan. The CMake options, the shell and the
-library keep SlothDB's names for now.
+`-DZUGODB_BUILD_SHELL=ON` adds the `zugodb` shell; `-DZUGODB_SANITIZERS=ON`
+builds with AddressSanitizer and UBSan.
 
 SlothDB's own README is kept in
 [docs/SLOTHDB-README.md](docs/SLOTHDB-README.md); its performance claims are
