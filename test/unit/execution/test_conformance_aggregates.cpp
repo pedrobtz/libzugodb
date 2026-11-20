@@ -59,3 +59,19 @@ TEST_CASE("Stage 8: an aggregate the engine does not compute is an error, not NU
     }
     CHECK(Run(conn, "SELECT MIN(i + 1), MAX(i * 2), SUM(i + 1) FROM t") == Rows{{"2", "4", "5"}});
 }
+
+// ---------------------------------------------------------------------------
+// aggregate/aggregates/test_sum_fastpath.test: a SUM of BIGINTs is a
+// double inside the hash aggregate, so past 2^53 it lost digits, and past
+// BIGINT it wrapped. Refused there.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: a BIGINT SUM past 2^53 is refused, not rounded") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE b(g INTEGER, x BIGINT)");
+    conn.Query("INSERT INTO b VALUES (1, 9007199254740993), (1, 1), (2, 5)");
+    CHECK_THROWS(conn.Query("SELECT g, SUM(x) FROM b GROUP BY g"));
+    CHECK_THROWS(conn.Query("SELECT sum(i) FROM generate_series(9007199254738944, 9007199254740991) t(i)"));
+    CHECK(Run(conn, "SELECT SUM(x) FROM b WHERE g = 2") == Rows{{"5"}});
+}

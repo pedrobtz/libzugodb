@@ -1,4 +1,5 @@
 #include "slothdb/execution/agg_emit_helpers.hpp"
+#include "slothdb/common/exception.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -45,6 +46,11 @@ bool EmitAggValue(const EmitAggDesc& desc, const EmitAggView& view,
         double s = view.sum;
         if (desc.sum_with_offset) s += desc.sum_offset * (double)view.count;
         if (desc.return_type_id == LogicalTypeId::BIGINT) {
+            // The sum is a double: exact only below 2^53. Past it, DuckDB's
+            // exact (HUGEINT) sum is not what the engine has (Stage 8, #12).
+            if (std::fabs(s) >= 9007199254740992.0) {
+                throw OutOfRangeException("SUM past 2^53 is not computed exactly");
+            }
             out_row.push_back(Value::BIGINT(static_cast<int64_t>(s)));
         } else {
             out_row.push_back(Value::DOUBLE(s));
