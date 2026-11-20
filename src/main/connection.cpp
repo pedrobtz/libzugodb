@@ -2752,42 +2752,100 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                     auto storage = std::make_shared<DataTable>(base_sel.result_types);
                     entry.SetStorage(storage);
 
+                    // SQL's recursion (#38): each step reads only the rows
+                    // the step before made, the working table, and the CTE
+                    // is every step's rows. Each step read the whole table
+                    // so far, so rows multiplied (a count to 3 made 500,501
+                    // rows), and a window in the step saw them all. UNION
+                    // keeps a row once; a step past the caps is an error,
+                    // not the rows so far.
+                    if (cte.query->set_op != "UNION ALL" && cte.query->set_op != "UNION") {
+                        throw NotImplementedException(
+                            "A recursive CTE joins its parts with UNION or UNION ALL");
+                    }
+                    if (cte.query->set_right->set_right) {
+                        throw NotImplementedException(
+                            "A recursive CTE of more than two parts is not supported");
+                    }
+                    const bool rec_union_all = cte.query->set_op == "UNION ALL";
+                    const auto &rec_types = base_sel.result_types;
+                    auto make_table = [&](const std::vector<std::vector<Value>> &rows) {
+                        auto t = std::make_shared<DataTable>(rec_types);
+                        for (idx_t start = 0; start < rows.size(); start += VECTOR_SIZE) {
+                            idx_t n = std::min<idx_t>(VECTOR_SIZE, rows.size() - start);
+                            DataChunk c;
+                            c.Initialize(rec_types);
+                            for (idx_t r = 0; r < n; r++) {
+                                for (idx_t col = 0; col < rec_types.size(); col++) {
+                                    c.SetValue(col, r, rows[start + r][col]);
+                                }
+                            }
+                            c.SetCardinality(n);
+                            t->Append(c);
+                        }
+                        return t;
+                    };
+                    SetOpRowSet rec_seen;
+                    std::vector<std::vector<Value>> rec_all, rec_work;
+                    auto take = [&](PhysicalOperator &op, const std::vector<LogicalType> &types,
+                                    std::vector<std::vector<Value>> &out) {
+                        if (types.size() != rec_types.size()) {
+                            throw BinderException(
+                                "The parts of a recursive CTE return different numbers of columns");
+                        }
+                        for (idx_t col = 0; col < types.size(); col++) {
+                            if (types[col].id() != rec_types[col].id() &&
+                                types[col].id() != LogicalTypeId::SQLNULL) {
+                                throw NotImplementedException(
+                                    "A recursive CTE whose recursive part's types differ from its "
+                                    "base part's is not supported");
+                            }
+                        }
+                        DataChunk chunk;
+                        while (op.GetData(chunk)) {
+                            for (idx_t r = 0; r < chunk.size(); r++) {
+                                std::vector<Value> row;
+                                row.reserve(types.size());
+                                for (idx_t col = 0; col < types.size(); col++) {
+                                    auto v = chunk.GetValue(col, r);
+                                    row.push_back(v.IsNull() ? Value() : v);
+                                }
+                                if (!rec_union_all && !rec_seen.insert(row).second) continue;
+                                out.push_back(std::move(row));
+                            }
+                        }
+                    };
+
                     auto base_logical = Planner::Plan(*base_bound);
                     PhysicalPlanner base_pp(db_.GetCatalog());
                     auto base_physical = base_pp.Plan(*base_logical);
                     base_physical->Init();
-                    DataChunk cte_chunk;
-                    while (true) {
-                        if (!base_physical->GetData(cte_chunk)) break;
-                        storage->Append(cte_chunk);
-                    }
+                    take(*base_physical, base_sel.result_types, rec_work);
+                    rec_all = rec_work;
 
-                    // 2. Iterate recursive case (max 1000 iterations, 10M total rows).
                     static constexpr idx_t MAX_RECURSIVE_ROWS = 10000000;
-                    for (int iter = 0; iter < 1000; iter++) {
-                        idx_t prev_count = storage->Count();
-                        if (prev_count > MAX_RECURSIVE_ROWS)
-                            throw InternalException("Recursive CTE exceeded 10M row limit");
-
+                    static constexpr int MAX_RECURSIVE_STEPS = 100000;
+                    for (int iter = 0; !rec_work.empty(); iter++) {
+                        if (iter >= MAX_RECURSIVE_STEPS || rec_all.size() > MAX_RECURSIVE_ROWS) {
+                            throw NotImplementedException(
+                                "Recursive CTE past " + std::to_string(MAX_RECURSIVE_STEPS) +
+                                " steps or " + std::to_string(MAX_RECURSIVE_ROWS) + " rows");
+                        }
+                        entry.SetStorage(make_table(rec_work));
                         Binder rec_binder(db_.GetCatalog());
                         auto rec_bound = rec_binder.Bind(*cte.query->set_right);
+                        auto &rec_sel = static_cast<BoundSelectStatement &>(*rec_bound);
+                        auto rec_result_types = rec_sel.result_types;
                         auto rec_logical = Planner::Plan(*rec_bound);
                         PhysicalPlanner rec_pp(db_.GetCatalog());
                         auto rec_physical = rec_pp.Plan(*rec_logical);
                         rec_physical->Init();
-
-                        DataChunk rec_chunk;
-                        bool got_rows = false;
-                        while (true) {
-                            if (!rec_physical->GetData(rec_chunk)) break;
-                            if (rec_chunk.size() > 0) {
-                                storage->Append(rec_chunk);
-                                got_rows = true;
-                            }
-                        }
-
-                        if (!got_rows || storage->Count() == prev_count) break;
+                        std::vector<std::vector<Value>> next;
+                        take(*rec_physical, rec_result_types, next);
+                        rec_work = std::move(next);
+                        rec_all.insert(rec_all.end(), rec_work.begin(), rec_work.end());
                     }
+                    entry.SetStorage(make_table(rec_all));
                     // (cte_tables.push_back already happened right after
                     //  CreateTable above so a mid-iteration throw still cleans up.)
                 } else {

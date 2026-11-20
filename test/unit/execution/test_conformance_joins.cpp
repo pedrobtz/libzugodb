@@ -121,3 +121,24 @@ TEST_CASE("Stage 8: a column alias list longer than the subquery is an error") {
     auto r = conn.Query("SELECT * FROM (SELECT 42, 41 AS x) v1(a)");
     CHECK(r.column_names == std::vector<std::string>{"a", "x"});
 }
+
+// ---------------------------------------------------------------------------
+// window/test_streaming_window.test:578 (#38): each step of a recursive
+// CTE read the whole table so far rather than the step before's rows, so
+// rows multiplied and a window in the step saw them all.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: a recursive CTE's step reads the step before's rows") {
+    Database db;
+    Connection conn(db);
+    CHECK(Run(conn, "WITH RECURSIVE rte AS (SELECT 1 l, 1::BIGINT r UNION ALL "
+                    "SELECT l+1, row_number() OVER() FROM rte WHERE l < 3) SELECT * FROM rte") ==
+          Rows{{"1", "1"}, {"2", "1"}, {"3", "1"}});
+    CHECK(Run(conn, "WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM t WHERE n < 5) "
+                    "SELECT sum(n), count(*) FROM t") == Rows{{"15", "5"}});
+    CHECK(Run(conn, "WITH RECURSIVE t AS (SELECT 1 AS n UNION SELECT n % 3 + 1 FROM t) "
+                    "SELECT n FROM t ORDER BY n") == Rows{{"1"}, {"2"}, {"3"}});
+    // No end: an error, not the rows so far.
+    CHECK_THROWS(conn.Query("WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM t) "
+                            "SELECT count(*) FROM t"));
+}
