@@ -769,6 +769,78 @@ minor version.
     comments in `physical_planner.cpp` that still name the Parquet
     paths.
 
+- **L29 (2026-11-20, Stage 11.1, decided with an advisor).** The
+  provider interface of L25, and where the engine runs it.
+  - Worker threads. After Stage 11, one query path runs on worker
+    threads: the window operator's per-partition sort, from 200,000 input
+    rows and two partitions at a thread cap of 2 or more
+    (`PhysicalWindow`, a `WorkerGroup`). It compares precomputed keys and
+    column values and evaluates no expression, so it calls no provider.
+    `ParallelExecutor` and `ParallelFor` are reached by no query. So the
+    engine calls every provider on the query's thread, until a parallel
+    operator that evaluates expressions returns. The contract on
+    providers stays L25's (safe from any thread, on distinct match
+    states), and match state is made per `Execute` call, so such an
+    operator would need no change. The thread doctests therefore drive
+    each provider path from 1, 2 and 4 threads directly, one compiled
+    pattern shared and match state per thread, which the `linux-tsan` job
+    runs; one more runs the parallel window sort over a regex key at caps
+    1, 2 and 4. The SQL fuzz target's oracle at caps 1 and 2 is unchanged:
+    it runs with no provider, so the regex forms are refused at both caps,
+    and the caps differ only where the window sort runs.
+  - The tables are the engine's own: `include/slothdb/main/providers.hpp`,
+    plain C, `zugodb_regex_v1` and `zugodb_utf8_v1`, each headed
+    `{uint32_t abi_version; uint32_t struct_size;}`, with the engine's
+    status codes, in a `zugodb_providers` that also holds reserved slots
+    for UUIDs, random numbers and decimals. The family's tables already
+    differ in their headers (zuutf's has no ABI field; zuregex's is
+    PCRE2-shaped and changes with zuregex#211), so zugodb's glue adapts
+    them with small functions rather than the engine mirroring either.
+  - `Database::SetProviders`, once and before the first query; a second
+    call, or one after a query, throws. A set that is NULL, of another
+    ABI version or too small throws (the host's bug). A service table that
+    is NULL, of another version, too small or has a NULL member is absent:
+    its functions are refused as with no table, and `GetProviderState`
+    says which. A larger `struct_size` is accepted. The members are copied
+    into the `Database`, and carried to the executor on each
+    `BoundFunction`, never in a static, so two databases never cross.
+    Reserved slots are not read.
+  - Regex. Through the table: `regexp_matches`, `regexp_full_match`,
+    `regexp_replace` and `regexp_extract` with a constant integer group,
+    and `[NOT] SIMILAR TO` as `regexp_full_match`. Their options are a
+    constant of `c` and `i` (the last wins), and `g` for
+    `regexp_replace`; another letter is refused. Still refused with a
+    table: `~` and `!~` (in the tokenizer), the functions that return a
+    `LIST` (`regexp_extract_all`, `regexp_split_to_array`,
+    `string_split_regex`, ...), `regexp_split_to_table`, `regexp_escape`,
+    `regexp`, `regexp_like`, `regexp_match` and `SIMILAR TO ... ESCAPE`.
+    Without a usable table every refusal stays where L24 put it, with its
+    message: `Parser::Parse` takes `ParseOptions::regex` from the
+    `Connection`, so `SIMILAR TO` is still refused by the parser. The
+    rewrite (`\0` to `\9`) and the global-replace loop are the
+    provider's, as zuregex#211 puts them in `zr_substitute`; a short
+    output buffer is retried once at the size the provider asks for.
+  - A constant pattern is compiled at bind, once per query, and an
+    invalid one is a bind error; a pattern computed per row is compiled
+    when its text changes. Match state is made per `Execute` call (one
+    chunk, one thread) and freed by its destructor, on a throw too. Every
+    status but OK and no-match is a query error with the provider's text;
+    a limit hit says so and is never taken as no match.
+  - The engine cannot check that a table has DuckDB's RE2 semantics. A
+    host gives no regex table until its library has that dialect
+    (zuregex#211): a PCRE-backed one would answer the same SQL otherwise.
+    An invalid UTF-8 subject is the provider's error, so a query error.
+  - UTF-8. `LENGTH`'s count of non-ASCII text goes through the table:
+    `validate`, then `count` of valid text; invalid text keeps the
+    engine's count, so the answer is the same with or without the table,
+    and another status is an error. The positions (`CodePointStarts`,
+    `CodePointPosition`) stay the engine's: the table gives no offsets.
+    No invalid UTF-8 is refused yet; refusing it must hold with and
+    without a provider, with a built-in validator at `Append`, literals
+    and `Checkpoint::Load`, and is a change of its own.
+  - Tests: stub tables in `test/unit/stub_providers.hpp` (a literal
+    matcher, and a UTF-8 counter), no package of the family built here.
+
 ## 9. Open questions
 
 - **LQ1 (settled 2026-11-20, Stage 6).** Which DuckDB tag is pinned, and
