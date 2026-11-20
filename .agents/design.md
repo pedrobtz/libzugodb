@@ -400,6 +400,24 @@ minor version.
   `tools/slt/parser.cpp`). A setting that changes answers
   (`default_null_order`, `ieee_floating_point_ops`, `timezone`, ...) is
   run, and refused if the engine refuses it.
+- **L18 (2026-11-20, Stage 7, Claude's implementation call).** How the
+  first crashes and hangs are closed, where a choice was made. In a query
+  with window functions, an `ORDER BY` item that is an ordinal or an
+  output name sorts by that output column; any other is bound to the
+  source columns, which the window operator then also emits after its
+  select list, and a projection above the sort drops them; an item the
+  planner cannot move to those columns (a window function or an aggregate
+  not in the select list, a subquery) is refused. `INSERT ... SELECT`
+  runs its `SELECT` to the end and copies each row before it appends the
+  first, so the `SELECT` reads the table as it was (DuckDB's answer, #23),
+  at the cost of holding the rows once. The binder checks the arity of
+  the string functions DuckDB's tests call wrongly (`ASCII`, `LPAD`,
+  `REPLACE`, `TRIM`, ... with DuckDB's signatures), and the executor
+  checks every argument a scalar function reads by position, so a
+  function not in the binder's list is an error rather than a read past
+  its arguments. A string result past `UINT32_MAX` bytes, the most a
+  `string_t` holds and DuckDB's limit, is refused before it is built
+  (`LPAD`, `RPAD`).
 
 ## 9. Open questions
 

@@ -437,8 +437,22 @@ under the sanitizers as well.
   job holds them there.
 - Every case from the list has a doctest that was seen to fail.
 
-**Design.** [§5](design.md#5-conformance-and-its-oracles) and
-[zugodb Q18][zdesign].
+**Deviations (2026-11-20).**
+
+- The `conformance` job already ran under ASan and UBSan from Stage 6
+  (design L16), so this stage adds no job. The counts are committed for
+  that build only; a Release build is not counted, as in Stage 6.
+- All 21 cases are fixed; none is refused as a whole. Two fixes refuse
+  what they cannot do instead: an `ORDER BY` item of a window query that
+  is neither an output column nor an expression of source columns, and a
+  `date_trunc` part the engine does not know (design L18).
+- The fixes let the cases after each crash run; some of those are wrong
+  or accepted (a window `skewness`, `percent_rank() over ()`, `CHR(-10)`,
+  `REPEAT('hello', 'world')`, ...). They are Stage 8's. No case that
+  passed or was refused before became wrong or accepted.
+
+**Design.** [§5](design.md#5-conformance-and-its-oracles), L18 in
+[§8](design.md#8-decisions) and [zugodb Q18][zdesign].
 
 ## Stage 8 — No wrong answer on the pinned subset
 
