@@ -6,9 +6,8 @@ out/
 # Local release artifacts
 dist/
 
-# External correctness benchmark corpora — fetched on demand, not vendored.
-# See bench/correctness/sqllogictest/fetch_corpus.sh.
-bench/correctness/sqllogictest/test_files/
+# DuckDB's test/sql at the pinned tag, fetched by test/conformance/fetch.sh.
+test/conformance/corpus/
 
 # IDE files
 .vs/
