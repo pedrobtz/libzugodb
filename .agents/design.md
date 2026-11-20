@@ -75,6 +75,8 @@ What follows from it:
   decimal literal, `10.0 % 0.0`) are fixed or refused one by one.
 - The plan text of `EXPLAIN` is the engine's own, not DuckDB's; the
   conformance runner leaves such queries out (L20).
+- The engine holds no NaN, and its regular expressions are a subset of
+  RE2's (L23, L24): what falls outside is an error, not an approximation.
 
 ## 4. Parser
 
@@ -373,6 +375,8 @@ minor version.
   except that an integer column does not take a fraction DuckDB's cast
   would round (`1.5` for 2) or its DOUBLE text. The type string itself is
   not checked, as there: the corpus writes `I` for many DOUBLE columns.
+  A recorded row is split at tabs as DuckDB's `StringUtil::Split` does,
+  dropping empty pieces (Stage 8, #38).
   So a type difference counts only where it changes the text past these
   rules, and a DECIMAL that the engine computes as a DOUBLE (#26) is
   wrong only where its value differs.
@@ -492,6 +496,57 @@ minor version.
   exact. The interim, per the advisor, is refusal, not a partial table; a
   complete simple case mapping generated from UnicodeData is a
   sub-issue of v0.3.0.
+
+- **L23 (2026-11-20, Stage 8, decided with an advisor).** What the
+  engine holds, and what a statement returns.
+  - No NaN. DuckDB orders NaN above every number and equal to itself;
+    the engine's comparisons are IEEE's in many hand-written paths
+    (sorts, joins, groups, `MIN`/`MAX`), and teaching each DuckDB's order
+    would leave any path missed a silent wrong answer. So a NaN is an
+    error wherever it would be made: an expression's result (text
+    `'nan'`, `0/0`, `inf - inf`, `SQRT(-1)`, `x % 0` of doubles, under
+    `TRY_CAST` too; `ExpressionExecutor::Execute` checks every `FLOAT`
+    and `DOUBLE` it computes), a table's append (`DataTable::Append`,
+    so `Connection::Append` too), a database file's value
+    (`Checkpoint::Load`; a file written before 0.3.0 that holds one is
+    refused), and a query's result, the backstop for an aggregate over
+    infinities. Infinities are kept, since IEEE orders them as DuckDB
+    does, with DuckDB's values: `x / 0` and `POWER(0, -2)` are
+    infinities. The R package decides what `dbWriteTable` of an R `NaN`
+    is (an error from the engine now).
+  - DuckDB's statement results. `CREATE TABLE AS` returns one row,
+    `Count`, the rows it made; `CREATE TABLE` a `Count` column and no
+    row; the other DDL is left as it was until a recorded case shows
+    its shape. `QueryResult::is_count` marks a result of `INSERT`,
+    `UPDATE`, `DELETE` or `CREATE TABLE`, so a caller classifies by it
+    rather than by parsing SQL or trusting a column's name.
+- **L24 (2026-11-20, Stage 8, decided with an advisor).** The regular
+  expressions of `regexp_matches`, `regexp_full_match`,
+  `regexp_replace` and `regexp_extract` are a subset of RE2's syntax,
+  compiled to a Pike VM (a Thompson NFA with captures, threads in
+  priority order) over code points: RE2's leftmost-first matches in time
+  linear in the subject, with no recursion, where `std::regex` was
+  ECMAScript over bytes, recursive (a stack overflow on a long subject)
+  and exponential on some patterns. The subset (`regex.hpp`): literals,
+  `\` before punctuation, `\d \D \w \W \s \S \b \B \n \t \r
+  \f \v`, `.`, bracket classes, `( )` and `(?: )`, `* + ? {n} {n,}
+  {n,m}` up to 1000 and their lazy forms, `|`, `^` and `$`. Refused at
+  compile: other `(?` groups, backreferences, `\x \p \Q \A \z \C`
+  and octal, a `{` that is not a repeat, a repeat of what can match
+  empty (RE2's empty-loop rule is its own), POSIX classes, a class
+  starting with `]`, a non-ASCII pattern outside literal mode. Refused at
+  match: option `'i'` over non-ASCII text (RE2 folds non-ASCII letters,
+  `k` with U+212A, `s` with U+017F), `.` over text with a newline unless
+  `'s'` (DuckDB's default `dot_nl` is not recorded in the corpus), and
+  `'m'`, `'n'`, `'p'` over text with a newline. DuckDB's options and
+  argument rules are read as its tests record them: options and the
+  group are constants, `'g'` only for `regexp_replace`, a group past 9 an
+  error and one past the pattern's groups the empty string, an empty
+  string where `regexp_extract` finds nothing. A doctest compares the VM
+  with `std::regex` on random patterns where ECMAScript and RE2 agree.
+  The VM is the engine's own until the host's RE2 arrives through the
+  function providers of #40; what the subset refuses now is what a
+  provider can then accept.
 
 ## 9. Open questions
 
