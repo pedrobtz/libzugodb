@@ -70,7 +70,13 @@
   as a different garbage number on each run (so `WHERE h = 5` matched
   nothing), and an `INTERVAL` could not hold any non-NULL value; and the
   database file has no encoding for them, so a file holding one could not
-  be opened again. A file written before keeps loading their NULLs. `fuzz/` holds the libFuzzer harness
+  be opened again. A file written before keeps loading their NULLs.
+- A string type's length, `VARCHAR(n)`, `CHAR(n)`, `TEXT(n)` or
+  `STRING(n)`, has no effect, as in DuckDB: the column is `VARCHAR` and
+  `DESCRIBE` shows `VARCHAR`. SlothDB refused an over-long string on
+  `INSERT ... VALUES` only, and the length was lost when the database was
+  saved; a length past 64 bits threw a C++ `std::out_of_range`.
+  `VarcharTypeInfo` and `LogicalType::VARCHAR_N` are removed. `fuzz/` holds the libFuzzer harness
   (`-DSLOTHDB_FUZZ=ON`, clang), its seed corpus and scripts, and CI runs
   it on every pull request and weekly; zugodb does not vendor it.
 

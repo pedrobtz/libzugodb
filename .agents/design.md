@@ -300,6 +300,20 @@ minor version.
   is the edges of `src/storage/checkpoint.cpp` covered by the kept corpus,
   as `-print_coverage=1` reports them (`fuzz/run.sh`), against a floor in
   the workflow.
+- **L13 (2026-11-20, Stage 4, recommended by an advisor sub-agent).** A
+  string type's length, `VARCHAR(n)`, `CHAR(n)`, `TEXT(n)` or
+  `STRING(n)`, is accepted and has no effect: the column is `VARCHAR`,
+  `DESCRIBE` shows `VARCHAR`, and a longer string is stored whole. This is
+  DuckDB's behaviour (its documentation: the length is for compatibility
+  only), so it is a DuckDB-compatible behaviour for `docs/dialect.md`, not
+  a listed difference. SlothDB enforced n, in bytes, on `INSERT ...
+  VALUES` only (`INSERT ... SELECT` and `UPDATE` went around it), and the
+  database file kept no length, so a reopened column was unbounded; L12's
+  round-trip doctest found that loss. `VarcharTypeInfo` and
+  `LogicalType::VARCHAR_N` go with the check, and with them a
+  `std::stoull` that threw `std::out_of_range` on a length past 64 bits.
+  DECIMAL and NUMERIC are not touched here: they bind to DOUBLE, filed for
+  0.3.0.
 
 ## 9. Open questions
 

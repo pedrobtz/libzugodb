@@ -61,17 +61,6 @@ private:
     uint8_t scale_;
 };
 
-// Carries the declared maximum length for VARCHAR(n) / CHAR(n).
-class VarcharTypeInfo : public ExtraTypeInfo {
-public:
-    explicit VarcharTypeInfo(idx_t max_length) : max_length_(max_length) {}
-    idx_t MaxLength() const { return max_length_; }
-    bool Equals(const ExtraTypeInfo &other) const override;
-
-private:
-    idx_t max_length_;
-};
-
 class ListTypeInfo : public ExtraTypeInfo {
 public:
     explicit ListTypeInfo(LogicalTypeId child_type);
@@ -154,7 +143,6 @@ public:
     static LogicalType ANY() { return LogicalType(LogicalTypeId::ANY); }
 
     static LogicalType DECIMAL(uint8_t width, uint8_t scale);
-    static LogicalType VARCHAR_N(idx_t max_length);
     static LogicalType LIST(const LogicalType &child);
     static LogicalType STRUCT(std::vector<StructField> fields);
     static LogicalType ARRAY(const LogicalType &child, idx_t size);
