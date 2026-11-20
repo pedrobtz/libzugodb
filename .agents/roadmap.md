@@ -38,7 +38,7 @@ issue closed. zugodb then moves its pin.
 | 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | [#30](https://github.com/pedrobtz/libzugodb/pull/30), [#41](https://github.com/pedrobtz/libzugodb/pull/41) | 2026-11-20 |
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | [#46](https://github.com/pedrobtz/libzugodb/pull/46) | 2026-11-20 |
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | [#52](https://github.com/pedrobtz/libzugodb/pull/52) | 2026-11-20 |
-| 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | | |
+| 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | [#54](https://github.com/pedrobtz/libzugodb/pull/54) | 2026-11-20 |
 | 11.1 | [Host-supplied function providers](#stage-111--host-supplied-function-providers) | 0.4.0 | ci | [#40](https://github.com/pedrobtz/libzugodb/issues/40) | | |
 | 12 | [The names become zugodb](#stage-12--the-names-become-zugodb) | 0.4.0 | ci | [#17](https://github.com/pedrobtz/libzugodb/issues/17) | | |
 <!-- markdownlint-enable MD013 -->
@@ -742,8 +742,9 @@ and the engine carries no zstd of its own.
 - The sizing (L28): zstd 23,958 lines, snappy 4,793, fastpforlib 2,621,
   miniz 9,255, the readers 8,319, the helpers 4,278;
   `physical_planner.cpp` goes from 14,896 lines to 5,855 and
-  `connection.cpp` from 3,438 to 2,305. In all, 65,909 lines are removed
-  (31,373 of them under `third_party/`) and 461 added.
+  `connection.cpp` from 3,438 to 2,305. In all, the pull request removes
+  65,944 lines (33,305 under `src/` and `include/`, 31,373 under
+  `third_party/`) and adds 685, documentation included.
 - The refusal tests of Stage 2 in `test_refused.cpp` and
   `test_between_explain_view.cpp` pass unchanged; the 18 refusal cases of
   the deleted reader tests move into `test_refused.cpp` with their names
