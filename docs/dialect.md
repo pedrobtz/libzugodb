@@ -30,7 +30,7 @@ whether a given use of it is right is what those counts measure.
 | `DELETE FROM ... [WHERE]` | |
 | `TRUNCATE [TABLE]` | |
 | `ALTER TABLE` | `ADD [COLUMN]`, `DROP [COLUMN]`, `RENAME [COLUMN] ... TO` |
-| `MERGE INTO ... USING ... ON` | `WHEN MATCHED THEN UPDATE SET`, `WHEN NOT MATCHED THEN INSERT VALUES` |
+| `MERGE INTO ... USING ... ON` | `ON` a column of the target `=` a column of the source, of one type, each named with its table; `WHEN MATCHED THEN UPDATE SET` and `WHEN NOT MATCHED THEN INSERT [(columns)] VALUES` from columns of the source of the target column's type, or `NULL` in `VALUES`; not into a table with a primary key |
 | `DESCRIBE` | of a table or a query |
 | `SHOW TABLES`, `SHOW DATABASES` | |
 | `PRAGMA table_info('t')` | |

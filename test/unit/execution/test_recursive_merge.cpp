@@ -89,3 +89,69 @@ TEST_CASE("MERGE - update only") {
     auto r = conn.Query("SELECT price FROM prices WHERE product = 'A'");
     CHECK(r.GetValue(0, 0).GetValue<int32_t>() == 150);
 }
+
+// What MERGE does not do is an error, and what it does is right (Stage
+// 10, #49). Each refusal leaves the target as it was.
+TEST_CASE("MERGE - a shape it cannot do is refused, not done otherwise") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE tgt (id INTEGER, val VARCHAR, n BIGINT)");
+    conn.Query("INSERT INTO tgt VALUES (1, 'a', 10), (2, 'b', 20), (NULL, 'z', 0)");
+    conn.Query("CREATE TABLE src (id INTEGER, val VARCHAR, n BIGINT, d DOUBLE)");
+    conn.Query("INSERT INTO src VALUES (2, 'B', 21, 2.5), (3, 'C', 31, 3.5), (NULL, 'Z', 1, 0.5)");
+    auto table = [&] {
+        auto r = conn.Query("SELECT id, val, n FROM tgt ORDER BY id NULLS LAST, val");
+        std::string out;
+        for (idx_t i = 0; i < r.RowCount(); i++) {
+            for (idx_t j = 0; j < 3; j++) out += r.GetValue(i, j).ToString() + (j < 2 ? "," : ";");
+        }
+        return out;
+    };
+    const std::string before = table();
+    for (const char *sql : {
+             // SET of a constant was left undone.
+             "MERGE INTO tgt USING src ON tgt.id = src.id WHEN MATCHED THEN UPDATE SET val = 'm'",
+             // A VALUES constant was stored as text: a number read back 0.
+             "MERGE INTO tgt USING src ON tgt.id = src.id WHEN NOT MATCHED THEN INSERT VALUES (src.id, 'x', 7)",
+             // ON other than one column pair matched the first columns.
+             "MERGE INTO tgt USING src ON tgt.id = src.id AND tgt.n = src.n WHEN MATCHED THEN UPDATE SET val = src.val",
+             "MERGE INTO tgt USING src ON tgt.id < src.id WHEN MATCHED THEN UPDATE SET val = src.val",
+             "MERGE INTO tgt USING src ON id = id WHEN MATCHED THEN UPDATE SET val = src.val",
+             // Columns of two types; a SET from the target itself.
+             "MERGE INTO tgt USING src ON tgt.n = src.d WHEN MATCHED THEN UPDATE SET val = src.val",
+             "MERGE INTO tgt USING src ON tgt.id = src.id WHEN MATCHED THEN UPDATE SET n = src.d",
+             "MERGE INTO tgt USING src ON tgt.id = src.id WHEN MATCHED THEN UPDATE SET val = tgt.val",
+         }) {
+        CAPTURE(sql);
+        CHECK_THROWS(conn.Query(sql));
+        CHECK(table() == before);
+    }
+    conn.Query("CREATE TABLE pk (id INTEGER PRIMARY KEY, val VARCHAR)");
+    CHECK_THROWS(conn.Query("MERGE INTO pk USING src ON pk.id = src.id "
+                            "WHEN NOT MATCHED THEN INSERT (id, val) VALUES (src.id, src.val)"));
+    // Two source rows for one target row: which one's values?
+    conn.Query("INSERT INTO src VALUES (2, 'B2', 22, 2.0)");
+    CHECK_THROWS(conn.Query("MERGE INTO tgt USING src ON tgt.id = src.id WHEN MATCHED THEN UPDATE SET val = src.val"));
+    CHECK(table() == before);
+}
+
+TEST_CASE("MERGE - NULL keys match nothing, the INSERT column list is honoured, inserted rows are not matched") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE tgt (id INTEGER, val VARCHAR, n BIGINT)");
+    conn.Query("INSERT INTO tgt VALUES (1, 'a', 10), (2, 'b', 20), (NULL, 'z', 0)");
+    conn.Query("CREATE TABLE src (id INTEGER, val VARCHAR, n BIGINT)");
+    conn.Query("INSERT INTO src VALUES (2, 'B', 21), (3, 'C', 31), (3, 'C2', 32), (NULL, 'Z', 1)");
+    conn.Query("MERGE INTO tgt USING src AS s ON s.id = tgt.id "
+               "WHEN MATCHED THEN UPDATE SET val = s.val, n = s.n "
+               "WHEN NOT MATCHED THEN INSERT (n, id) VALUES (s.n, s.id)");
+    auto r = conn.Query("SELECT id, val, n FROM tgt ORDER BY n");
+    std::vector<std::string> got;
+    for (idx_t i = 0; i < r.RowCount(); i++) {
+        got.push_back(r.GetValue(i, 0).ToString() + "," + r.GetValue(i, 1).ToString() + "," +
+                      r.GetValue(i, 2).ToString());
+    }
+    // Both (3, ...) rows are inserted: the second does not match the first.
+    // The NULL source row is inserted; the NULL target row is untouched.
+    CHECK(got == std::vector<std::string>{"NULL,z,0", "NULL,NULL,1", "1,a,10", "2,B,21", "3,NULL,31", "3,NULL,32"});
+}
