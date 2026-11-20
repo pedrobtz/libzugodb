@@ -85,6 +85,10 @@ Where the weight is, which the directory names do not show:
   reach the Parquet scan operator through a table set up with the catalog
   (`test/unit/parquet_table.hpp`). The SQLite, Excel, Avro and Arrow IPC
   readers are refused in their constructors too.
+- The database file is format version 1001 with a CRC-32 over the whole
+  file (`Checkpoint::ComputeChecksum`; layout in design L11). A change to
+  what `Checkpoint::Save` writes bumps `SLOTHDB_VERSION` in the same
+  commit, with a new golden file (`tools/make_db_fixtures.sh`).
 
 ## Invariants
 

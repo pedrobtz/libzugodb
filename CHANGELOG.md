@@ -34,6 +34,19 @@
   statements. This also closes a wrong answer: a `GROUP BY` over a Parquet
   file written by `COPY ... TO` returned no rows. The readers stay, tested
   through their C++ API, until 0.4.0 removes them.
+- The database file's format changes, which is why this is a minor
+  version: files are format version 1001, libzugodb's own range, and carry
+  a CRC-32 of the whole file in the header (offset 12, the field upstream
+  left reserved). Opening a file refuses, before any table is read, one
+  smaller than its header, a bad magic number, any version other than
+  1001 (the message names the version found and 1001, so a file written by
+  upstream SlothDB or by libzugodb 0.1.x, version 1, is refused), a size
+  other than the header records, and a checksum that does not match. Such
+  a file was read before and could open with wrong rows. Format 1001 is
+  little-endian, and a big-endian host refuses to read or write a database
+  file. New file for zugodb's `tools/vendor.yaml`:
+  `include/slothdb/common/crc32.hpp`, a header-only CRC-32 (zlib's).
+  `Checkpoint::ComputeChecksum` is public, for a fuzz harness.
 
 ## libzugodb 0.1.1
 
