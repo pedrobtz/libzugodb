@@ -1281,6 +1281,19 @@ static Vector CoerceVector(Vector &&src, const LogicalType &target_type, idx_t c
             for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
             copy_validity(); return out;
         }
+        // These sat in a second DOUBLE branch below that this one hid, so a
+        // TINYINT or SMALLINT operand of a DOUBLE operation was read as a
+        // double's bytes (Stage 8, #12).
+        if (src_id == LogicalTypeId::TINYINT) {
+            auto *s = src.GetData<int8_t>();
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            copy_validity(); return out;
+        }
+        if (src_id == LogicalTypeId::SMALLINT) {
+            auto *s = src.GetData<int16_t>();
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            copy_validity(); return out;
+        }
     } else if (dst_id == LogicalTypeId::INTEGER) {
         // ResolveArithmeticType promotes TINYINT+TINYINT and SMALLINT+
         // SMALLINT to INTEGER. Without these typed widenings, the
@@ -1337,16 +1350,14 @@ static Vector CoerceVector(Vector &&src, const LogicalType &target_type, idx_t c
             for (idx_t i = 0; i < count; i++) o[i] = static_cast<float>(s[i]);
             copy_validity(); return out;
         }
-    } else if (dst_id == LogicalTypeId::DOUBLE) {
-        auto *o = out.GetData<double>();
         if (src_id == LogicalTypeId::TINYINT) {
             auto *s = src.GetData<int8_t>();
-            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<float>(s[i]);
             copy_validity(); return out;
         }
         if (src_id == LogicalTypeId::SMALLINT) {
             auto *s = src.GetData<int16_t>();
-            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<float>(s[i]);
             copy_validity(); return out;
         }
     }

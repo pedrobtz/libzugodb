@@ -156,3 +156,19 @@ TEST_CASE("Stage 8: DECIMAL and NUMERIC are refused") {
     // A decimal literal is a DOUBLE, as before.
     CHECK(Run(conn, "SELECT 0.5 + 1") == Rows{{"1.5"}});
 }
+
+// ---------------------------------------------------------------------------
+// function/numeric/test_type_resolution.test: a TINYINT or SMALLINT operand
+// of a FLOAT or DOUBLE operation was read as the bytes of a double, so
+// 1::TINYINT + 1::REAL was 1.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: TINYINT and SMALLINT operands of floating-point arithmetic") {
+    Database db;
+    Connection conn(db);
+    CHECK(Run(conn, "SELECT 1::TINYINT + 1::REAL, 1::TINYINT + 1::DOUBLE, 2::TINYINT * 2.5, "
+                    "1::SMALLINT + 1.5") == Rows{{"2", "2", "5", "2.5"}});
+    conn.Query("CREATE TABLE t(a TINYINT, b SMALLINT, d DOUBLE)");
+    conn.Query("INSERT INTO t VALUES (1, 2, 0.5)");
+    CHECK(Run(conn, "SELECT a + d, b * d, a / d, b - 1.5 FROM t") == Rows{{"1.5", "1", "2", "0.5"}});
+}
