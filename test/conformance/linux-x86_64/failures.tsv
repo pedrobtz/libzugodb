@@ -265,9 +265,6 @@ test/sql/function/numeric/test_unary.test	62	unreliable	SELECT -b from minima;
 test/sql/function/numeric/test_unary.test	67	unreliable	SELECT +'hello'
 test/sql/function/numeric/test_unary.test	82	unreliable	SELECT +d FROM dates
 test/sql/function/numeric/test_unary.test	86	unreliable	SELECT -d FROM dates
-test/sql/function/string/regex_escape.test	70	unreliable	SELECT regexp_escape(c) FROM tbl;
-test/sql/function/string/regex_escape.test	75	unreliable	WITH cte AS (\n    SELECT c\n    FROM tbl\n    LIMIT 500\n)\nSELECT sum(cast(regexp_escape(c) = 'a\)\*\.\?\[\\\]b\^\{2\.\+_c' as int))\nFROM cte
-test/sql/function/string/regex_replace.test	276	unreliable	SELECT regexp_replace(s, pat, repl) FROM t_repl_invalid;
 test/sql/function/string/sha1.test	56	unreliable	SELECT sha1(42)
 test/sql/function/string/test_concat.test	21	unreliable	SELECT s || ' ' || s FROM strings ORDER BY s
 test/sql/function/string/test_concat.test	29	unreliable	SELECT s || ' ' || '🦆' FROM strings ORDER BY s

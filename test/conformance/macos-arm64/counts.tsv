@@ -257,7 +257,7 @@ test/sql/function/string/hex.test	run	13	4	9	0	0	0	0	0	0
 test/sql/function/string/hive_partition_component.test	run	10	0	10	0	0	0	0	0	0
 test/sql/function/string/like_unicode.test	run	10	10	0	0	0	0	0	0	0
 test/sql/function/string/md5.test	run	8	2	6	0	0	0	0	0	0
-test/sql/function/string/null_byte.test	run	23	16	7	0	0	0	0	0	0
+test/sql/function/string/null_byte.test	run	23	14	9	0	0	0	0	0	0
 test/sql/function/string/overlay.test	run	33	2	31	0	0	0	0	0	0
 test/sql/function/string/parse_formatted_bytes.test	run	46	16	30	0	0	0	0	0	0
 test/sql/function/string/parse_path.test	left out: reads files									
@@ -265,17 +265,17 @@ test/sql/function/string/parse_path_separator.test	run	12	2	10	0	0	0	0	0	0
 test/sql/function/string/parse_path_windows.test	left out: require windows									
 test/sql/function/string/path_join.test	run	29	7	22	0	0	0	0	0	0
 test/sql/function/string/regex_capture.test	run	14	9	5	0	0	0	0	0	0
-test/sql/function/string/regex_escape.test	run	15	1	12	0	0	2	0	0	0
-test/sql/function/string/regex_extract.test	run	37	30	7	0	0	0	0	0	0
+test/sql/function/string/regex_escape.test	run	15	1	14	0	0	0	0	0	0
+test/sql/function/string/regex_extract.test	run	37	14	23	0	0	0	0	0	0
 test/sql/function/string/regex_extract_all.test	run	91	3	88	0	0	0	0	0	0
 test/sql/function/string/regex_extract_all_struct.test	run	66	11	55	0	0	0	0	0	0
 test/sql/function/string/regex_extract_dictionary.test	left out: a database file									
 test/sql/function/string/regex_extract_empty_group_name.test	run	4	3	1	0	0	0	0	0	0
-test/sql/function/string/regex_filter_pushdown.test	run	6	6	0	0	0	0	0	0	0
+test/sql/function/string/regex_filter_pushdown.test	run	6	2	4	0	0	0	0	0	0
 test/sql/function/string/regex_operators.test	run	40	5	35	0	0	0	0	0	0
 test/sql/function/string/regex_operators_v1_5_view.test	left out: directive unzip									
-test/sql/function/string/regex_replace.test	run	43	37	5	0	0	1	0	0	0
-test/sql/function/string/regex_search.test	run	40	25	15	0	0	0	0	0	0
+test/sql/function/string/regex_replace.test	run	43	19	24	0	0	0	0	0	0
+test/sql/function/string/regex_search.test	run	40	13	27	0	0	0	0	0	0
 test/sql/function/string/regex_single_byte.test	run	22	15	7	0	0	0	0	0	0
 test/sql/function/string/regexp_split_to_table.test	run	3	0	3	0	0	0	0	0	0
 test/sql/function/string/regexp_unicode_literal.test	run	9	3	6	0	0	0	0	0	0
