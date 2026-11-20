@@ -53,8 +53,11 @@ build/test/slothdb_tests -ltc               # list test cases
   ```
 
   The committed counts (`counts.tsv`, `totals.tsv`, `failures.tsv`,
-  `threads.tsv`) come from the ASan and UBSan build, as the `conformance`
-  job's; a change to them is committed with the change that makes it.
+  `threads.tsv`) are per platform, `test/conformance/linux-x86_64/` and
+  `macos-arm64/`, the `conformance` job's two, from its ASan and UBSan
+  build; elsewhere set `CONFORMANCE_PLATFORM` to compare with one. A
+  change to them is committed with the change that makes it (the job's
+  artifact holds each platform's run).
   `CONFORMANCE_OUT=dir` keeps a run's outputs, with `details.tsv` (why
   each case did not pass).
 - `-DSLOTHDB_FUZZ=ON` (clang with libFuzzer; Apple clang lacks it) builds

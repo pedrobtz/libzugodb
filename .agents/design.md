@@ -383,7 +383,13 @@ minor version.
   must give every case the class it gets at cap 1, and the cases that do
   not are committed in `threads.tsv` (a value read from uninitialised
   memory differs from run to run within a class, so the values are not
-  compared). The counts are the run at cap 1.
+  compared). The counts are the run at cap 1. They are committed per
+  platform, `test/conformance/linux-x86_64/` and `macos-arm64/`, the
+  job's two, since the engine differs between them on three cases of the
+  first counts, and the runner not at all: `trunc(0::FLOAT, 2)` returns a
+  stale value on Linux, `-9223372036854775807::DECIMAL(19,0)::BIGINT`
+  converts a double out of range (undefined, so by architecture), and
+  `strftime` with `%-y` is the C library's.
 - **L17 (2026-11-20, Stage 6, Claude's implementation call).** A
   `statement ok` that only sets one of DuckDB's execution settings, which
   its tests use to reach other code paths with the same answers, is
@@ -408,8 +414,9 @@ minor version.
   `function/string` and `function/date`: 809 files
   (`test/conformance/subset.txt`), of which the runner leaves 63 out by
   L14's rules and runs 746, with 20,461 cases. The counts are in
-  `test/conformance/totals.tsv` and `counts.tsv`; the job runs well under
-  ten minutes, so the subset is not cut further.
+  `test/conformance/<platform>/totals.tsv` and `counts.tsv`; the job runs
+  under ten minutes (about 3.5 on Linux and 7 on macOS, build included), so the
+  subset is not cut further.
 - **LQ2.** When the engine's readers are cut, what else in `src/storage/`
   still needs zstd, snappy or miniz? [zugodb §7.5][zdesign] says the cut
   is sized first; the sizing is the first work of that stage.

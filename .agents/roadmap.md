@@ -391,6 +391,8 @@ reproducibly, and written down.
   `PhysicalOrderBy`), so its counts could not be committed (L16).
 - Caps 1 and 2 are compared by each case's class, not its values: a value
   read from uninitialised memory differs from run to run (L16).
+- The counts are committed per platform (`linux-x86_64`, `macos-arm64`):
+  the engine gives three cases a different class on each (L16).
 - A `statement ok` that only sets one of DuckDB's execution settings
   (`threads`, `debug_*`, optimizer and join thresholds, ...) is not run
   (L17).
