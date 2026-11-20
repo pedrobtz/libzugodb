@@ -24,6 +24,11 @@ namespace zugodb {
 //   (GetValue) or on the legacy per-row API. Some non-SELECT paths still
 //   write here directly.
 struct QueryResult {
+    // The result reports a statement, not a query: its one column "Count"
+    // holds the rows INSERT, UPDATE, DELETE or CREATE TABLE AS changed, or
+    // no row for CREATE TABLE, as DuckDB's (libzugodb 0.3.0). A caller
+    // reads rows affected from it rather than from the column's name.
+    bool is_count = false;
     std::vector<std::string> column_names;
     std::vector<LogicalType> column_types;
     std::vector<std::vector<Value>> rows;

@@ -946,6 +946,13 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 }
                 MaterializeSelectIntoTable(db_.GetCatalog(), *ct.query,
                                            ct.table_name);
+                // DuckDB's result: the rows the table was made with (#38).
+                auto *made = db_.GetCatalog().GetTable(ct.table_name);
+                final_result.column_names = {"Count"};
+                final_result.column_types = {LogicalType::BIGINT()};
+                final_result.rows.push_back(
+                    {Value::BIGINT(made ? static_cast<int64_t>(made->GetStorage().Count()) : 0)});
+                final_result.is_count = true;
                 continue;
             }
         }
@@ -1445,6 +1452,7 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 final_result.column_names = {"Count"};
                 final_result.column_types = {LogicalType::BIGINT()};
                 final_result.rows.push_back({Value::BIGINT(ins_count)});
+                final_result.is_count = true;
                 continue;
             }
         }
@@ -2939,6 +2947,13 @@ QueryResult Connection::RunStatements(const std::string &sql) {
             final_result.column_names = {"Count"};
             final_result.column_types = {LogicalType::BIGINT()};
             final_result.rows.push_back({Value::BIGINT(affected)});
+            final_result.is_count = true;
+        } else if (stmt->GetType() == StatementType::CREATE_TABLE) {
+            // DuckDB's result for CREATE TABLE: a Count column and no row
+            // (#38).
+            final_result.column_names = {"Count"};
+            final_result.column_types = {LogicalType::BIGINT()};
+            final_result.is_count = true;
         }
 
         // Re-tag DATE / TIMESTAMP result columns. The engine carries Parquet

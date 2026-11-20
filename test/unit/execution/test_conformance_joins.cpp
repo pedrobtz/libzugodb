@@ -142,3 +142,24 @@ TEST_CASE("Stage 8: a recursive CTE's step reads the step before's rows") {
     CHECK_THROWS(conn.Query("WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM t) "
                             "SELECT count(*) FROM t"));
 }
+
+// ---------------------------------------------------------------------------
+// function/string/null_byte.test:20, join/semianti/antijoin.test:60,
+// semijoin.test:60 (#38): DuckDB's CREATE TABLE returns a Count column,
+// with the rows made by CREATE TABLE AS and none for a plain CREATE.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: CREATE TABLE returns DuckDB's Count") {
+    Database db;
+    Connection conn(db);
+    auto r = conn.Query("CREATE TABLE other (a INTEGER, b INTEGER)");
+    CHECK(r.column_names == std::vector<std::string>{"Count"});
+    CHECK(r.RowCount() == 0);
+    CHECK(r.is_count);
+    r = conn.Query("CREATE TABLE null_byte AS SELECT concat('goo', chr(0), 'se') AS v");
+    CHECK(r.column_names == std::vector<std::string>{"Count"});
+    CHECK(Collect(r) == Rows{{"1"}});
+    CHECK(r.is_count);
+    CHECK(conn.Query("INSERT INTO other VALUES (1, 2)").is_count);
+    CHECK_FALSE(conn.Query("SELECT 1").is_count);
+}
