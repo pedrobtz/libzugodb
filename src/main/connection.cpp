@@ -1371,22 +1371,25 @@ QueryResult Connection::Query(const std::string &sql) {
                     return out;
                 };
 
+                // The SELECT runs to its end before the first row is
+                // appended, so it sees the table as it was when the
+                // statement began, as in DuckDB. Appending chunk by chunk
+                // let `INSERT INTO t SELECT ... FROM t` read its own rows
+                // and never finish (#23). build_coerced_chunk copies each
+                // value, so the kept chunks do not point into the source.
                 DataChunk chunk;
                 int64_t ins_count = 0;
+                std::vector<DataChunk> pending;
                 while (true) {
                     if (!sel_physical->GetData(chunk)) break;
                     ins_count += static_cast<int64_t>(chunk.size());
-                    if (target_indices.empty()) {
-                        auto coerced = build_coerced_chunk(chunk, nullptr);
-                        check_not_null_chunk(coerced);
-                        entry->CheckPrimaryKeyForChunk(coerced);
-                        entry->GetStorage().Append(coerced);
-                    } else {
-                        auto coerced = build_coerced_chunk(chunk, &target_indices);
-                        check_not_null_chunk(coerced);
-                        entry->CheckPrimaryKeyForChunk(coerced);
-                        entry->GetStorage().Append(coerced);
-                    }
+                    pending.push_back(build_coerced_chunk(
+                        chunk, target_indices.empty() ? nullptr : &target_indices));
+                }
+                for (auto &coerced : pending) {
+                    check_not_null_chunk(coerced);
+                    entry->CheckPrimaryKeyForChunk(coerced);
+                    entry->GetStorage().Append(coerced);
                 }
                 // INSERT-SELECT affected-row count (matches DuckDB).
                 final_result.column_names = {"Count"};

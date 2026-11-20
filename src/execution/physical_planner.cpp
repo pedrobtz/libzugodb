@@ -4407,7 +4407,12 @@ public:
                 if (info.fn == WF_ROW_NUMBER) continue;
                 // RANK / DENSE_RANK need to peek at the previous order-by
                 // value — also vectorisable but slightly more careful.
-                if (info.fn == WF_RANK || info.fn == WF_DENSE_RANK) continue;
+                // With an ORDER BY whose first key is not a column, the
+                // peers are not known here; ComputeWindowAt decides.
+                if (info.fn == WF_RANK || info.fn == WF_DENSE_RANK) {
+                    if (info.has_order && info.rank_order_col == INVALID_INDEX) return false;
+                    continue;
+                }
                 return false;
             }
             return false;
@@ -4540,7 +4545,14 @@ public:
                             // Compare order key vs previous; bump on change.
                             bool same = false;
                             if (rank_prev_ != INVALID_INDEX) {
-                                if (otid == LogicalTypeId::BIGINT)
+                                // No ORDER BY (CanUseVectorisedEmit admits no
+                                // other case without an order column): every
+                                // row of the partition is a peer, so rank()
+                                // over () is 1. This read column INVALID_INDEX
+                                // (libzugodb Stage 7, #11).
+                                if (order_col == INVALID_INDEX)
+                                    same = true;
+                                else if (otid == LogicalTypeId::BIGINT)
                                     same = input_.GetInt64(rank_prev_, order_col) == input_.GetInt64(row, order_col);
                                 else if (otid == LogicalTypeId::INTEGER)
                                     same = input_.GetInt32(rank_prev_, order_col) == input_.GetInt32(row, order_col);
@@ -5229,7 +5241,8 @@ private:
     }
 
     bool OrderEqual(const WinInfo &info, idx_t a, idx_t b) {
-        if (info.rank_order_col == INVALID_INDEX) return false;
+        // Without an ORDER BY every row of a partition is a peer.
+        if (info.rank_order_col == INVALID_INDEX) return !info.has_order;
         switch (info.rank_order_tid) {
         case LogicalTypeId::INTEGER:
             return input_.GetInt32(a, info.rank_order_col) == input_.GetInt32(b, info.rank_order_col);
@@ -5762,7 +5775,8 @@ private:
 
         // Typed equality for RANK/DENSE_RANK tie detection (reads raw data).
         auto order_equal = [&](idx_t a, idx_t b) -> bool {
-            if (rank_order_col == INVALID_INDEX) return false;
+            // Without an ORDER BY every row of a partition is a peer.
+            if (rank_order_col == INVALID_INDEX) return win.order_by.empty();
             switch (rank_order_tid) {
             case LogicalTypeId::INTEGER:
                 return input.GetInt32(a, rank_order_col) == input.GetInt32(b, rank_order_col);

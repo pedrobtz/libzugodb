@@ -11,6 +11,32 @@
   are committed in `test/conformance/`, and a new CI job, `conformance`,
   fails when a run's counts differ from them. Nothing in `src/` or
   `include/` changes.
+- No case of the pinned subset crashes or hangs, under ASan and UBSan
+  (#11):
+  - a string function called with too few or too many arguments
+    (`sha1()`, `REPLACE(1)`, `LTRIM('a', 'b', 'c')`, ...) is a binder
+    error, and every scalar function checks each argument it reads;
+  - `LPAD` and `RPAD` count characters, cut a long string to its first
+    characters, give `''` for a length of zero or less (it hung), refuse an
+    empty padding and a result past the maximum string size;
+  - `INSERT INTO t SELECT ... FROM t` reads the table as it was when the
+    statement began; it read its own rows and never finished (#23);
+  - in a query with window functions, `ORDER BY` sorts by the output
+    column it names, or by the source columns; it read the window's
+    output rows at the source's column positions, past their end or at the
+    wrong column. Other `ORDER BY` items there are refused;
+  - `rank()` and `dense_rank()` with no `ORDER BY` are 1 for every row;
+  - `LENGTH(NULL) ... GROUP BY NULL` is NULL: a column reference to a type
+    with no storage lost its NULLs. A column reference past the end of its
+    input is an error;
+  - `GROUP BY a` and `HAVING a` bind to the column `a` when a select-list
+    alias is also named `a`, as in DuckDB; a `HAVING` alias over a column
+    of its own name recursed without end;
+  - `date_trunc` reads its part per row, so the part may be a column or
+    NULL, and refuses a part it does not know (it returned the value cut
+    to the second);
+  - `substring` takes `BIGINT` bounds, which overflowed an `INTEGER`
+    buffer, and bounds past the 32-bit range.
 - Remove `bench/correctness/`, SlothDB's Python harness, which ran
   SlothDB's published wheel rather than this tree.
 

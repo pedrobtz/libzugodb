@@ -34,7 +34,7 @@ issue closed. zugodb then moves its pin.
 | 4 | [Harden Checkpoint::Load, with a fuzz harness in CI](#stage-4--harden-checkpointload-with-a-fuzz-harness-in-ci) | 0.2.0 | + `fuzz` | [#6](https://github.com/pedrobtz/libzugodb/issues/6) | [#24](https://github.com/pedrobtz/libzugodb/pull/24) | 2026-11-20 |
 | 5 | [ThreadSanitizer in CI](#stage-5--threadsanitizer-in-ci) | 0.2.0 | + `linux-tsan` | [#7](https://github.com/pedrobtz/libzugodb/issues/7) | [#27](https://github.com/pedrobtz/libzugodb/pull/27) | 2026-11-20 |
 | 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | [#28](https://github.com/pedrobtz/libzugodb/pull/28) | 2026-11-20 |
-| 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | | |
+| 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | [#29](https://github.com/pedrobtz/libzugodb/pull/29) | 2026-11-20 |
 | 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | | |
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | | |
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | | |
@@ -437,8 +437,22 @@ under the sanitizers as well.
   job holds them there.
 - Every case from the list has a doctest that was seen to fail.
 
-**Design.** [§5](design.md#5-conformance-and-its-oracles) and
-[zugodb Q18][zdesign].
+**Deviations (2026-11-20).**
+
+- The `conformance` job already ran under ASan and UBSan from Stage 6
+  (design L16), so this stage adds no job. The counts are committed for
+  that build only; a Release build is not counted, as in Stage 6.
+- All 21 cases are fixed; none is refused as a whole. Two fixes refuse
+  what they cannot do instead: an `ORDER BY` item of a window query that
+  is neither an output column nor an expression of source columns, and a
+  `date_trunc` part the engine does not know (design L18).
+- The fixes let the cases after each crash run; some of those are wrong
+  or accepted (a window `skewness`, `percent_rank() over ()`, `CHR(-10)`,
+  `REPEAT('hello', 'world')`, ...). They are Stage 8's. No case that
+  passed or was refused before became wrong or accepted.
+
+**Design.** [§5](design.md#5-conformance-and-its-oracles), L18 in
+[§8](design.md#8-decisions) and [zugodb Q18][zdesign].
 
 ## Stage 8 — No wrong answer on the pinned subset
 
