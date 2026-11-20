@@ -309,3 +309,23 @@ TEST_CASE("Stage 8: a NaN is refused wherever it would be made") {
     conn.Query("INSERT INTO t VALUES ('inf'), (1)");
     CHECK(Run(conn, "SELECT d FROM t ORDER BY d DESC") == Rows{{"inf"}, {"1"}});
 }
+
+// Logarithms and EXP outside their finite range give DuckDB v2.0.0's IEEE
+// values (types/float/ieee_floating_points.test); they gave NULL, found
+// with #43. A NaN is refused (L23).
+TEST_CASE("Logarithms of 0 are -inf and EXP past a double is inf, as DuckDB's") {
+    Database db;
+    Connection conn(db);
+    auto r = conn.Query("SELECT ln(0), log10(0), log2(0), log(0), log(2, 0), log(1, 8), exp(1000)");
+    REQUIRE(r.RowCount() == 1);
+    for (idx_t j = 0; j < 5; j++) {
+        CHECK(std::isinf(r.GetValue(0, j).GetValue<double>()));
+        CHECK(r.GetValue(0, j).GetValue<double>() < 0);
+    }
+    CHECK(std::isinf(r.GetValue(0, 5).GetValue<double>()));
+    CHECK(r.GetValue(0, 5).GetValue<double>() > 0);
+    CHECK(std::isinf(r.GetValue(0, 6).GetValue<double>()));
+    CHECK_THROWS(conn.Query("SELECT ln(-1)"));
+    CHECK_THROWS(conn.Query("SELECT log(-2, 8)"));
+    CHECK_THROWS(conn.Query("SELECT sqrt(-1::FLOAT)"));
+}

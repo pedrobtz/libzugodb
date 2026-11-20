@@ -1194,12 +1194,11 @@ void ExpressionExecutor::ArithmeticTyped(const std::string &op, Vector &left, Ve
             continue;
         }
         if constexpr (std::is_integral_v<T>) {
-            // Signed integer overflow is undefined behaviour in C++ and
-            // silently wraps on x86 — `2147483647 + 1` produced
-            // `-2147483648` even though the user got no error. SQL
-            // standard says overflow is a runtime error; we return NULL
-            // to match the divide-by-zero / modulo-by-zero behaviour
-            // already established by the +/-/* paths.
+            // In the result's own type, TINYINT to BIGINT, with DuckDB's
+            // error on overflow (#34, #43). The checks never compute an
+            // overflowing value: signed overflow is undefined behaviour,
+            // and a compiler drops a check made after it (`m / a != b`
+            // was optimised away, so 2147483647 * 2 gave -2).
             T a = ldata[i], b = rdata[i];
             T r{};
             bool overflow = false;
@@ -1207,20 +1206,23 @@ void ExpressionExecutor::ArithmeticTyped(const std::string &op, Vector &left, Ve
                 if ((b > 0 && a > std::numeric_limits<T>::max() - b) ||
                     (b < 0 && a < std::numeric_limits<T>::min() - b)) {
                     overflow = true;
-                } else r = a + b;
+                } else r = static_cast<T>(a + b);
             } else if (op == "-") {
                 if ((b < 0 && a > std::numeric_limits<T>::max() + b) ||
                     (b > 0 && a < std::numeric_limits<T>::min() + b)) {
                     overflow = true;
-                } else r = a - b;
+                } else r = static_cast<T>(a - b);
             } else if (op == "*") {
-                if (a != 0 && b != 0) {
-                    T m = a * b;
-                    // Detect overflow via re-division check (portable;
-                    // MSVC has no __builtin_mul_overflow).
-                    if (m / a != b) overflow = true;
-                    else r = m;
-                } // else r = 0 (already)
+                constexpr T kMax = std::numeric_limits<T>::max();
+                constexpr T kMin = std::numeric_limits<T>::min();
+                if (a == 0 || b == 0) {
+                    r = 0;
+                } else if (a > 0 ? (b > 0 ? a > kMax / b : b < kMin / a)
+                                 : (b > 0 ? a < kMin / b : a < kMax / b)) {
+                    overflow = true;
+                } else {
+                    r = static_cast<T>(a * b);
+                }
             } else if (op == "/") {
                 // The binder types / of integers DOUBLE, as DuckDB does;
                 // this is a guard.
@@ -1237,8 +1239,12 @@ void ExpressionExecutor::ArithmeticTyped(const std::string &op, Vector &left, Ve
             if (overflow) {
                 // DuckDB's error; a NULL was a value DuckDB never gives
                 // (#34).
-                throw OutOfRangeException("Overflow in " + op + " of " +
-                                          std::to_string(a) + " and " + std::to_string(b));
+                const char *what = op == "+" ? "addition" : op == "-" ? "subtraction"
+                                 : op == "*" ? "multiplication" : "division";
+                throw OutOfRangeException(std::string("Overflow in ") + what + " of INT" +
+                                          std::to_string(sizeof(T) * 8) + " (" +
+                                          std::to_string(a) + " " + op + " " +
+                                          std::to_string(b) + ")!");
             } else {
                 out[i] = r;
             }
@@ -1317,12 +1323,19 @@ static Vector CoerceVector(Vector &&src, const LogicalType &target_type, idx_t c
             for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
             copy_validity(); return out;
         }
+    } else if (dst_id == LogicalTypeId::SMALLINT) {
+        // TINYINT + SMALLINT is SMALLINT arithmetic (#43).
+        auto *o = out.GetData<int16_t>();
+        if (src_id == LogicalTypeId::TINYINT) {
+            auto *s = src.GetData<int8_t>();
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<int16_t>(s[i]);
+            copy_validity(); return out;
+        }
     } else if (dst_id == LogicalTypeId::INTEGER) {
-        // ResolveArithmeticType promotes TINYINT+TINYINT and SMALLINT+
-        // SMALLINT to INTEGER. Without these typed widenings, the
-        // fallback per-row SetValue wrote a TINYINT-typed Value into
-        // an INT32 buffer slot which read back as garbage (silent
-        // wrong-result on every TINYINT/SMALLINT arithmetic).
+        // Without these typed widenings, the fallback per-row SetValue
+        // wrote a TINYINT-typed Value into an INT32 buffer slot which
+        // read back as garbage (silent wrong-result on every TINYINT/
+        // SMALLINT arithmetic).
         auto *o = out.GetData<int32_t>();
         if (src_id == LogicalTypeId::TINYINT) {
             auto *s = src.GetData<int8_t>();
@@ -1491,27 +1504,32 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
         bool lvalid_all = lv.AllValid();
         bool rvalid_all = rv.AllValid();
         // An integer % 0 is DuckDB's "Division by zero" error, not NULL
-        // (#34); INT_MIN % -1 is 0, not a trap.
-        if (physical == PhysicalType::INT32) {
-            auto *ld = left.GetData<int32_t>(), *rd = right.GetData<int32_t>();
-            auto *out = result.GetData<int32_t>();
+        // (#34), and the least value % -1 is DuckDB's overflow error, as
+        // its division of the two is (#43); any other x % -1 is 0.
+        auto int_mod = [&](auto *ld, auto *rd, auto *out) {
+            using T = std::remove_pointer_t<decltype(out)>;
             for (idx_t i = 0; i < count; i++) {
                 bool li = lvalid_all || lv.RowIsValid(i);
                 bool ri = rvalid_all || rv.RowIsValid(i);
                 if (!li || !ri) { ov.SetInvalid(i); out[i] = 0; }
                 else if (rd[i] == 0) throw OutOfRangeException("Division by zero");
-                else out[i] = rd[i] == -1 ? 0 : ld[i] % rd[i];
+                else if (rd[i] == -1) {
+                    if (ld[i] == std::numeric_limits<T>::min()) {
+                        throw OutOfRangeException("Overflow in division of " +
+                                                  std::to_string(ld[i]) + " / -1");
+                    }
+                    out[i] = 0;
+                } else out[i] = static_cast<T>(ld[i] % rd[i]);
             }
+        };
+        if (physical == PhysicalType::INT8) {
+            int_mod(left.GetData<int8_t>(), right.GetData<int8_t>(), result.GetData<int8_t>());
+        } else if (physical == PhysicalType::INT16) {
+            int_mod(left.GetData<int16_t>(), right.GetData<int16_t>(), result.GetData<int16_t>());
+        } else if (physical == PhysicalType::INT32) {
+            int_mod(left.GetData<int32_t>(), right.GetData<int32_t>(), result.GetData<int32_t>());
         } else if (physical == PhysicalType::INT64) {
-            auto *ld = left.GetData<int64_t>(), *rd = right.GetData<int64_t>();
-            auto *out = result.GetData<int64_t>();
-            for (idx_t i = 0; i < count; i++) {
-                bool li = lvalid_all || lv.RowIsValid(i);
-                bool ri = rvalid_all || rv.RowIsValid(i);
-                if (!li || !ri) { ov.SetInvalid(i); out[i] = 0; }
-                else if (rd[i] == 0) throw OutOfRangeException("Division by zero");
-                else out[i] = rd[i] == -1 ? 0 : ld[i] % rd[i];
-            }
+            int_mod(left.GetData<int64_t>(), right.GetData<int64_t>(), result.GetData<int64_t>());
         } else if (physical == PhysicalType::FLOAT) {
             // IEEE fmod: x % 0 is a NaN, which the engine refuses (#33).
             // A FLOAT's buffer was read as doubles.
@@ -1536,39 +1554,67 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
         return;
     }
 
-    // Bitwise operators (& | ^ << >>) — integer-only. Operate on the
-    // int64 value of each operand; NULL propagates. Negative shift
-    // counts and counts >= 64 yield NULL (undefined behaviour guard).
-    if (expr.op == "&" || expr.op == "|" || expr.op == "^" ||
-        expr.op == "<<" || expr.op == ">>") {
+    // Bitwise operators (& | << >>), integer-only, in the result's type
+    // (both operands are coerced to it above); NULL propagates. Shifts
+    // follow DuckDB's BitwiseShiftLeft/RightOperator: a left shift of a
+    // negative number, by a negative count, past the type's width (unless
+    // of 0) or into the sign bit is an error; a right shift by a count
+    // outside 0 to width - 1 is 0 (#43). A NULL here was a value DuckDB
+    // never gives, and `1 << 31` wrapped.
+    if (expr.op == "&" || expr.op == "|" || expr.op == "<<" || expr.op == ">>") {
         auto &ov = result.GetValidity();
-        auto read_i64 = [](Vector &v, idx_t i, bool &ok) -> int64_t {
-            auto val = v.GetValue(i);
-            if (val.IsNull()) { ok = false; return 0; }
-            switch (val.type().id()) {
-            case LogicalTypeId::TINYINT:  return val.GetValue<int8_t>();
-            case LogicalTypeId::SMALLINT: return val.GetValue<int16_t>();
-            case LogicalTypeId::INTEGER:  return val.GetValue<int32_t>();
-            case LogicalTypeId::BIGINT:   return val.GetValue<int64_t>();
-            default: ok = false; return 0;
+        auto bitwise = [&](auto *ld, auto *rd, auto *out) {
+            using T = std::remove_pointer_t<decltype(out)>;
+            constexpr int64_t width = sizeof(T) * 8;
+            for (idx_t i = 0; i < count; i++) {
+                if (!left.GetValidity().RowIsValid(i) || !right.GetValidity().RowIsValid(i)) {
+                    ov.SetInvalid(i); out[i] = 0; continue;
+                }
+                T a = ld[i], b = rd[i];
+                if (expr.op == "&") { out[i] = static_cast<T>(a & b); continue; }
+                if (expr.op == "|") { out[i] = static_cast<T>(a | b); continue; }
+                if (expr.op == ">>") {
+                    out[i] = (b < 0 || b >= width) ? T(0) : static_cast<T>(a >> b);
+                    continue;
+                }
+                if (a < 0) {
+                    throw OutOfRangeException("Cannot left-shift negative number " +
+                                              std::to_string(a));
+                }
+                if (b < 0) {
+                    throw OutOfRangeException("Cannot left-shift by negative number " +
+                                              std::to_string(b));
+                }
+                if (b >= width) {
+                    if (a == 0) { out[i] = 0; continue; }
+                    throw OutOfRangeException("Left-shift value " + std::to_string(b) +
+                                              " is out of range");
+                }
+                if (b == 0) { out[i] = a; continue; }
+                T max_value = static_cast<T>(T(1) << (width - b - 1));
+                if (a >= max_value) {
+                    throw OutOfRangeException("Overflow in left shift (" + std::to_string(a) +
+                                              " << " + std::to_string(b) + ")");
+                }
+                out[i] = static_cast<T>(a << b);
             }
         };
-        bool out_is_i64 = result.GetType().GetInternalType() == PhysicalType::INT64;
-        for (idx_t i = 0; i < count; i++) {
-            bool ok = true;
-            int64_t a = read_i64(left, i, ok);
-            int64_t b = read_i64(right, i, ok);
-            if (!ok) { ov.SetInvalid(i); continue; }
-            int64_t r;
-            if (expr.op == "&") r = a & b;
-            else if (expr.op == "|") r = a | b;
-            else if (expr.op == "^") r = a ^ b;
-            else { // shifts
-                if (b < 0 || b >= 64) { ov.SetInvalid(i); continue; }
-                r = (expr.op == "<<") ? (a << b) : (a >> b);
-            }
-            if (out_is_i64) result.GetData<int64_t>()[i] = r;
-            else result.GetData<int32_t>()[i] = static_cast<int32_t>(r);
+        switch (result.GetType().GetInternalType()) {
+        case PhysicalType::INT8:
+            bitwise(left.GetData<int8_t>(), right.GetData<int8_t>(), result.GetData<int8_t>());
+            break;
+        case PhysicalType::INT16:
+            bitwise(left.GetData<int16_t>(), right.GetData<int16_t>(), result.GetData<int16_t>());
+            break;
+        case PhysicalType::INT32:
+            bitwise(left.GetData<int32_t>(), right.GetData<int32_t>(), result.GetData<int32_t>());
+            break;
+        case PhysicalType::INT64:
+            bitwise(left.GetData<int64_t>(), right.GetData<int64_t>(), result.GetData<int64_t>());
+            break;
+        default:
+            throw NotImplementedException("Bitwise " + expr.op + " for type " +
+                                          result.GetType().ToString());
         }
         return;
     }
@@ -1593,6 +1639,10 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
 
     auto physical = result.GetType().GetInternalType();
     switch (physical) {
+    case PhysicalType::INT8:
+        ArithmeticTyped<int8_t>(expr.op, left, right, result, count); break;
+    case PhysicalType::INT16:
+        ArithmeticTyped<int16_t>(expr.op, left, right, result, count); break;
     case PhysicalType::INT32:
         ArithmeticTyped<int32_t>(expr.op, left, right, result, count); break;
     case PhysicalType::INT64:
@@ -1685,34 +1735,30 @@ void ExpressionExecutor::ExecuteUnaryMinus(const BoundUnaryMinus &expr, DataChun
     auto &cvalid = child.GetValidity();
     auto &ovalid = result.GetValidity();
     auto physical = result.GetType().GetInternalType();
+    // The least value of an integer type has no negation in that type:
+    // DuckDB's "Overflow in negation" error (#43); it wrapped to itself.
+    auto negate_int = [&](auto *src, auto *dst) {
+        using T = std::remove_pointer_t<decltype(dst)>;
+        for (idx_t i = 0; i < count; i++) {
+            if (!cvalid.RowIsValid(i)) { ovalid.SetInvalid(i); dst[i] = 0; }
+            else if (src[i] == std::numeric_limits<T>::min()) {
+                throw OutOfRangeException("Overflow in negation of integer!");
+            } else dst[i] = static_cast<T>(-src[i]);
+        }
+    };
     switch (physical) {
-    case PhysicalType::INT16: {
-        auto *src = child.GetData<int16_t>();
-        auto *dst = result.GetData<int16_t>();
-        for (idx_t i = 0; i < count; i++) {
-            if (!cvalid.RowIsValid(i)) { ovalid.SetInvalid(i); dst[i] = 0; }
-            else dst[i] = static_cast<int16_t>(-src[i]);
-        }
+    case PhysicalType::INT8:
+        negate_int(child.GetData<int8_t>(), result.GetData<int8_t>());
         break;
-    }
-    case PhysicalType::INT32: {
-        auto *src = child.GetData<int32_t>();
-        auto *dst = result.GetData<int32_t>();
-        for (idx_t i = 0; i < count; i++) {
-            if (!cvalid.RowIsValid(i)) { ovalid.SetInvalid(i); dst[i] = 0; }
-            else dst[i] = -src[i];
-        }
+    case PhysicalType::INT16:
+        negate_int(child.GetData<int16_t>(), result.GetData<int16_t>());
         break;
-    }
-    case PhysicalType::INT64: {
-        auto *src = child.GetData<int64_t>();
-        auto *dst = result.GetData<int64_t>();
-        for (idx_t i = 0; i < count; i++) {
-            if (!cvalid.RowIsValid(i)) { ovalid.SetInvalid(i); dst[i] = 0; }
-            else dst[i] = -src[i];
-        }
+    case PhysicalType::INT32:
+        negate_int(child.GetData<int32_t>(), result.GetData<int32_t>());
         break;
-    }
+    case PhysicalType::INT64:
+        negate_int(child.GetData<int64_t>(), result.GetData<int64_t>());
+        break;
     case PhysicalType::FLOAT: {
         auto *src = child.GetData<float>();
         auto *dst = result.GetData<float>();
@@ -2682,18 +2728,13 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 result.GetValidity().SetInvalid(i);
                 continue;
             }
-            // Signed-integer ABS at the minimum value overflows (UB in
-            // C++; on x86 produces the same negative value back). SQL
-            // standard says overflow -> NULL. Matches the LN/SQRT/POWER
-            // domain-error idiom (set validity invalid). Also covers
-            // INT8/INT16 which previously fell through `default` and
-            // silently returned 0.
+            // Signed-integer ABS at the minimum value overflows: DuckDB's
+            // "Overflow on abs" error, where a NULL was given (#43).
             switch (physical) {
             case PhysicalType::INT8: {
                 auto v = arg.GetData<int8_t>()[i];
                 if (v == std::numeric_limits<int8_t>::min()) {
-                    result.GetValidity().SetInvalid(i);
-                    result.GetData<int8_t>()[i] = 0;
+                    throw OutOfRangeException("Overflow on abs(" + std::to_string(v) + ")");
                 } else {
                     result.GetData<int8_t>()[i] = static_cast<int8_t>(v < 0 ? -v : v);
                 }
@@ -2702,8 +2743,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             case PhysicalType::INT16: {
                 auto v = arg.GetData<int16_t>()[i];
                 if (v == std::numeric_limits<int16_t>::min()) {
-                    result.GetValidity().SetInvalid(i);
-                    result.GetData<int16_t>()[i] = 0;
+                    throw OutOfRangeException("Overflow on abs(" + std::to_string(v) + ")");
                 } else {
                     result.GetData<int16_t>()[i] = static_cast<int16_t>(v < 0 ? -v : v);
                 }
@@ -2712,8 +2752,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             case PhysicalType::INT32: {
                 auto v = arg.GetData<int32_t>()[i];
                 if (v == std::numeric_limits<int32_t>::min()) {
-                    result.GetValidity().SetInvalid(i);
-                    result.GetData<int32_t>()[i] = 0;
+                    throw OutOfRangeException("Overflow on abs(" + std::to_string(v) + ")");
                 } else {
                     result.GetData<int32_t>()[i] = std::abs(v);
                 }
@@ -2722,8 +2761,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             case PhysicalType::INT64: {
                 auto v = arg.GetData<int64_t>()[i];
                 if (v == std::numeric_limits<int64_t>::min()) {
-                    result.GetValidity().SetInvalid(i);
-                    result.GetData<int64_t>()[i] = 0;
+                    throw OutOfRangeException("Overflow on abs(" + std::to_string(v) + ")");
                 } else {
                     result.GetData<int64_t>()[i] = std::abs(v);
                 }
@@ -2764,6 +2802,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             else if (phys == PhysicalType::FLOAT) val = arg.GetData<float>()[i];
             else if (phys == PhysicalType::INT32) val = arg.GetData<int32_t>()[i];
             else if (phys == PhysicalType::INT64) val = static_cast<double>(arg.GetData<int64_t>()[i]);
+            else if (phys == PhysicalType::INT16) val = arg.GetData<int16_t>()[i];
+            else if (phys == PhysicalType::INT8) val = arg.GetData<int8_t>()[i];
+            else throw NotImplementedException(name + " of " + arg.GetType().ToString() +
+                                               " is not supported");
 
             if (name == "CEIL" || name == "CEILING") val = std::ceil(val);
             else if (name == "FLOOR") val = std::floor(val);
@@ -3295,7 +3337,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // 1-arg form computes the natural log (matches existing
         // behaviour). 2-arg LOG(base, value) computes log base `base`
         // of `value`, previously silently dropped the second arg.
-        // Domain errors (non-positive arg, base==1) return NULL.
+        // Domain errors are IEEE's, as DuckDB's (ln(0) is -inf).
         bool two_arg = (name == "LOG" && expr.arguments.size() >= 2);
         Vector arg0(Arg(expr, 0)->GetReturnType(), count);
         Execute(*Arg(expr, 0), input, arg0, count);
@@ -3315,24 +3357,14 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                     result.GetValidity().SetInvalid(i);
                     continue;
                 }
+                // DuckDB's IEEE results: log(2, 0) is -inf, log(1, 8)
+                // inf; a NaN (a negative base or value) is refused by
+                // the check on every DOUBLE computed (L23). Each was NULL.
                 double base = val_to_dbl(v0);
                 double val = val_to_dbl(v1);
-                if (base <= 0.0 || base == 1.0 || val <= 0.0) {
-                    result.GetValidity().SetInvalid(i);
-                    continue;
-                }
-                double r = std::log(val) / std::log(base);
-                if (std::isnan(r) || std::isinf(r)) {
-                    result.GetValidity().SetInvalid(i);
-                } else {
-                    result.GetData<double>()[i] = r;
-                }
+                result.GetData<double>()[i] = std::log(val) / std::log(base);
             } else {
                 double d = val_to_dbl(v0);
-                if (d <= 0.0) {
-                    result.GetValidity().SetInvalid(i);
-                    continue;
-                }
                 // 1-arg LOG(x) is log base 10 (DuckDB/Postgres/Oracle);
                 // LN(x) is the natural log. Previously LOG(x) wrongly
                 // returned ln(x) — LOG(100) gave 4.605 instead of 2.
@@ -3350,7 +3382,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            if (d <= 0.0) { result.GetValidity().SetInvalid(i); continue; }
+            // ln(0) is -inf, as DuckDB's; a NaN is refused (L23). It was NULL.
             result.GetData<double>()[i] = std::log2(d);
         }
         return;
@@ -3363,7 +3395,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            if (d <= 0.0) { result.GetValidity().SetInvalid(i); continue; }
+            // ln(0) is -inf, as DuckDB's; a NaN is refused (L23). It was NULL.
             result.GetData<double>()[i] = std::log10(d);
         }
         return;
@@ -3376,12 +3408,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            double r = std::exp(d);
-            if (std::isnan(r) || std::isinf(r)) {
-                result.GetValidity().SetInvalid(i);
-            } else {
-                result.GetData<double>()[i] = r;
-            }
+            // exp(1000) is inf, as DuckDB's; it was NULL.
+            result.GetData<double>()[i] = std::exp(d);
         }
         return;
     }

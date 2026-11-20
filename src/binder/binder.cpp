@@ -1258,9 +1258,78 @@ BoundExprPtr Binder::BindIsBool(const IsBoolExpression &expr, BindContext &conte
     return std::make_unique<BoundIsBool>(std::move(child), p, expr.is_not);
 }
 
+// An integer literal, `5` or `-5`, and its value. DuckDB types one as
+// INTEGER_LITERAL, which casts implicitly to any integer type that holds
+// it, so `x + 1` of a TINYINT `x` is TINYINT arithmetic and overflows at
+// 127 (#43). `(1 + 0)` or `1::INTEGER` is not a literal.
+static bool IntegerLiteralValue(const ParsedExpression &e, int64_t &out) {
+    if (e.GetExpressionType() == ExpressionType::CONSTANT) {
+        auto &c = static_cast<const ConstantExpression &>(e);
+        if (c.is_null || c.literal_type != TokenType::INTEGER_LITERAL) return false;
+        try {
+            size_t used = 0;
+            out = std::stoll(c.value, &used);
+            return used == c.value.size();
+        } catch (const std::exception &) {
+            return false;
+        }
+    }
+    if (e.GetExpressionType() == ExpressionType::UNARY_MINUS) {
+        int64_t v = 0;
+        if (!IntegerLiteralValue(*static_cast<const UnaryMinusExpression &>(e).child, v) ||
+            v == std::numeric_limits<int64_t>::min()) {
+            return false;
+        }
+        out = -v;
+        return true;
+    }
+    return false;
+}
+
+static int IntegerRank(LogicalTypeId t) {
+    switch (t) {
+    case LogicalTypeId::TINYINT: return 1;
+    case LogicalTypeId::SMALLINT: return 2;
+    case LogicalTypeId::INTEGER: return 3;
+    case LogicalTypeId::BIGINT: return 4;
+    default: return 0;
+    }
+}
+
+// The literal `v` as a constant of `target`, an integer type, when that
+// type holds it; otherwise the literal is left as bound.
+static void NarrowIntegerLiteral(BoundExprPtr &bound, int64_t v, const LogicalType &target) {
+    switch (target.id()) {
+    case LogicalTypeId::TINYINT:
+        if (v >= INT8_MIN && v <= INT8_MAX)
+            bound = std::make_unique<BoundConstant>(Value::TINYINT(static_cast<int8_t>(v)));
+        break;
+    case LogicalTypeId::SMALLINT:
+        if (v >= INT16_MIN && v <= INT16_MAX)
+            bound = std::make_unique<BoundConstant>(Value::SMALLINT(static_cast<int16_t>(v)));
+        break;
+    default:
+        break;
+    }
+}
+
 BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContext &context) {
     auto left = BindExpression(*expr.left, context);
     auto right = BindExpression(*expr.right, context);
+    // DuckDB's integer literals take the other operand's integer type when
+    // they fit it (#43). Only TINYINT and SMALLINT differ from the bound
+    // literal, an INTEGER or a BIGINT, so only those are narrowed.
+    if (expr.op != "||") {
+        int64_t lit = 0;
+        bool left_lit = IntegerLiteralValue(*expr.left, lit);
+        int64_t rlit = 0;
+        bool right_lit = IntegerLiteralValue(*expr.right, rlit);
+        if (left_lit && !right_lit && IntegerRank(right->GetReturnType().id()) > 0) {
+            NarrowIntegerLiteral(left, lit, right->GetReturnType());
+        } else if (right_lit && !left_lit && IntegerRank(left->GetReturnType().id()) > 0) {
+            NarrowIntegerLiteral(right, rlit, left->GetReturnType());
+        }
+    }
     // || is string concatenation.
     if (expr.op == "||") {
         if (left->GetReturnType().id() == LogicalTypeId::BLOB ||
@@ -1397,6 +1466,15 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
 }
 
 BoundExprPtr Binder::BindUnaryMinus(const UnaryMinusExpression &expr, BindContext &context) {
+    // `-5` is one literal, as in DuckDB: -2147483648 is an INTEGER, so
+    // `-2147483648 - 1` overflows as INTEGER arithmetic (#43).
+    int64_t lit = 0;
+    if (IntegerLiteralValue(expr, lit)) {
+        if (lit >= INT32_MIN && lit <= INT32_MAX) {
+            return std::make_unique<BoundConstant>(Value::INTEGER(static_cast<int32_t>(lit)));
+        }
+        return std::make_unique<BoundConstant>(Value::BIGINT(lit));
+    }
     auto child = BindExpression(*expr.child, context);
     return std::make_unique<BoundUnaryMinus>(std::move(child));
 }
@@ -2395,8 +2473,19 @@ LogicalType Binder::ResolveArithmeticType(const LogicalType &left, const Logical
         return LogicalType::BIGINT();
     if (left.id() == LogicalTypeId::INTEGER || right.id() == LogicalTypeId::INTEGER)
         return LogicalType::INTEGER();
-    if (left.id() == LogicalTypeId::SMALLINT || right.id() == LogicalTypeId::SMALLINT)
-        return LogicalType::INTEGER();
+    // DuckDB computes TINYINT and SMALLINT arithmetic in the wider of the
+    // two types and raises on overflow; it does not widen to INTEGER
+    // (#43). A NULL beside one takes its type.
+    auto small = [](LogicalTypeId t) {
+        return t == LogicalTypeId::TINYINT || t == LogicalTypeId::SMALLINT ||
+               t == LogicalTypeId::SQLNULL;
+    };
+    if (small(left.id()) && small(right.id())) {
+        if (left.id() == LogicalTypeId::SMALLINT || right.id() == LogicalTypeId::SMALLINT)
+            return LogicalType::SMALLINT();
+        if (left.id() == LogicalTypeId::TINYINT || right.id() == LogicalTypeId::TINYINT)
+            return LogicalType::TINYINT();
+    }
     return LogicalType::INTEGER();
 }
 

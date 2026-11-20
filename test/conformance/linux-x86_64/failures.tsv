@@ -150,26 +150,15 @@ test/sql/function/numeric/test_floor_ceil.test	114	unreliable	SELECT cast(FLOOR(
 test/sql/function/numeric/test_floor_ceil.test	124	unreliable	SELECT cast(FLOOR(n::float) as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_floor_ceil.test	134	unreliable	SELECT cast(FLOOR(n::double) as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_invalid_math.test	9	unreliable	SELECT log(0);
-test/sql/function/numeric/test_invalid_math.test	13	unreliable	SELECT log(-1);
 test/sql/function/numeric/test_invalid_math.test	17	unreliable	SELECT ln(0);
-test/sql/function/numeric/test_invalid_math.test	21	unreliable	SELECT ln(-1);
 test/sql/function/numeric/test_invalid_math.test	25	unreliable	SELECT log10(0);
-test/sql/function/numeric/test_invalid_math.test	29	unreliable	SELECT log10(-1);
-test/sql/function/numeric/test_invalid_math.test	48	unreliable	SELECT EXP(1e300), EXP(1e100)
 test/sql/function/numeric/test_is_nan.test	21	unreliable	SELECT f, isnan(f), isinf(f), isfinite(f) FROM floats ORDER BY f
 test/sql/function/numeric/test_is_nan.test	53	unreliable	SELECT f, isnan(f) FROM no_nan_nullable ORDER BY f
 test/sql/function/numeric/test_pg_math.test	105	unreliable	select log(0, 64)
 test/sql/function/numeric/test_pg_math.test	110	unreliable	select log(2, 0)
-test/sql/function/numeric/test_pg_math.test	115	unreliable	select log(-1, 64)
-test/sql/function/numeric/test_pg_math.test	120	unreliable	select log(2, -1)
 test/sql/function/numeric/test_pg_math.test	125	unreliable	select log(1, 64)
-test/sql/function/numeric/test_pg_math.test	151	unreliable	select log(64, 'Inf'::DOUBLE)
-test/sql/function/numeric/test_pg_math.test	166	unreliable	select log('-Inf'::DOUBLE, 64)
-test/sql/function/numeric/test_pg_math.test	171	unreliable	select log(64, '-Inf'::DOUBLE)
-test/sql/function/numeric/test_pg_math.test	176	unreliable	select log(2, -1)
 test/sql/function/numeric/test_pow.test	49	unreliable	SELECT power(0.0::float8, -2.0::float8);
 test/sql/function/numeric/test_pow.test	54	unreliable	SELECT 0.0::float8 ^ -1.0::float8;
-test/sql/function/numeric/test_round_integers.test	47	unreliable	SELECT\n\tround(124::TINYINT, -1),\n\tround((-124)::TINYINT, -1),\n\tround(32764::SMALLINT, -1),\n\tround((-32764)::SMALLINT, -1),\n\tround(2147483644::INTEGER, -1),\n\tround((-2147483644)::INTEGER, -1),\n\tround(9223372036854775804::BIGINT, -1),\n\tround((-9223372036854775804)::BIGINT, -1);
 test/sql/function/numeric/test_round_integers.test	69	unreliable	SELECT round(127::TINYINT, -1);
 test/sql/function/numeric/test_round_integers.test	73	unreliable	SELECT round((-128)::TINYINT, -1);
 test/sql/function/numeric/test_round_integers.test	77	unreliable	SELECT round(32767::SMALLINT, -1);
@@ -220,6 +209,7 @@ test/sql/function/numeric/test_trigo.test	338	unreliable	SELECT cast(ASIN(n)*100
 test/sql/function/numeric/test_trigo.test	390	unreliable	SELECT cast(ATAN2(n::tinyint, 42)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	400	unreliable	SELECT cast(ATAN2(n::smallint, 42)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	410	unreliable	SELECT cast(ATAN2(n::integer, 42)*1000 as bigint) FROM numbers ORDER BY n
+test/sql/function/numeric/test_trigo.test	420	unreliable	SELECT cast(ATAN2(n::bigint, 42)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	430	unreliable	SELECT cast(ATAN2(n::float, 42)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	440	unreliable	SELECT cast(ATAN2(n::double, 42)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	453	unreliable	select asin(-2);
@@ -237,27 +227,6 @@ test/sql/function/numeric/test_trigo.test	503	unreliable	select asin(2), acos(2)
 test/sql/function/numeric/test_trigo.test	524	unreliable	select acosh(-1), acosh(0), acosh(1), acosh(2);
 test/sql/function/numeric/test_trigo.test	542	unreliable	select cosh(-1), cosh(0), cosh(1), cosh(1000);
 test/sql/function/numeric/test_trigo.test	548	unreliable	select sinh(-1), sinh(0), sinh(1), sinh(1000);
-test/sql/function/numeric/test_trunc.test	14	unreliable	select trunc(42.12345::FLOAT)
-test/sql/function/numeric/test_trunc.test	19	unreliable	select trunc(-42.12345::FLOAT)
-test/sql/function/numeric/test_trunc.test	24	unreliable	select trunc(127::FLOAT)
-test/sql/function/numeric/test_trunc.test	29	unreliable	select trunc(-127::FLOAT)
-test/sql/function/numeric/test_trunc.test	50	unreliable	select trunc(54::TINYINT)
-test/sql/function/numeric/test_trunc.test	50	unreliable	select trunc(54::SMALLINT)
-test/sql/function/numeric/test_trunc.test	55	unreliable	select trunc(-27::SMALLINT)
-test/sql/function/numeric/test_trunc.test	50	unreliable	select trunc(54::INTEGER)
-test/sql/function/numeric/test_trunc.test	55	unreliable	select trunc(-27::INTEGER)
-test/sql/function/numeric/test_trunc.test	50	unreliable	select trunc(54::BIGINT)
-test/sql/function/numeric/test_trunc_precision.test	14	unreliable	select trunc(42.12345::FLOAT, 2), trunc(42.12345::FLOAT, -1)
-test/sql/function/numeric/test_trunc_precision.test	19	unreliable	select trunc(-42.12345::FLOAT, 2), trunc(-42.12345::FLOAT, -1)
-test/sql/function/numeric/test_trunc_precision.test	24	unreliable	select trunc(127::FLOAT, 2), trunc(127::FLOAT, -1)
-test/sql/function/numeric/test_trunc_precision.test	29	unreliable	select trunc(-127::FLOAT, 2), trunc(-127::FLOAT, -1)
-test/sql/function/numeric/test_trunc_precision.test	34	unreliable	select trunc(0::FLOAT, 2), trunc(0::FLOAT, -1)
-test/sql/function/numeric/test_trunc_precision.test	51	unreliable	select trunc(54::TINYINT, 2), trunc(54::TINYINT, -1)
-test/sql/function/numeric/test_trunc_precision.test	51	unreliable	select trunc(54::SMALLINT, 2), trunc(54::SMALLINT, -1)
-test/sql/function/numeric/test_trunc_precision.test	56	unreliable	select trunc(-27::SMALLINT, 2), trunc(-27::SMALLINT, -1)
-test/sql/function/numeric/test_trunc_precision.test	51	unreliable	select trunc(54::INTEGER, 2), trunc(54::INTEGER, -1)
-test/sql/function/numeric/test_trunc_precision.test	56	unreliable	select trunc(-27::INTEGER, 2), trunc(-27::INTEGER, -1)
-test/sql/function/numeric/test_trunc_precision.test	51	unreliable	select trunc(54::BIGINT, 2), trunc(54::BIGINT, -1)
 test/sql/function/numeric/test_unary.test	50	unreliable	SELECT -t from minima;
 test/sql/function/numeric/test_unary.test	54	unreliable	SELECT -s from minima;
 test/sql/function/numeric/test_unary.test	58	unreliable	SELECT -i from minima;
@@ -341,16 +310,12 @@ test/sql/types/float/ieee_floating_points.test	37	unreliable	SELECT val, val / 0
 test/sql/types/float/ieee_floating_points.test	42	unreliable	SELECT val, val % 0::FLOAT FROM tbl
 test/sql/types/float/ieee_floating_points.test	52	unreliable	SELECT val, val / 0::FLOAT FROM tbl
 test/sql/types/float/ieee_floating_points.test	62	unreliable	SELECT val, val % 0::FLOAT FROM tbl
-test/sql/types/float/ieee_floating_points.test	78	unreliable	SELECT sqrt(-1::FLOAT);
-test/sql/types/float/ieee_floating_points.test	82	unreliable	SELECT ln(-1::FLOAT);
 test/sql/types/float/ieee_floating_points.test	86	unreliable	SELECT asin(2::FLOAT);
 test/sql/types/float/ieee_floating_points.test	90	unreliable	SELECT acos(2::FLOAT);
 test/sql/types/float/ieee_floating_points.test	94	unreliable	SELECT atanh(2::FLOAT);
 test/sql/types/float/ieee_floating_points.test	98	unreliable	SELECT sin('inf'::FLOAT);
 test/sql/types/float/ieee_floating_points.test	102	unreliable	SELECT cos('inf'::FLOAT);
 test/sql/types/float/ieee_floating_points.test	106	unreliable	SELECT tan('inf'::FLOAT);
-test/sql/types/float/ieee_floating_points.test	129	unreliable	SELECT sqrt(-1::FLOAT), ln(-1::FLOAT), log10(-1::FLOAT), log2(-1::FLOAT);
-test/sql/types/float/ieee_floating_points.test	134	unreliable	SELECT ln(0::FLOAT), log10(0::FLOAT), log2(0::FLOAT), log(1::FLOAT, 64::FLOAT);
 test/sql/types/float/ieee_floating_points.test	139	unreliable	SELECT asin(2::FLOAT), acos(2::FLOAT), atanh(2::FLOAT), atanh(1::FLOAT), atanh(-1::FLOAT);
 test/sql/types/float/ieee_floating_points.test	14	unreliable	SELECT val, val / 0::DOUBLE FROM tbl
 test/sql/types/float/ieee_floating_points.test	24	unreliable	SELECT val, val % 0::DOUBLE FROM tbl
@@ -358,28 +323,18 @@ test/sql/types/float/ieee_floating_points.test	37	unreliable	SELECT val, val / 0
 test/sql/types/float/ieee_floating_points.test	42	unreliable	SELECT val, val % 0::DOUBLE FROM tbl
 test/sql/types/float/ieee_floating_points.test	52	unreliable	SELECT val, val / 0::DOUBLE FROM tbl
 test/sql/types/float/ieee_floating_points.test	62	unreliable	SELECT val, val % 0::DOUBLE FROM tbl
-test/sql/types/float/ieee_floating_points.test	82	unreliable	SELECT ln(-1::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	86	unreliable	SELECT asin(2::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	90	unreliable	SELECT acos(2::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	94	unreliable	SELECT atanh(2::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	98	unreliable	SELECT sin('inf'::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	102	unreliable	SELECT cos('inf'::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	106	unreliable	SELECT tan('inf'::DOUBLE);
-test/sql/types/float/ieee_floating_points.test	134	unreliable	SELECT ln(0::DOUBLE), log10(0::DOUBLE), log2(0::DOUBLE), log(1::DOUBLE, 64::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	139	unreliable	SELECT asin(2::DOUBLE), acos(2::DOUBLE), atanh(2::DOUBLE), atanh(1::DOUBLE), atanh(-1::DOUBLE);
 test/sql/types/float/nan_aggregate.test	14	unreliable	SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
 test/sql/types/float/nan_aggregate.test	21	unreliable	select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
 test/sql/types/float/nan_aggregate.test	26	unreliable	select sum(f) from floats where 0 > f;
 test/sql/types/float/nan_aggregate.test	31	unreliable	select sum(f) from floats
 test/sql/types/float/nan_aggregates.test	28	unreliable	SELECT MIN(f), MAX(f) FROM floats
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::tinyint
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::tinyint
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::smallint
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::smallint
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::integer
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::integer
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::bigint
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::bigint
 test/sql/types/float/nan_functions.test	82	unreliable	select f, abs(f), exp(f), pow(f, 2), sqrt(case when f < 0 then NULL else f end), cbrt(f), ln(case when f < 0 then NULL else f end), degrees(f), radians(f), gamma(f), lgamma(f), atan(f), atan2(f, 0)\nfrom floats;
 test/sql/types/float/nan_functions.test	93	unreliable	select sin('inf'::FLOAT)
 test/sql/types/float/nan_functions.test	98	unreliable	select sin('-inf'::FLOAT)
