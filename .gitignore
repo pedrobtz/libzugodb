@@ -72,3 +72,6 @@ build-clean/
 include/slothdb/util/
 test/unit/util/
 topn_dbg.log
+
+# tools/make_db_fixtures.sh builds its shell here
+build-fixtures/
