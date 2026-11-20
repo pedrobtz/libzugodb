@@ -404,3 +404,42 @@ TEST_CASE("Persistence - an upstream file of format version 1 is refused") {
     CHECK(message.find("reads version 1001 only") != std::string::npos);
     std::remove(DAMAGED_DB_PATH);
 }
+
+TEST_CASE("Persistence - a file of several checksum pieces is summed whole") {
+    // Load reads the file in 1 MiB pieces; the stored sum must equal
+    // ComputeChecksum over the whole image, and a flip past the first
+    // piece must be refused.
+    std::remove(TEST_DB_PATH);
+    {
+        Database db(TEST_DB_PATH);
+        Connection conn(db);
+        conn.Query("CREATE TABLE big (i INTEGER, s VARCHAR)");
+        for (int batch = 0; batch < 64; batch++) {
+            std::string sql = "INSERT INTO big VALUES ";
+            for (int k = 0; k < 1024; k++) {
+                auto i = std::to_string(batch * 1024 + k);
+                sql += (k ? ", (" : "(") + i + ", 'a row of about thirty bytes " + i + "')";
+            }
+            conn.Query(sql);
+        }
+    }
+    auto bytes = ReadBytes(TEST_DB_PATH);
+    REQUIRE(bytes.size() > 2 * (1u << 20));
+    uint32_t stored = uint32_t(bytes[12]) | uint32_t(bytes[13]) << 8 |
+                      uint32_t(bytes[14]) << 16 | uint32_t(bytes[15]) << 24;
+    CHECK(Checkpoint::ComputeChecksum(bytes.data(), bytes.size()) == stored);
+    {
+        Database db(TEST_DB_PATH);
+        Connection conn(db);
+        CHECK(conn.Query("SELECT COUNT(*) FROM big").GetValue(0, 0).GetValue<int64_t>() == 65536);
+    }
+    for (size_t offset : {size_t(1) << 20, (size_t(1) << 20) + 1, bytes.size() - 1}) {
+        CAPTURE(offset);
+        auto bad = ReadBytes(TEST_DB_PATH);
+        bad[offset] ^= 0x04;
+        WriteBytes(DAMAGED_DB_PATH, bad, bad.size());
+        CHECK(OpenRefused(DAMAGED_DB_PATH).find("checksum") != std::string::npos);
+    }
+    std::remove(TEST_DB_PATH);
+    std::remove(DAMAGED_DB_PATH);
+}
