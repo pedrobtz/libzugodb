@@ -34,6 +34,32 @@ jobs:
       - name: Test
         run: build/test/slothdb_tests
 
+  # ThreadSanitizer over the whole suite. test_threads.cpp repeats its
+  # multi-threaded queries ZUGODB_THREAD_ROUNDS times at thread caps 2 and
+  # 4; the first report fails the job. There are no suppressions: one
+  # added later must name its issue.
+  tsan:
+    name: linux-tsan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # The runner's kernel randomises mmap with more bits than clang 18's
+      # TSan accepts ("unexpected memory mapping"); 28 is the old default.
+      - name: Lower ASLR entropy for TSan
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: Configure
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
+          -DSLOTHDB_TSAN=ON
+      - name: Build
+        run: cmake --build build -j4
+      - name: Test
+        env:
+          TSAN_OPTIONS: halt_on_error=1 second_deadlock_stack=1
+          ZUGODB_THREAD_ROUNDS: '3'
+        run: build/test/slothdb_tests
+
   mingw:
     name: windows-mingw (UCRT64, as R's Rtools)
     runs-on: windows-latest
