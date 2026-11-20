@@ -105,8 +105,10 @@ Where the weight is, which the directory names do not show:
   other files in `execution/` (`radix_count_agg`, `int_group_agg`,
   `topk_varchar`, ...) are such paths split out of it.
 - `src/execution/expression_executor.cpp` (5,100 lines) is every scalar
-  function and cast. A new function also needs its return type in
-  `src/binder/binder.cpp`.
+  function and cast. A new function also needs its entry in the function
+  registry of `src/binder/binder.cpp` (arity, argument and return types;
+  any name outside it is refused) and in `docs/dialect.md`, which
+  `tools/check_dialect.sh` holds to the registry in CI.
 - `src/main/connection.cpp` (3,100 lines) does far more than dispatch:
   DDL, DML, `COPY`, table functions and several rewrites of the parsed
   statement happen here before or instead of the pipeline.
@@ -146,7 +148,8 @@ breaks:
 - **Bounded threads.** Every thread pool respects the process-wide cap in
   `include/slothdb/common/parallel.hpp` (`SetThreadCap`).
 - **Builds with MinGW-w64**, not only MSVC, on Windows.
-- **No transactions.** `ROLLBACK` is an error because nothing is undone.
+- **No transactions.** `BEGIN`, `COMMIT` and `ROLLBACK` are errors: every
+  statement commits as it runs and nothing is undone (design L26).
 
 ## What the R package takes
 
