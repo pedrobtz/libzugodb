@@ -29,7 +29,7 @@ issue closed. zugodb then moves its pin.
 | --- | --- | --- | --- | --- | --- | --- |
 | 0 | [Repository clean-up](#stage-0--repository-clean-up) | 0.2.0 | ci | [#8](https://github.com/pedrobtz/libzugodb/issues/8) | [#19](https://github.com/pedrobtz/libzugodb/pull/19) | 2026-11-19 |
 | 1 | [Errors on worker threads become query errors](#stage-1--errors-on-worker-threads-become-query-errors) | 0.2.0 | ci | [#3](https://github.com/pedrobtz/libzugodb/issues/3) | [#20](https://github.com/pedrobtz/libzugodb/pull/20) | 2026-11-20 |
-| 2 | [Refuse the CSV, Parquet and JSON table functions](#stage-2--refuse-the-csv-parquet-and-json-table-functions) | 0.2.0 | ci | [#4](https://github.com/pedrobtz/libzugodb/issues/4) | | |
+| 2 | [Refuse the CSV, Parquet and JSON table functions](#stage-2--refuse-the-csv-parquet-and-json-table-functions) | 0.2.0 | ci | [#4](https://github.com/pedrobtz/libzugodb/issues/4) | [#21](https://github.com/pedrobtz/libzugodb/pull/21) | 2026-11-20 |
 | 3 | [A checksum for the database file, and format version 1001](#stage-3--a-checksum-for-the-database-file-and-format-version-1001) | 0.2.0 | ci | [#5](https://github.com/pedrobtz/libzugodb/issues/5) | | |
 | 4 | [Harden Checkpoint::Load, with a fuzz harness in CI](#stage-4--harden-checkpointload-with-a-fuzz-harness-in-ci) | 0.2.0 | + `fuzz` | [#6](https://github.com/pedrobtz/libzugodb/issues/6) | | |
 | 5 | [ThreadSanitizer in CI](#stage-5--threadsanitizer-in-ci) | 0.2.0 | + `linux-tsan` | [#7](https://github.com/pedrobtz/libzugodb/issues/7) | | |
