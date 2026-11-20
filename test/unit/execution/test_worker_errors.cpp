@@ -7,11 +7,12 @@
 // the API that started the workers), after which the same connection
 // answers another query correctly.
 //
-// The Parquet cases reach the reader through read_parquet() from SQL. When
-// Stage 2 refuses that, they move to the reader's C++ API or an internal
-// path; the fork-join and pool cases need no file.
+// The Parquet cases reach the reader as a table set up through the
+// catalog's C++ API (parquet_table.hpp), since SQL cannot name a file
+// (Stage 2, #4); the fork-join and pool cases need no file.
 
 #include "doctest.h"
+#include "../parquet_table.hpp"
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/parallel.hpp"
 #include "slothdb/execution/parallel_executor.hpp"
@@ -73,8 +74,9 @@ void MakeTable(Connection &conn) {
     }
 }
 
+// The fixture as table pq.
 std::string ParquetSql(const std::string &select_list, const std::string &rest = "") {
-    return "SELECT " + select_list + " FROM read_parquet('" + PARQUET_PATH + "')" + rest;
+    return "SELECT " + select_list + " FROM pq" + rest;
 }
 
 // The query fails with the seam's exception, raised on a worker of `site`.
@@ -126,6 +128,7 @@ TEST_CASE("Worker errors - fork-join threads (WorkerGroup)") {
     Connection conn(db);
     MakeTable(conn);
     REQUIRE(std::filesystem::exists(PARQUET_PATH));
+    zugodb::testing::AddParquetTable(db, "pq", PARQUET_PATH);
 
     SUBCASE("window partitions sorted on workers") {
         const std::string sql =
@@ -158,6 +161,7 @@ TEST_CASE("Worker errors - ParallelFor") {
     Connection conn(db);
     MakeTable(conn);
     REQUIRE(std::filesystem::exists(PARQUET_PATH));
+    zugodb::testing::AddParquetTable(db, "pq", PARQUET_PATH);
 
     const std::string sql = ParquetSql("k, sum(v)", " GROUP BY k");
     CheckQueryFails(conn, sql, WorkerSite::PARALLEL_FOR);
@@ -177,6 +181,7 @@ TEST_CASE("Worker errors - Parquet decode pipeline") {
     Connection conn(db);
     MakeTable(conn);
     REQUIRE(std::filesystem::exists(PARQUET_PATH));
+    zugodb::testing::AddParquetTable(db, "pq", PARQUET_PATH);
 
     const std::string sql = ParquetSql("*");
     CheckQueryFails(conn, sql, WorkerSite::PIPELINE);
@@ -228,10 +233,10 @@ TEST_CASE("Worker errors - damaged Parquet file (SouravRoy-ETL/slothdb#33)") {
     Database db;
     Connection conn(db);
     MakeTable(conn);
+    zugodb::testing::AddParquetTable(db, "damaged", path);
 
     for (const char *select_list : {"sum(x)", "*"}) {
-        const std::string sql =
-            std::string("SELECT ") + select_list + " FROM read_parquet('" + path + "')";
+        const std::string sql = std::string("SELECT ") + select_list + " FROM damaged";
         INFO(sql);
         bool thrown = false;
         try {
