@@ -213,7 +213,7 @@ TEST_CASE("slt: loops, foreach, skipif and mode skip expand as DuckDB's runner d
 TEST_CASE("slt: a crash and a hang cost only their own file, through the driver") {
     DriverOptions options;
     options.binary = ZUGODB_SLT_BINARY;
-    options.case_timeout = 2;
+    options.case_timeout = 8;  // a sanitizer build starts slowly
     options.test_hooks = true;
     options.jobs = 2;
     std::vector<std::pair<std::string, std::string>> files = {
@@ -252,7 +252,7 @@ TEST_CASE("slt: a crash and a hang cost only their own file, through the driver"
 TEST_CASE("slt: the fixtures at thread caps 1 and 2 give the same classes, by the driver") {
     DriverOptions options;
     options.binary = ZUGODB_SLT_BINARY;
-    options.case_timeout = 2;
+    options.case_timeout = 8;  // a sanitizer build starts slowly
     options.test_hooks = true;
     options.jobs = 3;
     std::vector<std::pair<std::string, std::string>> files = {
