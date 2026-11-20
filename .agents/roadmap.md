@@ -33,7 +33,7 @@ issue closed. zugodb then moves its pin.
 | 3 | [A checksum for the database file, and format version 1001](#stage-3--a-checksum-for-the-database-file-and-format-version-1001) | 0.2.0 | ci | [#5](https://github.com/pedrobtz/libzugodb/issues/5) | [#22](https://github.com/pedrobtz/libzugodb/pull/22) | 2026-11-20 |
 | 4 | [Harden Checkpoint::Load, with a fuzz harness in CI](#stage-4--harden-checkpointload-with-a-fuzz-harness-in-ci) | 0.2.0 | + `fuzz` | [#6](https://github.com/pedrobtz/libzugodb/issues/6) | [#24](https://github.com/pedrobtz/libzugodb/pull/24) | 2026-11-20 |
 | 5 | [ThreadSanitizer in CI](#stage-5--threadsanitizer-in-ci) | 0.2.0 | + `linux-tsan` | [#7](https://github.com/pedrobtz/libzugodb/issues/7) | [#27](https://github.com/pedrobtz/libzugodb/pull/27) | 2026-11-20 |
-| 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | | |
+| 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | [#28](https://github.com/pedrobtz/libzugodb/pull/28) | 2026-11-20 |
 | 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | | |
 | 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | | |
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | | |
