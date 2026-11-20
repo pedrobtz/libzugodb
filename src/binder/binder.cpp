@@ -2019,7 +2019,13 @@ LogicalType Binder::ResolveTypeName(const std::string &name) {
     if (base == "BIGINT" || base == "INT8") return LogicalType::BIGINT();
     if (base == "SMALLINT" || base == "INT2") return LogicalType::SMALLINT();
     if (base == "TINYINT" || base == "INT1") return LogicalType::TINYINT();
-    if (base == "HUGEINT") return LogicalType::HUGEINT();
+    // HUGEINT, INTERVAL and UUID are refused, in every database: the engine
+    // holds no correct non-NULL value of them (a HUGEINT or UUID came back
+    // as garbage, an INTERVAL could not be stored) and the database file
+    // has no encoding for them (design L12).
+    if (base == "HUGEINT" || base == "INTERVAL" || base == "UUID") {
+        throw NotImplementedException(base + " is not supported");
+    }
     if (base == "FLOAT" || base == "REAL" || base == "FLOAT4") return LogicalType::FLOAT();
     if (base == "DOUBLE" || base == "FLOAT8") return LogicalType::DOUBLE();
     if (base == "BOOLEAN" || base == "BOOL") return LogicalType::BOOLEAN();
@@ -2042,8 +2048,6 @@ LogicalType Binder::ResolveTypeName(const std::string &name) {
         base == "TIMESTAMP_S" || base == "TIMESTAMP_MS" ||
         base == "TIMESTAMP_NS" || base == "DATETIME")
         return LogicalType::TIMESTAMP();
-    if (base == "INTERVAL") return LogicalType::INTERVAL();
-    if (base == "UUID") return LogicalType::UUID();
 
     if (base == "DECIMAL" || base == "NUMERIC") {
         // SlothDB has no native DECIMAL execution path: INSERT into

@@ -3,6 +3,7 @@
 #include "slothdb/main/connection.hpp"
 #include "slothdb/storage/checkpoint.hpp"
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -811,4 +812,185 @@ TEST_CASE("Load - the extreme DATE and TIMESTAMP values a file can hold render")
         CHECK(r.GetValue(1, 1).ToString() == "-290308-12-21 19:59:05.224192");
     }
     std::remove(HAND_DB_PATH);
+}
+
+// ============================================================================
+// HUGEINT, INTERVAL and UUID are refused by SQL (Stage 4, design L12)
+// ============================================================================
+
+namespace {
+
+// Runs `sql` on `conn`; returns the error message, "" when it succeeds.
+std::string QueryError(Connection &conn, const std::string &sql) {
+    try {
+        conn.Query(sql);
+    } catch (const std::exception &e) {
+        return e.what();
+    }
+    return "";
+}
+
+void CheckTypesRefused(Database &db, Connection &conn) {
+    auto tables = db.GetCatalog().GetSchema().GetTableNames();
+    std::sort(tables.begin(), tables.end());
+    for (std::string type : {"HUGEINT", "INTERVAL", "UUID", "hugeint", "uuid"}) {
+        CAPTURE(type);
+        std::string upper = type;
+        for (auto &c : upper) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        auto refused = upper + " is not supported";
+        CHECK(Has(QueryError(conn, "CREATE TABLE r (x " + type + ")"), refused));
+        CHECK(Has(QueryError(conn, "CREATE TABLE r2 (a INTEGER, x " + type + ", b VARCHAR)"), refused));
+        CHECK(Has(QueryError(conn, "ALTER TABLE keep ADD COLUMN x " + type), refused));
+        CHECK(Has(QueryError(conn, "SELECT CAST(5 AS " + type + ")"), refused));
+        CHECK(Has(QueryError(conn, "SELECT TRY_CAST('5' AS " + type + ")"), refused));
+        CHECK(Has(QueryError(conn, "SELECT a::" + type + " FROM keep"), refused));
+        CHECK(Has(QueryError(conn, "CREATE TABLE r3 AS SELECT CAST(NULL AS " + type + ") AS x"), refused));
+    }
+    // No table was made and none was changed.
+    auto after = db.GetCatalog().GetSchema().GetTableNames();
+    std::sort(after.begin(), after.end());
+    CHECK(after == tables);
+    CHECK(conn.Query("SELECT * FROM keep").ColumnCount() == 2);
+}
+
+} // namespace
+
+TEST_CASE("Types - HUGEINT, INTERVAL and UUID are refused, in memory and in a file") {
+    {
+        Database db;
+        Connection conn(db);
+        conn.Query("CREATE TABLE keep (a INTEGER, s VARCHAR)");
+        conn.Query("INSERT INTO keep VALUES (1, 'one'), (2, NULL)");
+        CheckTypesRefused(db, conn);
+    }
+    std::remove(TEST_DB_PATH);
+    {
+        Database db(TEST_DB_PATH);
+        Connection conn(db);
+        conn.Query("CREATE TABLE keep (a INTEGER, s VARCHAR)");
+        conn.Query("INSERT INTO keep VALUES (1, 'one'), (2, NULL)");
+        conn.Query("CREATE TABLE other (d DOUBLE)");
+        conn.Query("INSERT INTO other VALUES (1.5)");
+        CheckTypesRefused(db, conn);
+    }
+    {
+        // Closed, saved and reopened: the tables are all there, as they were.
+        Database db(TEST_DB_PATH);
+        Connection conn(db);
+        auto names = db.GetCatalog().GetSchema().GetTableNames();
+        std::sort(names.begin(), names.end());
+        CHECK(names == std::vector<std::string>{"keep", "other"});
+        auto r = conn.Query("SELECT a, s FROM keep ORDER BY a");
+        REQUIRE(r.RowCount() == 2);
+        CHECK(r.ColumnCount() == 2);
+        CHECK(r.GetValue(0, 1).GetValue<std::string>() == "one");
+        CHECK(r.GetValue(1, 1).IsNull());
+        CHECK(conn.Query("SELECT d FROM other").GetValue(0, 0).GetValue<double>() == 1.5);
+    }
+    std::remove(TEST_DB_PATH);
+}
+
+TEST_CASE("Types - every type SQL accepts round-trips its extremes through the file") {
+    // Each type name below that CREATE TABLE accepts must have values here
+    // (its least, its greatest, its zero, and NULL) and give them back after
+    // the database is closed, saved and opened again; a type accepted with
+    // no file encoding fails this test. The names are DuckDB's, and the
+    // engine's aliases.
+    auto values = [](LogicalTypeId id, std::vector<Value> &out) {
+        const std::string big(300, '\xff');
+        switch (id) {
+        case LogicalTypeId::BOOLEAN:
+            out = {Value::BOOLEAN(false), Value::BOOLEAN(true), Value::BOOLEAN(false)};
+            return true;
+        case LogicalTypeId::TINYINT:
+            out = {Value::TINYINT(INT8_MIN), Value::TINYINT(INT8_MAX), Value::TINYINT(0)};
+            return true;
+        case LogicalTypeId::SMALLINT:
+            out = {Value::SMALLINT(INT16_MIN), Value::SMALLINT(INT16_MAX), Value::SMALLINT(0)};
+            return true;
+        case LogicalTypeId::INTEGER:
+            out = {Value::INTEGER(INT32_MIN), Value::INTEGER(INT32_MAX), Value::INTEGER(0)};
+            return true;
+        case LogicalTypeId::BIGINT:
+            out = {Value::BIGINT(INT64_MIN), Value::BIGINT(INT64_MAX), Value::BIGINT(0)};
+            return true;
+        case LogicalTypeId::FLOAT:
+            out = {Value::FLOAT(-3.4028235e38f), Value::FLOAT(3.4028235e38f), Value::FLOAT(0.0f)};
+            return true;
+        case LogicalTypeId::DOUBLE:
+            out = {Value::DOUBLE(-1.7976931348623157e308), Value::DOUBLE(1.7976931348623157e308),
+                   Value::DOUBLE(0.0)};
+            return true;
+        case LogicalTypeId::VARCHAR:
+            out = {Value::VARCHAR(""), Value::VARCHAR(big), Value::VARCHAR("0")};
+            return true;
+        case LogicalTypeId::BLOB:
+            out = {Value::BLOB(""), Value::BLOB(big), Value::BLOB(std::string(1, '\0'))};
+            return true;
+        case LogicalTypeId::DATE:
+            out = {Value::DATE(INT32_MIN), Value::DATE(INT32_MAX), Value::DATE(0)};
+            return true;
+        case LogicalTypeId::TIME:
+            out = {Value::TIME(INT64_MIN), Value::TIME(INT64_MAX), Value::TIME(0)};
+            return true;
+        case LogicalTypeId::TIMESTAMP:
+            out = {Value::TIMESTAMP(INT64_MIN), Value::TIMESTAMP(INT64_MAX), Value::TIMESTAMP(0)};
+            return true;
+        default:
+            return false;
+        }
+    };
+    auto text = [](const QueryResult &r) {
+        std::string out;
+        for (auto &t : r.column_types) out += t.ToString() + ";";
+        for (idx_t i = 0; i < r.RowCount(); i++) {
+            for (idx_t c = 0; c < r.ColumnCount(); c++) {
+                auto v = r.GetValue(i, c);
+                out += v.IsNull() ? std::string("NULL|") : std::to_string(v.ToString().size()) + ":" + v.ToString() + "|";
+            }
+            out += "\n";
+        }
+        return out;
+    };
+
+    const char *names[] = {
+        "BOOLEAN", "BOOL", "TINYINT", "INT1", "SMALLINT", "INT2", "INTEGER", "INT", "INT4",
+        "BIGINT", "INT8", "HUGEINT", "UHUGEINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT",
+        "FLOAT", "REAL", "FLOAT4", "DOUBLE", "FLOAT8", "DECIMAL", "DECIMAL(18,3)", "NUMERIC",
+        "VARCHAR", "VARCHAR(5)", "TEXT", "STRING", "CHAR", "BLOB", "BYTEA", "BIT", "DATE",
+        "TIME", "TIMETZ", "TIMESTAMP", "TIMESTAMPTZ", "TIMESTAMP_S", "TIMESTAMP_MS",
+        "TIMESTAMP_NS", "DATETIME", "INTERVAL", "UUID", "JSON", "ENUM", "LIST", "MAP",
+        "STRUCT", "UNION", "INTEGER[]", "VARINT", "NULL"};
+    idx_t accepted = 0;
+    for (std::string name : names) {
+        CAPTURE(name);
+        std::remove(TEST_DB_PATH);
+        std::string before;
+        {
+            Database db(TEST_DB_PATH);
+            Connection conn(db);
+            if (!QueryError(conn, "CREATE TABLE t (v " + name + ")").empty()) continue;
+            accepted++;
+            auto *entry = db.GetCatalog().GetTable("t");
+            REQUIRE(entry != nullptr);
+            auto types = entry->GetTypes();
+            std::vector<Value> vals;
+            INFO("type ", types[0].ToString(), " is accepted by SQL but has no round-trip values");
+            REQUIRE(values(types[0].id(), vals));
+            vals.push_back(Value());
+            DataChunk chunk;
+            chunk.Initialize(types);
+            for (idx_t i = 0; i < vals.size(); i++) chunk.SetValue(0, i, vals[i]);
+            entry->GetStorage().Append(chunk);
+            before = text(conn.Query("SELECT * FROM t"));
+            CHECK(conn.Query("SELECT count(*) FROM t").GetValue(0, 0).GetValue<int64_t>() == 4);
+        }
+        {
+            Database db(TEST_DB_PATH);
+            Connection conn(db);
+            CHECK(text(conn.Query("SELECT * FROM t")) == before);
+        }
+    }
+    CHECK(accepted >= 20);
+    std::remove(TEST_DB_PATH);
 }
