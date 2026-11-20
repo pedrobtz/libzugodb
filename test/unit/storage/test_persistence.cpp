@@ -764,3 +764,51 @@ TEST_CASE("Load - row groups are sized to the rows the file holds") {
     }
     std::remove(HAND_DB_PATH);
 }
+
+TEST_CASE("Load - found by the fuzzer: a TIME of INT64_MIN microseconds") {
+    // test/fixtures/fuzz/checkpoint_load_time_int64_min.db: one table, one
+    // TIME column, one row of INT64_MIN. Rendering it overflowed in
+    // FormatTime (a UBSan report). The same file is built here by hand.
+    auto fixture = ReadBytes(FIXTURES + "fuzz/checkpoint_load_time_int64_min.db");
+    auto built = Image(Bytes().U32(1).Str("t").U32(1).Str("x").U8(uint8_t(LogicalTypeId::TIME))
+                           .U64(1).U8(0).I64(INT64_MIN));
+    CHECK(fixture == built);
+    WriteBytes(HAND_DB_PATH, fixture, fixture.size());
+    {
+        DatabaseConfig config;
+        config.path = HAND_DB_PATH;
+        config.read_only = true;
+        Database db(config);
+        Connection conn(db);
+        auto r = conn.Query("SELECT x FROM t");
+        REQUIRE(r.RowCount() == 1);
+        CHECK(r.GetValue(0, 0).ToString() == "19:59:05.224192");
+    }
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - the extreme DATE and TIMESTAMP values a file can hold render") {
+    // Expected text from the same civil-from-days algorithm in Python's
+    // unbounded integers. DaysToYMD overflowed past INT32_MAX - 719468
+    // days, and a TIMESTAMP's day count was cut to 32 bits.
+    auto b = Bytes().U32(1).Str("t").U32(2).Str("d").U8(uint8_t(LogicalTypeId::DATE))
+                 .Str("ts").U8(uint8_t(LogicalTypeId::TIMESTAMP)).U64(2)
+                 .U8(0).I32(INT32_MAX).U8(0).I64(INT64_MAX)
+                 .U8(0).I32(INT32_MIN).U8(0).I64(INT64_MIN);
+    auto image = Image(b);
+    WriteBytes(HAND_DB_PATH, image, image.size());
+    {
+        DatabaseConfig config;
+        config.path = HAND_DB_PATH;
+        config.read_only = true;
+        Database db(config);
+        Connection conn(db);
+        auto r = conn.Query("SELECT d, ts FROM t");
+        REQUIRE(r.RowCount() == 2);
+        CHECK(r.GetValue(0, 0).ToString() == "5881580-07-11");
+        CHECK(r.GetValue(0, 1).ToString() == "294247-01-10 04:00:54.775807");
+        CHECK(r.GetValue(1, 0).ToString() == "-5877641-06-23");
+        CHECK(r.GetValue(1, 1).ToString() == "-290308-12-21 19:59:05.224192");
+    }
+    std::remove(HAND_DB_PATH);
+}
