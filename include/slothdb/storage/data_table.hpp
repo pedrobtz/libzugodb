@@ -61,6 +61,7 @@ public:
 
     // Number of row groups (for parallel scheduling).
     idx_t RowGroupCount() const { return static_cast<idx_t>(row_groups_.size()); }
+    const RowGroup &GetRowGroup(idx_t index) const { return *row_groups_.at(index); }
 
 private:
     std::vector<LogicalType> types_;
