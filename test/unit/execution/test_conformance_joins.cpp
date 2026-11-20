@@ -88,3 +88,20 @@ TEST_CASE("Stage 8: NATURAL JOIN and a join without ON are refused") {
     CHECK_THROWS(conn.Query("SELECT * FROM integers LEFT JOIN integers2"));
     CHECK(Run(conn, "SELECT count(*) FROM integers CROSS JOIN integers2") == Rows{{"6"}});
 }
+
+// ---------------------------------------------------------------------------
+// join/left_outer/test_left_outer.test:176 (#38): ORDER BY a position of
+// SELECT * bound the column by its name, so after a join ORDER BY 1 was
+// the other table's column of that name.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: ORDER BY a position of SELECT * over a join") {
+    Database db;
+    Connection conn(db);
+    CHECK(Run(conn, "select * from (values(1), (2)) t1(i) left join (values (2), (3)) t2(i) "
+                    "on t1.i=t2.i AND t1.i+t2.i=4 ORDER BY 1, 2") ==
+          Rows{{"1", "NULL"}, {"2", "2"}});
+    conn.Query("CREATE TABLE a(i INT, j INT)");
+    conn.Query("INSERT INTO a VALUES (1, 20), (2, 10)");
+    CHECK(Run(conn, "SELECT i, * FROM a ORDER BY 3") == Rows{{"2", "2", "10"}, {"1", "1", "20"}});
+}

@@ -499,24 +499,33 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                     if (ord >= 1 &&
                         ord <= static_cast<int64_t>(result->select_list.size())) {
                         idx_t sl_idx = static_cast<idx_t>(ord - 1);
-                        if (sl_idx < stmt.select_list.size() &&
-                            stmt.select_list[sl_idx]->GetExpressionType()
-                                != ExpressionType::STAR) {
+                        // With a * in the list, positions count its
+                        // columns, so stmt.select_list does not line up.
+                        bool has_star = false;
+                        for (auto &e : stmt.select_list) {
+                            has_star = has_star || e->GetExpressionType() == ExpressionType::STAR;
+                        }
+                        if (!has_star && sl_idx < stmt.select_list.size()) {
                             bound_item.expression = BindExpression(
                                 *stmt.select_list[sl_idx], context);
                             bound_item.select_index = sl_idx;
                             resolved = true;
-                        } else if (sl_idx < result->result_names.size()) {
-                            // Star-expanded column: re-resolve by name.
-                            auto col = std::make_unique<ColumnRefExpression>(
-                                result->result_names[sl_idx]);
-                            try {
-                                bound_item.expression = BindExpression(*col, context);
-                                bound_item.select_index = sl_idx;
-                                resolved = true;
-                            } catch (...) {
-                                // Fall through to alias path.
-                            }
+                        } else if (sl_idx < result->result_names.size() &&
+                                   result->select_list[sl_idx]->GetExpressionType() ==
+                                       BoundExpressionType::COLUMN_REF) {
+                            // Star-expanded column: the column itself. By
+                            // its name it was the other table's column of
+                            // that name after a join (SELECT * FROM a JOIN
+                            // b ... ORDER BY 1 sorted by b.i, #38).
+                            auto &cr = static_cast<const BoundColumnRef &>(*result->select_list[sl_idx]);
+                            bound_item.expression = std::make_unique<BoundColumnRef>(
+                                cr.column_name, cr.column_index, cr.GetReturnType());
+                            bound_item.select_index = sl_idx;
+                            resolved = true;
+                        } else {
+                            throw NotImplementedException(
+                                "ORDER BY position " + std::to_string(ord) +
+                                " of this select list is not supported");
                         }
                     } else {
                         throw BinderException(
