@@ -9,6 +9,19 @@
 
 namespace zugodb {
 
+// A condition is BOOLEAN: AND, OR and NOT's operands, WHERE, HAVING,
+// QUALIFY, ON and CASE WHEN. Another type is cast to BOOLEAN, DuckDB's
+// implicit cast (10 is true, 'abc' an error). The bytes of an INTEGER
+// were read as a bool: NOT 10 was true, CASE WHEN 2 took the ELSE, and
+// 1 WHERE 'abc' gave no row where DuckDB raises (Stage 9's SQL fuzzer).
+static void AsCondition(BoundExprPtr &e) {
+    if (!e) return;
+    auto t = e->GetReturnType().id();
+    if (t == LogicalTypeId::BOOLEAN || t == LogicalTypeId::SQLNULL) return;
+    e = std::make_unique<BoundCast>(std::move(e), LogicalType::BOOLEAN());
+}
+
+
 static bool ContainsAggregate(const BoundExpression &expr);
 // Returns true if `expr` contains a column reference that is neither
 // listed in `group_by` (by column_index) nor enclosed in an aggregate
@@ -198,6 +211,7 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
 
                 if (cur->on_condition) {
                     join_info->condition = BindExpression(*cur->on_condition, context);
+                    AsCondition(join_info->condition);
                 }
 
                 running_left_count += join_info->right_col_count;
@@ -252,6 +266,7 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
     // BinderException is what SQL standard requires.
     if (stmt.where_clause) {
         result->where_clause = BindExpression(*stmt.where_clause, context);
+        AsCondition(result->where_clause);
         if (ContainsAggregate(*result->where_clause)) {
             throw BinderException(ErrorCode::AGGREGATE_IN_WHERE,
                 "aggregate functions are not allowed in WHERE clause");
@@ -420,6 +435,7 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                 context.select_list_aliases[key] = stmt.select_list[i].get();
         }
         result->having_clause = BindExpression(*stmt.having_clause, context);
+        AsCondition(result->having_clause);
         context.select_list_aliases.clear();
         // HAVING implies aggregation even when there's no GROUP BY and
         // no aggregate in the SELECT list:
@@ -460,6 +476,7 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
     // Bind QUALIFY.
     if (stmt.qualify_clause) {
         result->qualify_clause = BindExpression(*stmt.qualify_clause, context);
+        AsCondition(result->qualify_clause);
         result->has_window = true;
     }
 
@@ -931,6 +948,7 @@ BoundStmtPtr Binder::BindUpdate(const UpdateStatement &stmt) {
 
     if (stmt.where_clause) {
         result->where_clause = BindExpression(*stmt.where_clause, context);
+        AsCondition(result->where_clause);
         if (ContainsAggregate(*result->where_clause)) {
             throw BinderException(ErrorCode::AGGREGATE_IN_WHERE,
                 "aggregate functions are not allowed in WHERE clause");
@@ -958,6 +976,7 @@ BoundStmtPtr Binder::BindDelete(const DeleteStatement &stmt) {
 
     if (stmt.where_clause) {
         result->where_clause = BindExpression(*stmt.where_clause, context);
+        AsCondition(result->where_clause);
         if (ContainsAggregate(*result->where_clause)) {
             throw BinderException(ErrorCode::AGGREGATE_IN_WHERE,
                 "aggregate functions are not allowed in WHERE clause");
@@ -1219,14 +1238,76 @@ BoundExprPtr Binder::BindComparison(const ComparisonExpression &expr, BindContex
     return std::make_unique<BoundComparison>(expr.op, std::move(left), std::move(right));
 }
 
+// The type of a CASE's branches and of COALESCE's, NULLIF's, GREATEST's
+// and LEAST's arguments, DuckDB's where the engine computes it the same
+// way (Stage 9): NULLs aside, one type is kept as it is (BOOLEAN, DATE,
+// FLOAT, TINYINT, ...), numbers widen to the widest (an integer with a
+// FLOAT is a FLOAT), and a string constant beside one other type takes
+// that type, as DuckDB's string literal does. Every other mix is
+// refused: the engine unified anything but a VARCHAR as an INTEGER, so
+// CASE WHEN c THEN true ELSE false END was an INTEGER, a FLOAT became a
+// DOUBLE and a DATE an error, and a VARCHAR column beside a number made
+// both VARCHAR where DuckDB's answer depends on which side is a literal.
+static LogicalType UnifyTypes(const std::vector<const BoundExpression *> &exprs,
+                              const std::string &fn) {
+    auto int_rank = [](LogicalTypeId x) -> int {
+        switch (x) {
+        case LogicalTypeId::TINYINT: return 1;
+        case LogicalTypeId::SMALLINT: return 2;
+        case LogicalTypeId::INTEGER: return 3;
+        case LogicalTypeId::BIGINT: return 4;
+        default: return 0;
+        }
+    };
+    std::vector<LogicalType> others;
+    bool string_constant = false;
+    for (auto *e : exprs) {
+        auto t = e->GetReturnType();
+        if (t.id() == LogicalTypeId::SQLNULL) continue;
+        if (t.id() == LogicalTypeId::VARCHAR &&
+            e->GetExpressionType() == BoundExpressionType::CONSTANT) {
+            string_constant = true;
+            continue;
+        }
+        others.push_back(t);
+    }
+    if (others.empty()) {
+        return string_constant ? LogicalType::VARCHAR() : LogicalType::SQLNULL();
+    }
+    bool same = true;
+    for (auto &t : others) same = same && t.id() == others[0].id();
+    if (same) return others[0];
+    bool numeric = true, has_float = false, has_double = false;
+    int widest = 0;
+    LogicalType widest_int = LogicalType::INTEGER();
+    for (auto &t : others) {
+        if (t.id() == LogicalTypeId::FLOAT) has_float = true;
+        else if (t.id() == LogicalTypeId::DOUBLE) has_double = true;
+        else if (int_rank(t.id()) > 0) {
+            if (int_rank(t.id()) > widest) { widest = int_rank(t.id()); widest_int = t; }
+        } else numeric = false;
+    }
+    if (numeric) {
+        if (has_double) return LogicalType::DOUBLE();
+        if (has_float) return LogicalType::FLOAT();
+        return widest_int;
+    }
+    std::string list;
+    for (auto &t : others) list += (list.empty() ? "" : ", ") + t.ToString();
+    throw NotImplementedException(fn + " of the types " + list + " is not supported");
+}
+
 BoundExprPtr Binder::BindConjunction(const ConjunctionExpression &expr, BindContext &context) {
     auto left = BindExpression(*expr.left, context);
     auto right = BindExpression(*expr.right, context);
+    AsCondition(left);
+    AsCondition(right);
     return std::make_unique<BoundConjunction>(expr.op, std::move(left), std::move(right));
 }
 
 BoundExprPtr Binder::BindNegation(const NegationExpression &expr, BindContext &context) {
     auto child = BindExpression(*expr.child, context);
+    AsCondition(child);
     return std::make_unique<BoundNegation>(std::move(child));
 }
 
@@ -1742,41 +1823,10 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         //                                                 from INT slot)
         //   COALESCE(int_col, 'foo')              -> int_col (varchar
         //                                                  silently dropped)
-        bool any_varchar = false;
-        bool any_numeric = false;
-        LogicalTypeId widest_numeric = LogicalTypeId::SQLNULL;
-        auto rank = [](LogicalTypeId x) -> int {
-            switch (x) {
-            case LogicalTypeId::DOUBLE:   return 6;
-            case LogicalTypeId::FLOAT:    return 5;
-            case LogicalTypeId::BIGINT:   return 4;
-            case LogicalTypeId::INTEGER:  return 3;
-            case LogicalTypeId::SMALLINT: return 2;
-            case LogicalTypeId::TINYINT:  return 1;
-            default:                      return 0;
-            }
-        };
-        for (auto &a : args) {
-            auto id = a->GetReturnType().id();
-            if (id == LogicalTypeId::SQLNULL) continue;
-            if (id == LogicalTypeId::VARCHAR) { any_varchar = true; continue; }
-            any_numeric = true;
-            if (rank(id) > rank(widest_numeric)) widest_numeric = id;
-        }
-        if (any_varchar) {
-            return_type = LogicalType::VARCHAR();
-        } else if (any_numeric) {
-            switch (widest_numeric) {
-            case LogicalTypeId::DOUBLE:   return_type = LogicalType::DOUBLE(); break;
-            case LogicalTypeId::FLOAT:    return_type = LogicalType::DOUBLE(); break;
-            case LogicalTypeId::BIGINT:   return_type = LogicalType::BIGINT(); break;
-            case LogicalTypeId::INTEGER:  return_type = LogicalType::INTEGER(); break;
-            case LogicalTypeId::SMALLINT: return_type = LogicalType::INTEGER(); break;
-            case LogicalTypeId::TINYINT:  return_type = LogicalType::INTEGER(); break;
-            default:                      return_type = LogicalType::INTEGER(); break;
-            }
-        } else {
-            return_type = LogicalType::SQLNULL();
+        {
+            std::vector<const BoundExpression *> branch;
+            for (auto &a : args) branch.push_back(a.get());
+            return_type = UnifyTypes(branch, name);
         }
         // Wrap mismatched args in BoundCast so the executor reads each
         // through a type-compatible buffer. SQLNULL is preserved (NULL
@@ -1792,41 +1842,10 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         //   NULLIF(1, 1.0) returns 1 instead of NULL — the DOUBLE 1.0
         //   was read through an INTEGER Value union slot and compared
         //   as a different value, so the equality check failed.
-        bool any_varchar = false;
-        bool any_numeric = false;
-        LogicalTypeId widest_numeric = LogicalTypeId::SQLNULL;
-        auto rank = [](LogicalTypeId x) -> int {
-            switch (x) {
-            case LogicalTypeId::DOUBLE:   return 6;
-            case LogicalTypeId::FLOAT:    return 5;
-            case LogicalTypeId::BIGINT:   return 4;
-            case LogicalTypeId::INTEGER:  return 3;
-            case LogicalTypeId::SMALLINT: return 2;
-            case LogicalTypeId::TINYINT:  return 1;
-            default:                      return 0;
-            }
-        };
-        for (auto &a : args) {
-            auto id = a->GetReturnType().id();
-            if (id == LogicalTypeId::SQLNULL) continue;
-            if (id == LogicalTypeId::VARCHAR) { any_varchar = true; continue; }
-            any_numeric = true;
-            if (rank(id) > rank(widest_numeric)) widest_numeric = id;
-        }
-        if (any_varchar) {
-            return_type = LogicalType::VARCHAR();
-        } else if (any_numeric) {
-            switch (widest_numeric) {
-            case LogicalTypeId::DOUBLE:   return_type = LogicalType::DOUBLE(); break;
-            case LogicalTypeId::FLOAT:    return_type = LogicalType::DOUBLE(); break;
-            case LogicalTypeId::BIGINT:   return_type = LogicalType::BIGINT(); break;
-            case LogicalTypeId::INTEGER:  return_type = LogicalType::INTEGER(); break;
-            case LogicalTypeId::SMALLINT: return_type = LogicalType::INTEGER(); break;
-            case LogicalTypeId::TINYINT:  return_type = LogicalType::INTEGER(); break;
-            default:                      return_type = LogicalType::INTEGER(); break;
-            }
-        } else {
-            return_type = LogicalType::SQLNULL();
+        {
+            std::vector<const BoundExpression *> branch;
+            for (auto &a : args) branch.push_back(a.get());
+            return_type = UnifyTypes(branch, name);
         }
         for (auto &a : args) {
             if (a->GetReturnType().id() != return_type.id() &&
@@ -1847,47 +1866,13 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         // (the DOUBLE 2.5 was written into an INTEGER-typed Value union
         // slot and read back as garbage). Same pattern for any mixed
         // type branch.
-        bool any_varchar = false;
-        bool any_numeric = false;
-        LogicalTypeId widest_numeric = LogicalTypeId::SQLNULL;
-        auto rank = [](LogicalTypeId x) -> int {
-            switch (x) {
-            case LogicalTypeId::DOUBLE:   return 6;
-            case LogicalTypeId::FLOAT:    return 5;
-            case LogicalTypeId::BIGINT:   return 4;
-            case LogicalTypeId::INTEGER:  return 3;
-            case LogicalTypeId::SMALLINT: return 2;
-            case LogicalTypeId::TINYINT:  return 1;
-            default:                      return 0;
-            }
-        };
-        auto consider = [&](const LogicalType &t) {
-            auto id = t.id();
-            if (id == LogicalTypeId::SQLNULL) return;
-            if (id == LogicalTypeId::VARCHAR) { any_varchar = true; return; }
-            any_numeric = true;
-            if (rank(id) > rank(widest_numeric)) widest_numeric = id;
-        };
-        for (size_t i = 1; i < args.size(); i += 2) {
-            consider(args[i]->GetReturnType());
-        }
-        if (args.size() % 2 == 1 && !args.empty()) {
-            consider(args.back()->GetReturnType());
-        }
-        if (any_varchar) {
-            return_type = LogicalType::VARCHAR();
-        } else if (any_numeric) {
-            switch (widest_numeric) {
-            case LogicalTypeId::DOUBLE:   return_type = LogicalType::DOUBLE(); break;
-            case LogicalTypeId::FLOAT:    return_type = LogicalType::DOUBLE(); break;
-            case LogicalTypeId::BIGINT:   return_type = LogicalType::BIGINT(); break;
-            case LogicalTypeId::INTEGER:  return_type = LogicalType::INTEGER(); break;
-            case LogicalTypeId::SMALLINT: return_type = LogicalType::INTEGER(); break;
-            case LogicalTypeId::TINYINT:  return_type = LogicalType::INTEGER(); break;
-            default:                      return_type = LogicalType::INTEGER(); break;
-            }
-        } else {
-            return_type = LogicalType::SQLNULL();
+        // Each WHEN is a condition (AsCondition).
+        for (size_t i = 0; i + 1 < args.size(); i += 2) AsCondition(args[i]);
+        {
+            std::vector<const BoundExpression *> branch;
+            for (size_t i = 1; i < args.size(); i += 2) branch.push_back(args[i].get());
+            if (args.size() % 2 == 1 && !args.empty()) branch.push_back(args.back().get());
+            return_type = UnifyTypes(branch, "CASE");
         }
         // Wrap mismatched THEN/ELSE in a BoundCast so the executor's
         // per-row write into the unified-type result Vector reads from
@@ -1972,41 +1957,10 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         // when types mix, SQLNULL when every arg is NULL. Without this,
         // GREATEST(1, 2.5) returned 1 because args[0]'s INTEGER type
         // truncated the DOUBLE second arg at the result-Vector write.
-        bool any_varchar = false;
-        bool any_numeric = false;
-        LogicalTypeId widest_numeric = LogicalTypeId::SQLNULL;
-        auto rank = [](LogicalTypeId x) -> int {
-            switch (x) {
-            case LogicalTypeId::DOUBLE:   return 6;
-            case LogicalTypeId::FLOAT:    return 5;
-            case LogicalTypeId::BIGINT:   return 4;
-            case LogicalTypeId::INTEGER:  return 3;
-            case LogicalTypeId::SMALLINT: return 2;
-            case LogicalTypeId::TINYINT:  return 1;
-            default:                      return 0;
-            }
-        };
-        for (auto &a : args) {
-            auto id = a->GetReturnType().id();
-            if (id == LogicalTypeId::SQLNULL) continue;
-            if (id == LogicalTypeId::VARCHAR) { any_varchar = true; continue; }
-            any_numeric = true;
-            if (rank(id) > rank(widest_numeric)) widest_numeric = id;
-        }
-        if (any_varchar) {
-            return_type = LogicalType::VARCHAR();
-        } else if (any_numeric) {
-            switch (widest_numeric) {
-            case LogicalTypeId::DOUBLE:   return_type = LogicalType::DOUBLE(); break;
-            case LogicalTypeId::FLOAT:    return_type = LogicalType::DOUBLE(); break;
-            case LogicalTypeId::BIGINT:   return_type = LogicalType::BIGINT(); break;
-            case LogicalTypeId::INTEGER:  return_type = LogicalType::INTEGER(); break;
-            case LogicalTypeId::SMALLINT: return_type = LogicalType::INTEGER(); break;
-            case LogicalTypeId::TINYINT:  return_type = LogicalType::INTEGER(); break;
-            default:                      return_type = LogicalType::INTEGER(); break;
-            }
-        } else {
-            return_type = LogicalType::SQLNULL();
+        {
+            std::vector<const BoundExpression *> branch;
+            for (auto &a : args) branch.push_back(a.get());
+            return_type = UnifyTypes(branch, name);
         }
         for (auto &a : args) {
             if (a->GetReturnType().id() != return_type.id() &&

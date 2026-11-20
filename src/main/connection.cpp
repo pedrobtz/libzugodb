@@ -2084,21 +2084,44 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 // Prior code only handled the 2+ arg forms and silently
                 // left start=stop=0 for the 1-arg form, producing an
                 // empty result — fix as a general engine improvement.
-                int64_t start_val = 0, stop_val = 0, step_val = 1;
+                // Each argument is an integer literal, `5` or `-5`; any
+                // other expression was read as a constant's text it was not
+                // (a UnaryMinusExpression cast to ConstantExpression, Stage
+                // 9's SQL fuzzer), and is refused.
                 auto &fa = sel.from_table->function_args;
+                if (fa.empty() || fa.size() > 3) {
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "GENERATE_SERIES takes one to three arguments");
+                }
+                auto literal = [](const ParsedExpression &e) -> int64_t {
+                    const ParsedExpression *x = &e;
+                    bool negative = false;
+                    if (x->GetExpressionType() == ExpressionType::UNARY_MINUS) {
+                        negative = true;
+                        x = static_cast<const UnaryMinusExpression *>(x)->child.get();
+                    }
+                    if (x->GetExpressionType() == ExpressionType::CONSTANT) {
+                        auto &c = static_cast<const ConstantExpression &>(*x);
+                        if (!c.is_null && c.literal_type == TokenType::INTEGER_LITERAL) {
+                            try {
+                                size_t used = 0;
+                                int64_t v = std::stoll(c.value, &used);
+                                if (used == c.value.size()) return negative ? -v : v;
+                            } catch (const std::exception &) {
+                            }
+                        }
+                    }
+                    throw NotImplementedException(
+                        "GENERATE_SERIES arguments other than BIGINT literals are not supported");
+                };
+                int64_t start_val = 0, stop_val = 0, step_val = 1;
                 if (fa.size() == 1) {
-                    auto &e = static_cast<ConstantExpression &>(*fa[0]);
-                    stop_val = std::stoll(e.value);
-                } else if (fa.size() >= 2) {
-                    auto &s = static_cast<ConstantExpression &>(*fa[0]);
-                    start_val = std::stoll(s.value);
-                    auto &e = static_cast<ConstantExpression &>(*fa[1]);
-                    stop_val = std::stoll(e.value);
+                    stop_val = literal(*fa[0]);
+                } else {
+                    start_val = literal(*fa[0]);
+                    stop_val = literal(*fa[1]);
                 }
-                if (fa.size() >= 3) {
-                    auto &st = static_cast<ConstantExpression &>(*fa[2]);
-                    step_val = std::stoll(st.value);
-                }
+                if (fa.size() == 3) step_val = literal(*fa[2]);
 
                 std::string tbl_name = sel.from_table->alias.empty()
                     ? ("__generate_series_" + std::to_string(preproc_uid) + "__") : sel.from_table->alias;
@@ -2123,14 +2146,29 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 entry.SetStorage(storage);
 
                 if (step_val == 0) throw InvalidInputException("GENERATE_SERIES step cannot be 0");
-                static constexpr int64_t MAX_SERIES_ROWS = 10000000; // 10M limit
-                int64_t est_rows = (step_val > 0) ? (stop_val - start_val) / step_val + 1 : 0;
-                if (est_rows > MAX_SERIES_ROWS || est_rows < 0)
+                // The row count in unsigned arithmetic, so that no sum or
+                // difference of the bounds overflows: (stop - start) / step
+                // overflowed, and a negative step was counted as 0 rows and
+                // then ran without the limit.
+                static constexpr uint64_t MAX_SERIES_ROWS = 10000000; // 10M limit
+                uint64_t rows = 0;
+                uint64_t magnitude = step_val > 0 ? static_cast<uint64_t>(step_val)
+                                                  : static_cast<uint64_t>(-(step_val + 1)) + 1;
+                if (step_val > 0 && stop_val >= start_val) {
+                    rows = (static_cast<uint64_t>(stop_val) - static_cast<uint64_t>(start_val)) /
+                               magnitude + 1;
+                } else if (step_val < 0 && stop_val <= start_val) {
+                    rows = (static_cast<uint64_t>(start_val) - static_cast<uint64_t>(stop_val)) /
+                               magnitude + 1;
+                }
+                if (rows > MAX_SERIES_ROWS)
                     throw InvalidInputException("GENERATE_SERIES would produce too many rows (limit: 10M)");
 
-                for (int64_t v = start_val;
-                     (step_val > 0) ? (v <= stop_val) : (v >= stop_val);
-                     v += step_val) {
+                for (uint64_t r = 0; r < rows; r++) {
+                    uint64_t offset = r * magnitude;
+                    int64_t v = static_cast<int64_t>(
+                        step_val > 0 ? static_cast<uint64_t>(start_val) + offset
+                                     : static_cast<uint64_t>(start_val) - offset);
                     DataChunk chunk;
                     chunk.Initialize({LogicalType::BIGINT()});
                     chunk.SetValue(0, 0, Value::BIGINT(v));
