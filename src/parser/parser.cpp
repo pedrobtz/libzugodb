@@ -48,8 +48,13 @@ std::vector<ParsedStmtPtr> Parser::Parse(const std::string &sql) {
             continue;
         }
         statements.push_back(parser.ParseStatement());
-        // Consume optional trailing semicolon.
-        parser.Match(TokenType::SEMICOLON);
+        // A statement ends at a semicolon or the end of the text. Anything
+        // else after it is DuckDB's syntax error: `SELECT 1 SELECT 2` ran
+        // as two statements, and a statement's unparsed tail was read as
+        // the start of the next (Stage 9, design §4).
+        if (!parser.Match(TokenType::SEMICOLON) && !parser.IsAtEnd()) {
+            parser.ThrowUnexpected("after the end of a statement");
+        }
     }
     return statements;
 }
@@ -201,6 +206,11 @@ const Token &Parser::ExpectIdentifier(const std::string &context) {
 
 bool Parser::IsAtEnd() const { return Current().type == TokenType::END_OF_FILE; }
 
+bool Parser::CheckWord(const char *word) const {
+    return Current().type == TokenType::IDENTIFIER && !Current().quoted &&
+           StringUtil::Upper(Current().value) == word;
+}
+
 [[noreturn]] void Parser::ThrowError(const std::string &msg) {
     auto ex = ParserException(ErrorCode::SYNTAX_ERROR, msg);
     ex.SetQueryLocation(Current().line, Current().column);
@@ -302,7 +312,7 @@ ParsedStmtPtr Parser::ParseStatement() {
     // SHOW {TABLES | DATABASES | SCHEMAS | COLUMNS FROM t} [LIKE 'pat'].
     // "SHOW" is not a reserved keyword in the tokenizer, so match on the
     // identifier's text. Same trick the CREATE parser uses for "OR REPLACE".
-    if (Check(TokenType::IDENTIFIER) && StringUtil::Upper(Current().value) == "SHOW") {
+    if (CheckWord("SHOW")) {
         return ParseShowStatement();
     }
     // COPY table TO/FROM 'file' and COPY (SELECT ...) TO 'file'.
@@ -337,7 +347,7 @@ ParsedStmtPtr Parser::ParseStatement() {
             MatchKeyword(TokenType::KW_COLUMN);
             stmt->action = AlterTableStatement::AlterAction::DROP_COLUMN;
             stmt->column_name = ExpectIdentifier("for column name").value;
-        } else if (Check(TokenType::IDENTIFIER) && StringUtil::Upper(Current().value) == "RENAME") {
+        } else if (CheckWord("RENAME")) {
             Advance();
             MatchKeyword(TokenType::KW_COLUMN);
             stmt->action = AlterTableStatement::AlterAction::RENAME_COLUMN;
@@ -371,10 +381,17 @@ ParsedStmtPtr Parser::ParseSelectStatement() {
             SelectStatement::CTE cte;
             cte.recursive = is_recursive;
             cte.name = ExpectIdentifier("for CTE name").value;
-            // Optional column alias list: nums(n) or nums(a, b).
+            // Optional column alias list: nums(n) or nums(a, b). The names
+            // were skipped, any tokens at all, so `WITH t(b, a) AS (SELECT
+            // 1 AS a, 2 AS b) SELECT a FROM t` gave 1 where DuckDB gives 2
+            // (Stage 9). They name the query's first columns, as an alias
+            // list on a subquery does.
+            std::vector<std::pair<std::string, const Token *>> aliases;
             if (Match(TokenType::LPAREN)) {
-                // Skip column names - they're just aliases.
-                do { Advance(); } while (Match(TokenType::COMMA));
+                do {
+                    const Token &t = Current();
+                    aliases.emplace_back(ExpectIdentifier("for CTE column alias").value, &t);
+                } while (Match(TokenType::COMMA));
                 Expect(TokenType::RPAREN, "after CTE column list");
             }
             Expect(TokenType::KW_AS, "after CTE name");
@@ -384,6 +401,29 @@ ParsedStmtPtr Parser::ParseSelectStatement() {
             cte.query = std::unique_ptr<SelectStatement>(
                 static_cast<SelectStatement *>(inner.release()));
             Expect(TokenType::RPAREN, "after CTE query");
+            if (!aliases.empty()) {
+                auto &sel_list = cte.query->select_list;
+                for (auto &e : sel_list) {
+                    if (e->GetExpressionType() == ExpressionType::STAR) {
+                        auto ex = ParserException(
+                            "A column alias list on a CTE whose select list has * is not "
+                            "supported");
+                        ex.SetQueryLocation(aliases[0].second->line, aliases[0].second->column);
+                        throw ex;
+                    }
+                }
+                if (aliases.size() > sel_list.size()) {
+                    auto ex = ParserException(
+                        "table \"" + cte.name + "\" has " + std::to_string(sel_list.size()) +
+                        " columns available but " + std::to_string(aliases.size()) +
+                        " columns specified");
+                    ex.SetQueryLocation(aliases[0].second->line, aliases[0].second->column);
+                    throw ex;
+                }
+                for (size_t i = 0; i < aliases.size(); i++) {
+                    sel_list[i]->alias = aliases[i].first;
+                }
+            }
             stmt->ctes.push_back(std::move(cte));
         } while (Match(TokenType::COMMA));
     }
@@ -674,13 +714,12 @@ std::unique_ptr<TableRef> Parser::ParseTableRef() {
             // (#38). Beside a *, the aliases were set on the * and lost.
             for (auto &e : sel_list) {
                 if (e->GetExpressionType() == ExpressionType::STAR) {
-                    throw ParserException(
-                        "A column alias list on a subquery whose select list has * "
-                        "is not supported");
+                    ThrowError("A column alias list on a subquery whose select list has * "
+                               "is not supported");
                 }
             }
             if (ref->column_aliases.size() > sel_list.size()) {
-                throw ParserException("table has " + std::to_string(sel_list.size()) +
+                ThrowError("table has " + std::to_string(sel_list.size()) +
                     " columns available but " + std::to_string(ref->column_aliases.size()) +
                     " columns specified");
             }
@@ -959,19 +998,19 @@ ParsedExprPtr Parser::ParseComparison() {
         if (!pat_const || !esc_const ||
             pat_const->literal_type != TokenType::STRING_LITERAL ||
             esc_const->literal_type != TokenType::STRING_LITERAL) {
-            throw ParserException(
+            ThrowError(
                 "ESCAPE requires constant string for both pattern and "
                 "escape character");
         }
         const std::string &esc_str = esc_const->value;
         if (esc_str.size() > 1) {
-            throw ParserException(
+            ThrowError(
                 "ESCAPE character must be a single character");
         }
         if (esc_str.empty()) return;  // no-op
         char esc_char = esc_str[0];
         if (esc_char == '%' || esc_char == '_') {
-            throw ParserException(
+            ThrowError(
                 "ESCAPE character may not be the same as a wildcard");
         }
         const std::string &pat_str = pat_const->value;
@@ -980,7 +1019,7 @@ ParsedExprPtr Parser::ParseComparison() {
         for (size_t i = 0; i < pat_str.size(); i++) {
             if (pat_str[i] == esc_char && i + 1 == pat_str.size()) {
                 // DuckDB's error; it was read as a literal (#34).
-                throw ParserException("LIKE pattern must not end with escape character");
+                ThrowError("LIKE pattern must not end with escape character");
             }
             if (pat_str[i] == esc_char && i + 1 < pat_str.size()) {
                 // Emit \ + literal next char. Existing backslashes in
@@ -1251,7 +1290,7 @@ ParsedExprPtr Parser::ParsePrimary() {
     }
 
     // TRY_CAST(expr AS type) - returns NULL on failure instead of error.
-    if (Check(TokenType::IDENTIFIER) && StringUtil::Upper(Current().value) == "TRY_CAST") {
+    if (CheckWord("TRY_CAST")) {
         Advance();
         Expect(TokenType::LPAREN, "after TRY_CAST");
         auto expr = ParseExpression();
@@ -1659,7 +1698,7 @@ ParsedStmtPtr Parser::ParseCreateStatement() {
     bool or_replace = false;
     if (CheckKeyword(TokenType::KW_OR)) {
         Advance();
-        if (Check(TokenType::IDENTIFIER) && StringUtil::Upper(Current().value) == "REPLACE") {
+        if (CheckWord("REPLACE")) {
             Advance();
             or_replace = true;
         }
@@ -1846,7 +1885,7 @@ ParsedStmtPtr Parser::ParseDescribeStatement() {
 // Single-shot dispatcher; actual row production lives in connection.cpp.
 ParsedStmtPtr Parser::ParseShowStatement() {
     // "SHOW" arrives as an IDENTIFIER (not a reserved keyword).
-    if (!(Check(TokenType::IDENTIFIER) && StringUtil::Upper(Current().value) == "SHOW")) {
+    if (!(CheckWord("SHOW"))) {
         ThrowError("expected SHOW");
     }
     Advance(); // consume SHOW
@@ -1854,7 +1893,7 @@ ParsedStmtPtr Parser::ParseShowStatement() {
     auto stmt = std::make_unique<ShowStatement>();
 
     auto next_upper = [&]() -> std::string {
-        return Check(TokenType::IDENTIFIER) ? StringUtil::Upper(Current().value) : "";
+        return Check(TokenType::IDENTIFIER) && !Current().quoted ? StringUtil::Upper(Current().value) : "";
     };
 
     std::string kw = next_upper();
@@ -1869,7 +1908,7 @@ ParsedStmtPtr Parser::ParseShowStatement() {
         stmt->kind = ShowStatement::Kind::COLUMNS;
         // SHOW COLUMNS FROM t  (also accepts IN as a synonym, MySQL style).
         if (CheckKeyword(TokenType::KW_FROM) ||
-            (Check(TokenType::IDENTIFIER) && StringUtil::Upper(Current().value) == "IN")) {
+            CheckWord("IN")) {
             Advance();
         }
         stmt->table_name = ExpectIdentifier("for SHOW COLUMNS target").value;
