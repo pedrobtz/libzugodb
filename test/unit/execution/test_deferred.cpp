@@ -45,32 +45,17 @@ TEST_CASE("GENERATE_SERIES - in WHERE") {
 }
 
 // ============================================================================
-// REGEX functions (basic - without full regex engine, pattern-based)
+// REGEX functions: refused until a host's RE2 provider supplies them
+// (libzugodb#40, design L24; test_conformance_strings.cpp has the cases)
 // ============================================================================
 
-TEST_CASE("REGEXP_MATCHES - basic pattern") {
+TEST_CASE("REGEXP_MATCHES and REGEXP_REPLACE are refused") {
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE t (s VARCHAR)");
     conn.Query("INSERT INTO t VALUES ('hello123'), ('world'), ('abc456')");
-
-    // Simple: check if string contains digits.
-    auto r = conn.Query("SELECT REGEXP_MATCHES(s, '[0-9]') FROM t");
-    CHECK(r.RowCount() == 3);
-    // hello123 -> true, world -> false, abc456 -> true
-    CHECK(r.GetValue(0, 0).GetValue<bool>() == true);
-    CHECK(r.GetValue(1, 0).GetValue<bool>() == false);
-    CHECK(r.GetValue(2, 0).GetValue<bool>() == true);
-}
-
-TEST_CASE("REGEXP_REPLACE - basic") {
-    Database db;
-    Connection conn(db);
-    conn.Query("CREATE TABLE t (s VARCHAR)");
-    conn.Query("INSERT INTO t VALUES ('hello 123 world')");
-
-    auto r = conn.Query("SELECT REGEXP_REPLACE(s, '[0-9]+', 'NUM') FROM t");
-    CHECK(r.GetValue(0, 0).GetValue<std::string>() == "hello NUM world");
+    CHECK_THROWS(conn.Query("SELECT REGEXP_MATCHES(s, '[0-9]') FROM t"));
+    CHECK_THROWS(conn.Query("SELECT REGEXP_REPLACE(s, '[0-9]+', 'NUM') FROM t"));
 }
 
 // ============================================================================

@@ -352,10 +352,16 @@ std::vector<Token> Tokenizer::Tokenize() {
                 tokens.push_back(Token(TokenType::GREATER_THAN, ">", line_, tok_col));
             }
             break;
+        case '~':
+            // DuckDB's ~ (and ~~*, !~ ...) are regular expressions and
+            // LIKE forms; refused before anything runs (design L24).
+            RefuseRegex("The ~ operator");
         case '!':
             if (!IsAtEnd() && Peek() == '=') {
                 Advance();
                 tokens.push_back(Token(TokenType::NOT_EQUALS, "!=", line_, tok_col));
+            } else if (!IsAtEnd() && Peek() == '~') {
+                RefuseRegex("The !~ operator");
             } else {
                 auto ex = ParserException(ErrorCode::UNEXPECTED_TOKEN,
                                            "Unexpected character '!'");

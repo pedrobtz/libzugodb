@@ -9,7 +9,6 @@
 #include "slothdb/common/types/string_type.hpp"
 #include "slothdb/common/types/blob.hpp"
 #include "slothdb/common/types/nan_guard.hpp"
-#include "slothdb/execution/regex.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -4023,83 +4022,6 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v1 = arg1.GetValue(i), v2 = arg2.GetValue(i);
             if (v1 == v2) result.GetValidity().SetInvalid(i);
             else result.SetValue(i, v1);
-        }
-        return;
-    }
-
-    // ---- Regex functions ----
-    // DuckDB's regexp_matches, regexp_full_match, regexp_replace and
-    // regexp_extract over the RE2 subset of regex.hpp (#32, design L24).
-    // The binder checks their arguments' shape: options and the group are
-    // constants.
-
-    if (name == "REGEXP_MATCHES" || name == "REGEXP_FULL_MATCH" || name == "REGEXP_REPLACE" ||
-        name == "REGEXP_EXTRACT") {
-        const bool replace = name == "REGEXP_REPLACE";
-        const bool extract = name == "REGEXP_EXTRACT";
-        const bool full = name == "REGEXP_FULL_MATCH";
-        // Constant arguments: options (and extract's group).
-        std::string opt_text;
-        int64_t group = 0;
-        idx_t nargs = expr.arguments.size();
-        auto constant = [&](idx_t k) -> const Value & {
-            return static_cast<const BoundConstant &>(*Arg(expr, k)).value;
-        };
-        if (replace && nargs == 4) opt_text = constant(3).GetValue<std::string>();
-        if (!replace && !extract && nargs == 3) opt_text = constant(2).GetValue<std::string>();
-        if (extract && nargs >= 3) {
-            const Value &third = constant(2);
-            if (third.type().id() == LogicalTypeId::VARCHAR) {
-                opt_text = third.GetValue<std::string>();
-            } else {
-                group = IntegerArg(third, "regexp_extract");
-            }
-            if (nargs == 4) opt_text = constant(3).GetValue<std::string>();
-        }
-        auto options = regex::ParseOptions(opt_text, replace);
-        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
-        Vector pat_vec(Arg(expr, 1)->GetReturnType(), count);
-        Execute(*Arg(expr, 0), input, str_vec, count);
-        Execute(*Arg(expr, 1), input, pat_vec, count);
-        Vector rep_vec(replace ? Arg(expr, 2)->GetReturnType() : LogicalType::VARCHAR(), count);
-        if (replace) Execute(*Arg(expr, 2), input, rep_vec, count);
-        std::unique_ptr<regex::Regex> re;
-        std::string re_pattern;
-        std::vector<std::pair<int64_t, int64_t>> groups;
-        for (idx_t i = 0; i < count; i++) {
-            auto sv = str_vec.GetValue(i);
-            auto pv = pat_vec.GetValue(i);
-            Value rv = replace ? rep_vec.GetValue(i) : Value::VARCHAR("");
-            if (sv.IsNull() || pv.IsNull() || rv.IsNull()) {
-                result.GetValidity().SetInvalid(i);
-                continue;
-            }
-            const auto &pat = pv.GetValue<std::string>();
-            if (!re || pat != re_pattern) {
-                re = std::make_unique<regex::Regex>(pat, options);
-                re_pattern = pat;
-                // DuckDB's: an index past 9 is an error, one past the
-                // pattern's groups gives the empty string.
-                if (extract && (group < 0 || group > 9)) {
-                    throw InvalidInputException("Group index must be between 0 and 9");
-                }
-            }
-            const auto &subject = sv.GetValue<std::string>();
-            if (replace) {
-                result.SetValue(i, Value::VARCHAR(regex::Replace(*re, subject,
-                                                                 rv.GetValue<std::string>(),
-                                                                 options.global)));
-            } else if (extract) {
-                std::string out;
-                if (re->Search(subject, 0, false, false, groups) &&
-                    group < static_cast<int64_t>(groups.size()) && groups[group].first >= 0) {
-                    out = subject.substr(static_cast<size_t>(groups[group].first),
-                                         static_cast<size_t>(groups[group].second - groups[group].first));
-                }
-                result.SetValue(i, Value::VARCHAR(out));
-            } else {
-                result.GetData<bool>()[i] = re->Search(subject, 0, full, full, groups);
-            }
         }
         return;
     }

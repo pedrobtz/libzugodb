@@ -1001,6 +1001,15 @@ ParsedExprPtr Parser::ParseComparison() {
         }
         pat = std::make_unique<ConstantExpression>(out, TokenType::STRING_LITERAL);
     };
+    // SIMILAR TO is a regular expression: refused (design L24).
+    {
+        size_t k = pos_;
+        if (k < tokens_.size() && tokens_[k].type == TokenType::KW_NOT) k++;
+        if (k < tokens_.size() && tokens_[k].type == TokenType::IDENTIFIER &&
+            StringUtil::Upper(tokens_[k].value) == "SIMILAR") {
+            RefuseRegex("SIMILAR TO");
+        }
+    }
     if (MatchKeyword(TokenType::KW_LIKE)) {
         auto right = ParseAddSub();
         consume_escape_and_rewrite(right);

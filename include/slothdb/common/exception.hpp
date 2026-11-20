@@ -131,6 +131,15 @@ public:
         : SlothDBException(ErrorCategory::NOT_IMPLEMENTED, ErrorCode::NOT_IMPLEMENTED, msg) {}
 };
 
+// Every regular expression function and operator is refused with this
+// error (design L24): RE2's semantics come from a host-supplied provider
+// (libzugodb#40), and the engine has no regular expressions of its own.
+[[noreturn]] inline void RefuseRegex(const std::string &what) {
+    throw NotImplementedException(
+        what + " is not supported: regular expressions come from a host-supplied RE2 "
+        "provider (libzugodb#40), which this engine does not have");
+}
+
 class ParserException : public SlothDBException {
 public:
     explicit ParserException(const std::string &msg)
