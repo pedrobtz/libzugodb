@@ -5098,22 +5098,52 @@ private:
         int64_t count = 0;
         double min_d = 0, max_d = 0;
         bool has_mm = false;
+        if (info.arg_col != INVALID_INDEX &&
+            (info.arg_tid == LogicalTypeId::INTEGER || info.arg_tid == LogicalTypeId::BIGINT ||
+             info.arg_tid == LogicalTypeId::SMALLINT || info.arg_tid == LogicalTypeId::TINYINT)) {
+            // Integers in 64 bits, exactly: through a double, a sum or a
+            // bound past 2^53 lost its low digits, and a sum of NULLs was 0
+            // (Stage 8, #12). A sum past BIGINT is DuckDB's HUGEINT, which
+            // the engine does not have: refused.
+            int64_t isum = 0, imin = 0, imax = 0;
+            for (idx_t k = 0; k < ps; k++) {
+                idx_t idx = indices[k];
+                if (input_.IsNull(idx, info.arg_col)) continue;
+                int64_t d;
+                if (info.arg_tid == LogicalTypeId::INTEGER) d = input_.GetInt32(idx, info.arg_col);
+                else if (info.arg_tid == LogicalTypeId::BIGINT) d = input_.GetInt64(idx, info.arg_col);
+                else {
+                    auto v = input_.Get(idx, info.arg_col);
+                    d = info.arg_tid == LogicalTypeId::SMALLINT ? v.GetValue<int16_t>() : v.GetValue<int8_t>();
+                }
+                if ((d > 0 && isum > std::numeric_limits<int64_t>::max() - d) ||
+                    (d < 0 && isum < std::numeric_limits<int64_t>::min() - d)) {
+                    if (info.fn == WF_SUM || info.fn == WF_AVG)
+                        throw OutOfRangeException("Window " + std::string(info.fn == WF_SUM ? "SUM" : "AVG") +
+                                                  " is out of the range of BIGINT");
+                }
+                isum += d;
+                if (count == 0 || d < imin) imin = d;
+                if (count == 0 || d > imax) imax = d;
+                count++;
+            }
+            if (info.fn == WF_COUNT) return Value::BIGINT(count);
+            if (count == 0) return Value();
+            if (info.fn == WF_SUM) return Value::BIGINT(isum);
+            if (info.fn == WF_AVG) return Value::DOUBLE(static_cast<double>(isum) / static_cast<double>(count));
+            int64_t m = info.fn == WF_MIN ? imin : imax;
+            if (info.fn == WF_MIN || info.fn == WF_MAX) {
+                switch (info.arg_tid) {
+                case LogicalTypeId::TINYINT: return Value::TINYINT(static_cast<int8_t>(m));
+                case LogicalTypeId::SMALLINT: return Value::SMALLINT(static_cast<int16_t>(m));
+                case LogicalTypeId::INTEGER: return Value::INTEGER(static_cast<int32_t>(m));
+                default: return Value::BIGINT(m);
+                }
+            }
+            return Value();
+        }
         if (info.arg_col == INVALID_INDEX) {
             count = static_cast<int64_t>(ps);
-        } else if (info.arg_tid == LogicalTypeId::INTEGER) {
-            for (idx_t k = 0; k < ps; k++) { idx_t idx = indices[k]; if (!input_.IsNull(idx, info.arg_col)) {
-                double d = input_.GetInt32(idx, info.arg_col);
-                count++; sum += d;
-                if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-            } }
-        } else if (info.arg_tid == LogicalTypeId::BIGINT) {
-            for (idx_t k = 0; k < ps; k++) { idx_t idx = indices[k]; if (!input_.IsNull(idx, info.arg_col)) {
-                double d = static_cast<double>(input_.GetInt64(idx, info.arg_col));
-                count++; sum += d;
-                if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-            } }
         } else if (info.arg_tid == LogicalTypeId::DOUBLE) {
             for (idx_t k = 0; k < ps; k++) { idx_t idx = indices[k]; if (!input_.IsNull(idx, info.arg_col)) {
                 double d = input_.GetDouble(idx, info.arg_col);
@@ -5133,6 +5163,7 @@ private:
                     if (tid == LogicalTypeId::INTEGER) d = v.GetValue<int32_t>();
                     else if (tid == LogicalTypeId::BIGINT) d = static_cast<double>(v.GetValue<int64_t>());
                     else if (tid == LogicalTypeId::DOUBLE) d = v.GetValue<double>();
+                    else if (tid == LogicalTypeId::FLOAT) d = v.GetValue<float>();
                     sum += d;
                     if (!has_mm || v < min_v) min_v = v;
                     if (!has_mm || v > max_v) max_v = v;
@@ -5141,6 +5172,7 @@ private:
             }
             if (info.fn == WF_COUNT) return Value::BIGINT(count);
             if (info.fn == WF_SUM) {
+                if (count == 0) return Value();
                 if (info.arg_tid == LogicalTypeId::DOUBLE || info.arg_tid == LogicalTypeId::FLOAT)
                     return Value::DOUBLE(sum);
                 return Value::BIGINT(static_cast<int64_t>(sum));
@@ -5152,6 +5184,7 @@ private:
         }
         if (info.fn == WF_COUNT) return Value::BIGINT(count);
         if (info.fn == WF_SUM) {
+            if (count == 0) return Value();
             // Return type matches argument's numeric type (DOUBLE for DOUBLE, BIGINT otherwise).
             if (info.arg_tid == LogicalTypeId::DOUBLE) return Value::DOUBLE(sum);
             return Value::BIGINT(static_cast<int64_t>(sum));
@@ -5876,116 +5909,15 @@ private:
             case WF_AVG:
             case WF_MIN:
             case WF_MAX: {
-                // Aggregate over whole partition (typed fast path), broadcast to rows.
-                double sum = 0;
-                int64_t count = 0;
-                double min_d = 0, max_d = 0;
-                bool has_mm = false;
-                bool is_str = false;
-                bool has_str = false;
-                string_t min_s, max_s;
-                LogicalTypeId arg_tid = (arg_col != INVALID_INDEX && arg_col < input.types.size())
-                                            ? input.types[arg_col] : LogicalTypeId::SQLNULL;
-                if (arg_tid == LogicalTypeId::VARCHAR) is_str = true;
-
-                if (arg_col == INVALID_INDEX) {
-                    count = static_cast<int64_t>(ps);
-                } else if (arg_tid == LogicalTypeId::INTEGER) {
-                    for (auto idx : indices) {
-                        if (!input.IsNull(idx, arg_col)) {
-                            double d = input.GetInt32(idx, arg_col);
-                            count++; sum += d;
-                            if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                            else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-                        }
-                    }
-                } else if (arg_tid == LogicalTypeId::BIGINT) {
-                    for (auto idx : indices) {
-                        if (!input.IsNull(idx, arg_col)) {
-                            double d = static_cast<double>(input.GetInt64(idx, arg_col));
-                            count++; sum += d;
-                            if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                            else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-                        }
-                    }
-                } else if (arg_tid == LogicalTypeId::DOUBLE) {
-                    for (auto idx : indices) {
-                        if (!input.IsNull(idx, arg_col)) {
-                            double d = input.GetDouble(idx, arg_col);
-                            count++; sum += d;
-                            if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                            else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-                        }
-                    }
-                } else if (is_str) {
-                    // MIN/MAX only for strings; SUM/AVG undefined.
-                    for (auto idx : indices) {
-                        if (!input.IsNull(idx, arg_col)) {
-                            auto &s = input.GetStr(idx, arg_col);
-                            count++;
-                            if (!has_str) { min_s = max_s = s; has_str = true; }
-                            else {
-                                uint32_t l_min = s.GetSize() < min_s.GetSize() ? s.GetSize() : min_s.GetSize();
-                                int c_min = memcmp(s.GetData(), min_s.GetData(), l_min);
-                                if (c_min < 0 || (c_min == 0 && s.GetSize() < min_s.GetSize())) min_s = s;
-                                uint32_t l_max = s.GetSize() < max_s.GetSize() ? s.GetSize() : max_s.GetSize();
-                                int c_max = memcmp(s.GetData(), max_s.GetData(), l_max);
-                                if (c_max > 0 || (c_max == 0 && s.GetSize() > max_s.GetSize())) max_s = s;
-                            }
-                        }
-                    }
-                } else {
-                    // Fallback via Value (rare types).
-                    Value min_v, max_v;
-                    for (auto idx : indices) {
-                        auto v = input.Get(idx, arg_col);
-                        if (!v.IsNull()) {
-                            count++;
-                            auto tid = v.type().id();
-                            double d = 0;
-                            if (tid == LogicalTypeId::INTEGER) d = v.GetValue<int32_t>();
-                            else if (tid == LogicalTypeId::BIGINT) d = static_cast<double>(v.GetValue<int64_t>());
-                            else if (tid == LogicalTypeId::DOUBLE) d = v.GetValue<double>();
-                            sum += d;
-                            if (!has_mm || v < min_v) min_v = v;
-                            if (!has_mm || v > max_v) max_v = v;
-                            has_mm = true;
-                        }
-                    }
-                    Value result;
-                    if (fn == WF_COUNT) result = Value::BIGINT(count);
-                    else if (fn == WF_SUM) result = Value::BIGINT(static_cast<int64_t>(sum));
-                    else if (fn == WF_AVG) result = count > 0 ? Value::DOUBLE(sum / count) : Value();
-                    else if (fn == WF_MIN) result = has_mm ? min_v : Value();
-                    else if (fn == WF_MAX) result = has_mm ? max_v : Value();
-                    for (auto idx : indices) output[idx][out_col] = result;
-                    break;
-                }
-
-                // Build result from typed accumulators.
-                Value result;
-                if (fn == WF_COUNT) {
-                    result = Value::BIGINT(count);
-                } else if (is_str) {
-                    if (fn == WF_MIN) result = has_str ? Value::VARCHAR(std::string(min_s.GetData(), min_s.GetSize())) : Value();
-                    else if (fn == WF_MAX) result = has_str ? Value::VARCHAR(std::string(max_s.GetData(), max_s.GetSize())) : Value();
-                    else result = Value();  // SUM/AVG on string not defined
-                } else {
-                    if (fn == WF_SUM) result = Value::BIGINT(static_cast<int64_t>(sum));
-                    else if (fn == WF_AVG) result = count > 0 ? Value::DOUBLE(sum / count) : Value();
-                    else if (fn == WF_MIN) {
-                        if (!has_mm) result = Value();
-                        else if (arg_tid == LogicalTypeId::INTEGER) result = Value::INTEGER(static_cast<int32_t>(min_d));
-                        else if (arg_tid == LogicalTypeId::BIGINT) result = Value::BIGINT(static_cast<int64_t>(min_d));
-                        else result = Value::DOUBLE(min_d);
-                    }
-                    else if (fn == WF_MAX) {
-                        if (!has_mm) result = Value();
-                        else if (arg_tid == LogicalTypeId::INTEGER) result = Value::INTEGER(static_cast<int32_t>(max_d));
-                        else if (arg_tid == LogicalTypeId::BIGINT) result = Value::BIGINT(static_cast<int64_t>(max_d));
-                        else result = Value::DOUBLE(max_d);
-                    }
-                }
+                // Aggregate over the whole partition, broadcast to rows:
+                // the same computation as the main path's (exact integer
+                // sums, NULL for no value; Stage 8, #12).
+                WinInfo wi;
+                wi.fn = fn;
+                wi.arg_col = arg_col;
+                wi.arg_tid = (arg_col != INVALID_INDEX && arg_col < input.types.size())
+                                 ? input.types[arg_col] : LogicalTypeId::SQLNULL;
+                Value result = ComputePartitionAggregate(wi, indices);
                 for (auto idx : indices) output[idx][out_col] = result;
                 break;
             }

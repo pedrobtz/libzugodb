@@ -70,3 +70,22 @@ TEST_CASE("Stage 8: the window shapes the operator computes") {
     CHECK(Run(conn, "SELECT v, lag(v) OVER (ORDER BY a, b, v) FROM t ORDER BY v") ==
           Rows{{"10", "NULL"}, {"20", "50"}, {"30", "20"}, {"40", "30"}, {"50", "10"}});
 }
+
+// ---------------------------------------------------------------------------
+// Window SUM, MIN, MAX and AVG over integers went through a double, and a
+// SUM of only NULLs was 0 (DuckDB: NULL).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: window aggregates over integers are exact, and NULL over no value") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE u(g INTEGER, x BIGINT, s SMALLINT)");
+    conn.Query("INSERT INTO u VALUES (1, NULL, 1), (1, NULL, 2), (2, 9007199254740993, 3), (2, 1, NULL)");
+    CHECK(Run(conn, "SELECT g, sum(x) OVER (PARTITION BY g), max(x) OVER (PARTITION BY g), "
+                    "sum(s) OVER (PARTITION BY g) FROM u ORDER BY g, x") ==
+          Rows{{"1", "NULL", "NULL", "3"}, {"1", "NULL", "NULL", "3"},
+               {"2", "9007199254740994", "9007199254740993", "3"},
+               {"2", "9007199254740994", "9007199254740993", "3"}});
+    conn.Query("INSERT INTO u VALUES (3, 9223372036854775807, 0), (3, 1, 0)");
+    CHECK_THROWS(conn.Query("SELECT sum(x) OVER (PARTITION BY g) FROM u"));
+}
