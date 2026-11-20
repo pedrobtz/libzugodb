@@ -9,6 +9,7 @@
 #include "slothdb/common/types/string_type.hpp"
 #include "slothdb/common/types/blob.hpp"
 #include "slothdb/common/types/nan_guard.hpp"
+#include "slothdb/execution/regex.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -18,7 +19,6 @@
 #include <limits>
 #include <optional>
 #include <random>
-#include <regex>
 
 namespace zugodb {
 
@@ -4028,131 +4028,77 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     // ---- Regex functions ----
+    // DuckDB's regexp_matches, regexp_full_match, regexp_replace and
+    // regexp_extract over the RE2 subset of regex.hpp (#32, design L24).
+    // The binder checks their arguments' shape: options and the group are
+    // constants.
 
-    if (name == "REGEXP_MATCHES" || name == "REGEXP_MATCH" ||
-        name == "REGEXP" || name == "REGEXP_LIKE") {
-        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
-        Vector pat_vec(Arg(expr, 1)->GetReturnType(), count);
-        Execute(*Arg(expr, 0), input, str_vec, count);
-        Execute(*Arg(expr, 1), input, pat_vec, count);
-        auto *out = result.GetData<bool>();
-        for (idx_t i = 0; i < count; i++) {
-            auto sv = str_vec.GetValue(i);
-            auto pv = pat_vec.GetValue(i);
-            if (sv.IsNull() || pv.IsNull()) {
-                result.GetValidity().SetInvalid(i);
-                continue;
-            }
-            auto s = sv.GetValue<std::string>();
-            auto p = pv.GetValue<std::string>();
-            try {
-                std::regex re(p);
-                out[i] = std::regex_search(s, re);
-            } catch (...) {
-                out[i] = false;
-            }
-        }
-        return;
-    }
-
-    if (name == "REGEXP_REPLACE") {
-        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
-        Vector pat_vec(Arg(expr, 1)->GetReturnType(), count);
-        Vector rep_vec(Arg(expr, 2)->GetReturnType(), count);
-        Execute(*Arg(expr, 0), input, str_vec, count);
-        Execute(*Arg(expr, 1), input, pat_vec, count);
-        Execute(*Arg(expr, 2), input, rep_vec, count);
-        // Translate SQL-style replacement (\1..\9 backrefs, \\ literal) into
-        // std::regex_replace ECMAScript form ($1..$9, $$ literal $). Bare $
-        // in the input must be escaped to $$ so it isn't reinterpreted.
-        auto translate_replacement = [](const std::string &r) {
-            std::string out;
-            out.reserve(r.size());
-            for (size_t k = 0; k < r.size(); ++k) {
-                char c = r[k];
-                if (c == '\\' && k + 1 < r.size()) {
-                    char n = r[k + 1];
-                    if (n >= '0' && n <= '9') {
-                        out += '$';
-                        out += n;
-                        ++k;
-                        continue;
-                    }
-                    if (n == '\\') {
-                        out += '\\';
-                        ++k;
-                        continue;
-                    }
-                    // Unknown escape: keep backslash + char as-is.
-                    out += c;
-                    out += n;
-                    ++k;
-                    continue;
-                }
-                if (c == '$') {
-                    out += "$$";
-                    continue;
-                }
-                out += c;
-            }
-            return out;
+    if (name == "REGEXP_MATCHES" || name == "REGEXP_FULL_MATCH" || name == "REGEXP_REPLACE" ||
+        name == "REGEXP_EXTRACT") {
+        const bool replace = name == "REGEXP_REPLACE";
+        const bool extract = name == "REGEXP_EXTRACT";
+        const bool full = name == "REGEXP_FULL_MATCH";
+        // Constant arguments: options (and extract's group).
+        std::string opt_text;
+        int64_t group = 0;
+        idx_t nargs = expr.arguments.size();
+        auto constant = [&](idx_t k) -> const Value & {
+            return static_cast<const BoundConstant &>(*Arg(expr, k)).value;
         };
-        std::optional<std::regex> compiled_re;
-        std::string cached_pattern;
-        bool have_cached = false;
+        if (replace && nargs == 4) opt_text = constant(3).GetValue<std::string>();
+        if (!replace && !extract && nargs == 3) opt_text = constant(2).GetValue<std::string>();
+        if (extract && nargs >= 3) {
+            const Value &third = constant(2);
+            if (third.type().id() == LogicalTypeId::VARCHAR) {
+                opt_text = third.GetValue<std::string>();
+            } else {
+                group = IntegerArg(third, "regexp_extract");
+            }
+            if (nargs == 4) opt_text = constant(3).GetValue<std::string>();
+        }
+        auto options = regex::ParseOptions(opt_text, replace);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector pat_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, pat_vec, count);
+        Vector rep_vec(replace ? Arg(expr, 2)->GetReturnType() : LogicalType::VARCHAR(), count);
+        if (replace) Execute(*Arg(expr, 2), input, rep_vec, count);
+        std::unique_ptr<regex::Regex> re;
+        std::string re_pattern;
+        std::vector<std::pair<int64_t, int64_t>> groups;
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto pv = pat_vec.GetValue(i);
-            auto rv = rep_vec.GetValue(i);
+            Value rv = replace ? rep_vec.GetValue(i) : Value::VARCHAR("");
             if (sv.IsNull() || pv.IsNull() || rv.IsNull()) {
                 result.GetValidity().SetInvalid(i);
                 continue;
             }
-            auto s = sv.GetValue<std::string>();
-            auto p = pv.GetValue<std::string>();
-            auto r = rv.GetValue<std::string>();
-            try {
-                if (!have_cached || cached_pattern != p) {
-                    have_cached = false;
-                    compiled_re.emplace(p);
-                    cached_pattern = p;
-                    have_cached = true;
+            const auto &pat = pv.GetValue<std::string>();
+            if (!re || pat != re_pattern) {
+                re = std::make_unique<regex::Regex>(pat, options);
+                re_pattern = pat;
+                // DuckDB's: an index past 9 is an error, one past the
+                // pattern's groups gives the empty string.
+                if (extract && (group < 0 || group > 9)) {
+                    throw InvalidInputException("Group index must be between 0 and 9");
                 }
-                auto rep = translate_replacement(r);
-                result.SetValue(i, Value::VARCHAR(std::regex_replace(s, *compiled_re, rep)));
-            } catch (...) {
-                result.SetValue(i, Value::VARCHAR(s));
             }
-        }
-        return;
-    }
-
-    if (name == "REGEXP_EXTRACT") {
-        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
-        Vector pat_vec(Arg(expr, 1)->GetReturnType(), count);
-        Execute(*Arg(expr, 0), input, str_vec, count);
-        Execute(*Arg(expr, 1), input, pat_vec, count);
-        for (idx_t i = 0; i < count; i++) {
-            auto sv = str_vec.GetValue(i);
-            auto pv = pat_vec.GetValue(i);
-            if (sv.IsNull() || pv.IsNull()) {
-                result.GetValidity().SetInvalid(i);
-                continue;
-            }
-            auto s = sv.GetValue<std::string>();
-            auto p = pv.GetValue<std::string>();
-            try {
-                std::regex re(p);
-                std::smatch m;
-                if (std::regex_search(s, m, re) && m.size() > 1) {
-                    result.SetValue(i, Value::VARCHAR(m[1].str()));
-                } else if (std::regex_search(s, m, re)) {
-                    result.SetValue(i, Value::VARCHAR(m[0].str()));
-                } else {
-                    result.GetValidity().SetInvalid(i);
+            const auto &subject = sv.GetValue<std::string>();
+            if (replace) {
+                result.SetValue(i, Value::VARCHAR(regex::Replace(*re, subject,
+                                                                 rv.GetValue<std::string>(),
+                                                                 options.global)));
+            } else if (extract) {
+                std::string out;
+                if (re->Search(subject, 0, false, false, groups) &&
+                    group < static_cast<int64_t>(groups.size()) && groups[group].first >= 0) {
+                    out = subject.substr(static_cast<size_t>(groups[group].first),
+                                         static_cast<size_t>(groups[group].second - groups[group].first));
                 }
-            } catch (...) {
-                result.GetValidity().SetInvalid(i);
+                result.SetValue(i, Value::VARCHAR(out));
+            } else {
+                result.GetData<bool>()[i] = re->Search(subject, 0, full, full, groups);
             }
         }
         return;

@@ -1458,6 +1458,57 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
                 "Could not choose a best candidate function for contains(NULL, NULL)");
         }
     }
+    // The regular expression functions (#32, design L24): DuckDB's
+    // signatures, with their options and regexp_extract's group constant.
+    // REGEXP, REGEXP_LIKE and REGEXP_MATCH are not DuckDB's names.
+    if (name == "REGEXP" || name == "REGEXP_LIKE" || name == "REGEXP_MATCH") {
+        throw NotImplementedException("Function " + name + " is not supported");
+    }
+    if (name == "REGEXP_MATCHES" || name == "REGEXP_FULL_MATCH" || name == "REGEXP_REPLACE" ||
+        name == "REGEXP_EXTRACT") {
+        size_t lo = name == "REGEXP_REPLACE" ? 3 : 2;
+        size_t hi = name == "REGEXP_REPLACE" || name == "REGEXP_EXTRACT" ? 4 : 3;
+        if (args.size() < lo || args.size() > hi) {
+            throw BinderException(ErrorCode::TYPE_MISMATCH,
+                "No function matches " + StringUtil::Lower(name) + "() with " +
+                std::to_string(args.size()) + " argument(s)");
+        }
+        for (size_t k = 0; k < args.size(); k++) {
+            auto t = args[k]->GetReturnType().id();
+            bool constant_arg = k >= lo || (name == "REGEXP_EXTRACT" && k == 2);
+            if (!constant_arg) {
+                if (t != LogicalTypeId::VARCHAR && t != LogicalTypeId::SQLNULL) {
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        StringUtil::Lower(name) + "() takes text, not " +
+                        args[k]->GetReturnType().ToString());
+                }
+                continue;
+            }
+            if (args[k]->GetExpressionType() != BoundExpressionType::CONSTANT) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    StringUtil::Lower(name) + "(): the options and the group must be a constant expression");
+            }
+            const auto &v = static_cast<const BoundConstant &>(*args[k]).value;
+            bool group = name == "REGEXP_EXTRACT" && k == 2 && t != LogicalTypeId::VARCHAR;
+            if (v.IsNull()) {
+                throw InvalidInputException(StringUtil::Lower(name) + "(): the " +
+                    (group ? "group" : "options") + " must not be NULL");
+            }
+            if (!group && t != LogicalTypeId::VARCHAR) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    StringUtil::Lower(name) + "(): the options are text");
+            }
+            if (name == "REGEXP_EXTRACT" && k == 2 && !group && args.size() == 4) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "Could not choose a best candidate function for regexp_extract()");
+            }
+            if (group && t != LogicalTypeId::INTEGER && t != LogicalTypeId::BIGINT &&
+                t != LogicalTypeId::SMALLINT && t != LogicalTypeId::TINYINT) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "regexp_extract(): the group is an integer");
+            }
+        }
+    }
     // A BLOB argument: the functions that read a BLOB's bytes as DuckDB
     // does. The others read it as text, gave a VARCHAR of its bytes or
     // unified it with no type (#31).
@@ -1876,8 +1927,7 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         return_type = LogicalType::DOUBLE();
     } else if (name == "INITCAP") {
         return_type = LogicalType::VARCHAR();
-    } else if (name == "EXISTS" || name == "REGEXP_MATCHES" || name == "REGEXP_MATCH" ||
-               name == "REGEXP" || name == "REGEXP_LIKE") {
+    } else if (name == "EXISTS" || name == "REGEXP_MATCHES" || name == "REGEXP_FULL_MATCH") {
         return_type = LogicalType::BOOLEAN();
     } else if (name == "REGEXP_REPLACE" || name == "REGEXP_EXTRACT") {
         return_type = LogicalType::VARCHAR();
