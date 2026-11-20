@@ -19,13 +19,13 @@
 // the kept corpus covers (fuzz/run.sh), against a floor in the workflow.
 //
 // Build: cmake -S . -B build-fuzz -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang
-//        -DSLOTHDB_FUZZ=ON -DSLOTHDB_BUILD_TESTS=OFF && cmake --build build-fuzz
+//        -DZUGODB_FUZZ=ON -DZUGODB_BUILD_TESTS=OFF && cmake --build build-fuzz
 // Run:   build-fuzz/fuzz/sql_fuzzer fuzz/corpus/sql
 
-#include "slothdb/common/parallel.hpp"
-#include "slothdb/common/types/data_chunk.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/common/parallel.hpp"
+#include "zugodb/common/types/data_chunk.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
 
 #include <cstddef>
 #include <cstdint>

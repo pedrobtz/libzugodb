@@ -40,7 +40,7 @@ issue closed. zugodb then moves its pin.
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | [#52](https://github.com/pedrobtz/libzugodb/pull/52) | 2026-11-20 |
 | 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | [#54](https://github.com/pedrobtz/libzugodb/pull/54) | 2026-11-20 |
 | 11.1 | [Host-supplied function providers](#stage-111--host-supplied-function-providers) | 0.4.0 | ci | [#40](https://github.com/pedrobtz/libzugodb/issues/40) | [#57](https://github.com/pedrobtz/libzugodb/pull/57) | 2026-11-20 |
-| 12 | [The names become zugodb](#stage-12--the-names-become-zugodb) | 0.4.0 | ci | [#17](https://github.com/pedrobtz/libzugodb/issues/17) | | |
+| 12 | [The names become zugodb](#stage-12--the-names-become-zugodb) | 0.4.0 | ci | [#17](https://github.com/pedrobtz/libzugodb/issues/17) | [#62](https://github.com/pedrobtz/libzugodb/pull/62) | |
 <!-- markdownlint-enable MD013 -->
 
 ## Stage 0 — Repository clean-up
@@ -867,7 +867,26 @@ except the credit.
 - Every `**Tests.**` line holds on all CI jobs.
 - `v0.4.0` is tagged and released.
 
-**Design.** [§7](design.md#7-the-contract-with-zugodb).
+**Deviations (2026-11-20).**
+
+- The shell's CMake target is `zugodb_shell`, its executable `zugodb`:
+  the library's target is `zugodb` (L31).
+- The grep is `tools/check_names.sh`, in the three `test` legs. Besides
+  the credit and the changelog it excludes `.agents/`, whose past stages
+  and decisions are history, and `tools/make_db_fixtures.sh`, which
+  builds two commits from before the rename under their names (L31).
+- The symbols are compared with `main` before the rename (72352a9), not
+  with 0.3.0, from which Stage 11 removed a third of `src/`. Demangled,
+  the two lists differ only in `SlothDBException`, now
+  `ZugodbException`.
+- The database file's bytes are kept: the constants are renamed, the
+  magic (`BDLS`) and format version 1001 are not, so no fixture changes.
+- The release is a pull request of its own, as 0.3.0's was: the version
+  in `CMakeLists.txt` and the changelog's heading change there, and the
+  tag follows it.
+
+**Design.** [§7](design.md#7-the-contract-with-zugodb), L31 in
+[§8](design.md#8-decisions).
 
 ## After 0.4.0
 

@@ -1,5 +1,5 @@
-#include "slothdb/common/types/logical_type.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/common/types/logical_type.hpp"
+#include "zugodb/common/exception.hpp"
 
 namespace zugodb {
 

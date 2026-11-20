@@ -19,12 +19,12 @@
 // crash, hang, sanitizer report or broken oracle fails (__builtin_trap).
 //
 // Build: cmake -S . -B build-fuzz -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang
-//        -DSLOTHDB_FUZZ=ON -DSLOTHDB_BUILD_TESTS=OFF && cmake --build build-fuzz
+//        -DZUGODB_FUZZ=ON -DZUGODB_BUILD_TESTS=OFF && cmake --build build-fuzz
 // Run:   build-fuzz/fuzz/checkpoint_load_fuzzer fuzz/corpus/checkpoint_load
 
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
-#include "slothdb/storage/checkpoint.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/storage/checkpoint.hpp"
 
 #include <algorithm>
 #include <cstddef>

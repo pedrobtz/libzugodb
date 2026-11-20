@@ -8,8 +8,8 @@
 #include "doctest.h"
 
 #include "../conformance_rows.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
 
 using namespace zugodb;
 using namespace zugodb::conformance;

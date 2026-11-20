@@ -1,7 +1,7 @@
 #include "doctest.h"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/common/exception.hpp"
 
 using namespace zugodb;
 

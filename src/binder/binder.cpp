@@ -1,9 +1,9 @@
-#include "slothdb/binder/binder.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/string_util.hpp"
-#include "slothdb/execution/expression_executor.hpp"
-#include "slothdb/main/query_materialize.hpp"
-#include "slothdb/parser/expression/parsed_expression.hpp"
+#include "zugodb/binder/binder.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/string_util.hpp"
+#include "zugodb/execution/expression_executor.hpp"
+#include "zugodb/main/query_materialize.hpp"
+#include "zugodb/parser/expression/parsed_expression.hpp"
 #include <functional>
 
 namespace zugodb {
@@ -1805,7 +1805,7 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
     auto name = StringUtil::Upper(expr.function_name);
     // Canonical alias normalization — collapse SQL-standard synonyms
     // onto SlothDB's primary names so the binder/executor only need to
-    // recognise one spelling. byte-length semantics (slothdb's LENGTH
+    // recognise one spelling. byte-length semantics (SlothDB's LENGTH
     // returns bytes today, matching the byte-oriented LEFT/RIGHT/
     // SUBSTRING family); true UTF-8 codepoint length is a separate
     // future change.

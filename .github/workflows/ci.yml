@@ -23,20 +23,22 @@ jobs:
       matrix:
         include:
           - { name: linux-gcc, os: ubuntu-24.04, flags: '' }
-          - { name: linux-asan-ubsan, os: ubuntu-24.04, flags: '-DSLOTHDB_SANITIZERS=ON' }
+          - { name: linux-asan-ubsan, os: ubuntu-24.04, flags: '-DZUGODB_SANITIZERS=ON' }
           - { name: macos-clang, os: macos-latest, flags: '' }
     steps:
       - uses: actions/checkout@v4
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSLOTHDB_BUILD_SHELL=ON ${{ matrix.flags }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DZUGODB_BUILD_SHELL=ON ${{ matrix.flags }}
       - name: Build
         run: cmake --build build -j4
       - name: Check docs/dialect.md against the binder's functions
         run: tools/check_dialect.sh
+      - name: Check that nothing is named after SlothDB but the credit
+        run: tools/check_names.sh
       - name: Check that no symbol of a removed library is left
-        run: tools/check_symbols.sh build/src/libslothdb.a
+        run: tools/check_symbols.sh build/src/libzugodb.a
       - name: Test
-        run: build/test/slothdb_tests
+        run: build/test/zugodb_tests
 
   # ThreadSanitizer over the whole suite. test_threads.cpp repeats its
   # multi-threaded queries ZUGODB_THREAD_ROUNDS times at thread caps 2 and
@@ -55,14 +57,14 @@ jobs:
         run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
           -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
-          -DSLOTHDB_TSAN=ON
+          -DZUGODB_TSAN=ON
       - name: Build
         run: cmake --build build -j4
       - name: Test
         env:
           TSAN_OPTIONS: halt_on_error=1 second_deadlock_stack=1
           ZUGODB_THREAD_ROUNDS: '3'
-        run: build/test/slothdb_tests
+        run: build/test/zugodb_tests
 
   # The conformance subset (design §5, L14 to L17): DuckDB's test/sql at
   # the tag in test/conformance/duckdb-tag, run by tools/slt at thread caps
@@ -97,7 +99,7 @@ jobs:
       - name: Configure
         run: >-
           cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
-          -DSLOTHDB_SANITIZERS=ON -DSLOTHDB_BUILD_TESTS=OFF ${{ matrix.flags }}
+          -DZUGODB_SANITIZERS=ON -DZUGODB_BUILD_TESTS=OFF ${{ matrix.flags }}
       - name: Build
         run: cmake --build build -j4 --target zugodb_slt
       - name: Run and compare with the committed counts
@@ -134,9 +136,9 @@ jobs:
       - name: Check docs/dialect.md against the binder's functions
         run: tools/check_dialect.sh
       - name: Check that no symbol of a removed library is left
-        run: tools/check_symbols.sh build/src/libslothdb.a
+        run: tools/check_symbols.sh build/src/libzugodb.a
       - name: Test
-        run: build/test/slothdb_tests.exe
+        run: build/test/zugodb_tests.exe
 
   # libFuzzer, clang, ASan and UBSan (fuzz/run.sh). Each target runs 120 s
   # on a pull request and an hour on the weekly schedule; any crash, hang,
@@ -160,7 +162,7 @@ jobs:
         run: >-
           cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=RelWithDebInfo
           -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
-          -DSLOTHDB_FUZZ=ON -DSLOTHDB_BUILD_TESTS=OFF
+          -DZUGODB_FUZZ=ON -DZUGODB_BUILD_TESTS=OFF
       - name: Build
         run: cmake --build build-fuzz -j4 --target ${{ matrix.target }}_fuzzer
       - name: Fuzz

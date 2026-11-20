@@ -9,10 +9,10 @@
 // cannot go stale.
 #include "doctest.h"
 
-#include "slothdb/common/parallel.hpp"
-#include "slothdb/common/types/float_order.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/common/parallel.hpp"
+#include "zugodb/common/types/float_order.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
 
 #include <cmath>
 #include <cstdio>

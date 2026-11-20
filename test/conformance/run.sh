@@ -11,7 +11,7 @@
 #   test/conformance/run.sh <zugodb_slt> [--update] [corpus dir]
 #
 # The committed outputs are made by the build the `conformance` CI job
-# uses: RelWithDebInfo with -DSLOTHDB_SANITIZERS=ON (ASan and UBSan), so
+# uses: RelWithDebInfo with -DZUGODB_SANITIZERS=ON (ASan and UBSan), so
 # that a memory error is a crash every time and not by chance (design L16).
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)

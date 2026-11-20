@@ -14,7 +14,7 @@
 
 #include "slt.hpp"
 
-#include "slothdb/common/types/value.hpp"
+#include "zugodb/common/types/value.hpp"
 
 #include <cmath>
 #include <fstream>

@@ -1,5 +1,5 @@
 #include "doctest.h"
-#include "slothdb/common/types/vector.hpp"
+#include "zugodb/common/types/vector.hpp"
 
 using namespace zugodb;
 

@@ -1,6 +1,6 @@
-#include "slothdb/parser/tokenizer.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/string_util.hpp"
+#include "zugodb/parser/tokenizer.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/string_util.hpp"
 #include <unordered_map>
 
 namespace zugodb {

@@ -1,7 +1,7 @@
 #include "doctest.h"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/optimizer/optimizer.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/optimizer/optimizer.hpp"
 
 using namespace zugodb;
 

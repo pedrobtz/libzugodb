@@ -9,7 +9,7 @@ add_library(zugodb_slt_lib STATIC
     driver.cpp
 )
 target_include_directories(zugodb_slt_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(zugodb_slt_lib PUBLIC slothdb_lib)
+target_link_libraries(zugodb_slt_lib PUBLIC zugodb)
 
 add_executable(zugodb_slt main.cpp)
 target_link_libraries(zugodb_slt PRIVATE zugodb_slt_lib)

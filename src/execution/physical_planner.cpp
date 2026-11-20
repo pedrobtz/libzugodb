@@ -1,17 +1,17 @@
-#include "slothdb/execution/physical_planner.hpp"
-#include "slothdb/common/profile_log.hpp"
-#include "slothdb/execution/expression_executor.hpp"
-#include "slothdb/execution/agg_emit_helpers.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/parallel.hpp"
-#include "slothdb/common/string_util.hpp"
-#include "slothdb/storage/data_table.hpp"
+#include "zugodb/execution/physical_planner.hpp"
+#include "zugodb/common/profile_log.hpp"
+#include "zugodb/execution/expression_executor.hpp"
+#include "zugodb/execution/agg_emit_helpers.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/parallel.hpp"
+#include "zugodb/common/string_util.hpp"
+#include "zugodb/storage/data_table.hpp"
 #include "third_party/unordered_dense.h"
-#include "slothdb/execution/simple_i64_set.hpp"
-#include "slothdb/execution/literal_emit_filter.hpp"
-#include "slothdb/execution/count_group_agg.hpp"
-#include "slothdb/execution/group_key.hpp"
-#include "slothdb/common/types/float_order.hpp"
+#include "zugodb/execution/simple_i64_set.hpp"
+#include "zugodb/execution/literal_emit_filter.hpp"
+#include "zugodb/execution/count_group_agg.hpp"
+#include "zugodb/execution/group_key.hpp"
+#include "zugodb/common/types/float_order.hpp"
 #include <algorithm>
 #include <cmath>
 #include <chrono>
@@ -34,12 +34,12 @@
 #include <unordered_set>
 
 // AVX2 baseline (Haswell+, 2013). CMake adds /arch:AVX2 (MSVC) or -mavx2
-// to slothdb_lib so we can use 256-bit SIMD directly. Used by the FUSED
+// to zugodb so we can use 256-bit SIMD directly. Used by the FUSED
 // PARQUET FAST PATH's INT32 SUM hot loop (SUM / AVG over 100M rows).
 // MSVC defines __AVX2__ when /arch:AVX2 is set.
 #if defined(__AVX2__)
 #include <immintrin.h>
-#define SLOTHDB_PP_HAS_AVX2 1
+#define ZUGODB_PP_HAS_AVX2 1
 #endif
 
 namespace zugodb {
@@ -1283,7 +1283,7 @@ public:
 
         auto types = table_->GetTypes();
         DataChunk chunk;
-        // zuslothdb: every row of the VALUES list goes into this one chunk,
+        // zugodb: every row of the VALUES list goes into this one chunk,
         // so it is sized for them all; at the default 2048 rows a longer
         // list wrote past its buffers (#45).
         chunk.Initialize(types, std::max<idx_t>(VECTOR_SIZE, values_.size()));
@@ -2467,7 +2467,7 @@ private:
     }
 
     void Setup() {
-#if 0 // SLOTHDB_DBG_WINDOW
+#if 0 // ZUGODB_DBG_WINDOW
         auto _dbg_t0 = std::chrono::high_resolution_clock::now();
         auto _dbg_step = [&](const char *what) {
             auto t = std::chrono::high_resolution_clock::now();

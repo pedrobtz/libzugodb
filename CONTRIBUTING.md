@@ -11,12 +11,12 @@ engine accepts or refuses.
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
-build/test/slothdb_tests                    # the whole doctest suite
-build/test/slothdb_tests -tc="*Window*"     # test cases by name
+build/test/zugodb_tests                    # the whole doctest suite
+build/test/zugodb_tests -tc="*Window*"     # test cases by name
 ```
 
-`-DSLOTHDB_SANITIZERS=ON` builds with ASan and UBSan, and
-`-DSLOTHDB_BUILD_SHELL=ON` adds the `slothdb` shell from `tools/shell/`.
+`-DZUGODB_SANITIZERS=ON` builds with ASan and UBSan, and
+`-DZUGODB_BUILD_SHELL=ON` adds the `zugodb` shell from `tools/shell/`.
 CI runs the suite on Linux gcc, Linux with ASan and UBSan, macOS clang and
 MinGW-w64 UCRT64; a change must pass all four.
 
@@ -24,7 +24,7 @@ MinGW-w64 UCRT64; a change must pass all four.
 
 - C++20, in the namespace `zugodb::`.
 - Sources are under `src/<step>/`, their headers under
-  `include/slothdb/<step>/`, included as `"slothdb/<step>/<file>.hpp"`.
+  `include/zugodb/<step>/`, included as `"zugodb/<step>/<file>.hpp"`.
   Sources are globbed: after adding a file, re-run the configure step.
 - The engine refuses what it cannot answer right, is offline, writes
   nothing to `stdout` or `stderr`, and keeps every thread pool under the
@@ -39,7 +39,7 @@ MinGW-w64 UCRT64; a change must pass all four.
 ## Tests
 
 Tests are doctest cases under `test/unit/<step>/`, all linked into
-`slothdb_tests`.
+`zugodb_tests`.
 
 ## What zugodb vendors
 

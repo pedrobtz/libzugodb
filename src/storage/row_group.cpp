@@ -1,5 +1,5 @@
-#include "slothdb/storage/row_group.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/storage/row_group.hpp"
+#include "zugodb/common/exception.hpp"
 #include <algorithm>
 
 namespace zugodb {

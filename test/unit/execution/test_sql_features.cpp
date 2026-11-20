@@ -1,6 +1,6 @@
 #include "doctest.h"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
 
 using namespace zugodb;
 
@@ -133,8 +133,8 @@ TEST_CASE("SQL - REPLACE") {
     conn.Query("CREATE TABLE t (s VARCHAR)");
     conn.Query("INSERT INTO t VALUES ('Hello World')");
 
-    auto r = conn.Query("SELECT REPLACE(s, 'World', 'SlothDB') FROM t");
-    CHECK(r.GetValue(0, 0).GetValue<std::string>() == "Hello SlothDB");
+    auto r = conn.Query("SELECT REPLACE(s, 'World', 'zugodb') FROM t");
+    CHECK(r.GetValue(0, 0).GetValue<std::string>() == "Hello zugodb");
 }
 
 // ============================================================================

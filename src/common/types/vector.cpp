@@ -1,6 +1,6 @@
-#include "slothdb/common/types/vector.hpp"
-#include "slothdb/common/enums.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/common/types/vector.hpp"
+#include "zugodb/common/enums.hpp"
+#include "zugodb/common/exception.hpp"
 #include <cstring>
 
 namespace zugodb {
@@ -50,7 +50,7 @@ Vector &Vector::operator=(Vector &&other) noexcept {
 }
 
 void Vector::Initialize(idx_t capacity) {
-    // zuslothdb: one validity bit per row of the capacity, not one
+    // zugodb: one validity bit per row of the capacity, not one
     // vector's 2048 (#45); a statement's VALUES can make a larger vector.
     validity_.SetCapacity(capacity);
     capacity_ = capacity;

@@ -1,8 +1,8 @@
 #include "doctest.h"
-#include "slothdb/execution/dictionary_vector.hpp"
-#include "slothdb/execution/gpu/gpu_engine.hpp"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
+#include "zugodb/execution/dictionary_vector.hpp"
+#include "zugodb/execution/gpu/gpu_engine.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
 #include <chrono>
 
 using namespace zugodb;

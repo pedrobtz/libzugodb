@@ -1,5 +1,5 @@
 #include "doctest.h"
-#include "slothdb/common/crc32.hpp"
+#include "zugodb/common/crc32.hpp"
 #include <cstring>
 
 using namespace zugodb;

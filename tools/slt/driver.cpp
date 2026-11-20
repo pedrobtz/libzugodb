@@ -11,7 +11,7 @@
 
 #include "slt.hpp"
 
-#include "slothdb/common/parallel.hpp"
+#include "zugodb/common/parallel.hpp"
 
 #include <algorithm>
 #include <cerrno>

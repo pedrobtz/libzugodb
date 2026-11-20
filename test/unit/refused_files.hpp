@@ -6,8 +6,8 @@
 // grep for file routes in test/ finds only its arguments.
 
 #include "doctest.h"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/main/connection.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/main/connection.hpp"
 
 #include <string>
 

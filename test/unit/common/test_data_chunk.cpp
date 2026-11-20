@@ -1,5 +1,5 @@
 #include "doctest.h"
-#include "slothdb/common/types/data_chunk.hpp"
+#include "zugodb/common/types/data_chunk.hpp"
 
 using namespace zugodb;
 

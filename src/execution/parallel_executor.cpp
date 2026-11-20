@@ -1,6 +1,6 @@
-#include "slothdb/execution/parallel_executor.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/parallel.hpp"
+#include "zugodb/execution/parallel_executor.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/parallel.hpp"
 
 namespace zugodb {
 
