@@ -63,7 +63,6 @@ enum class WorkerSite : unsigned int {
     NONE = 0,
     FORK_JOIN = 1,    // WorkerGroup: threads started and joined in one scope
     PARALLEL_FOR = 2, // ParallelFor
-    PIPELINE = 3,     // Parquet scan's decode workers feeding GetData()
     POOL = 4,         // tasks on ThreadPool (ParallelExecutor)
 };
 

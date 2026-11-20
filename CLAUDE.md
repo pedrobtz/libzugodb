@@ -100,30 +100,27 @@ binding, is removed.
 
 Where the weight is, which the directory names do not show:
 
-- `src/execution/physical_planner.cpp` (14,600 lines) holds the physical
+- `src/execution/physical_planner.cpp` (5,900 lines) holds the physical
   operators and many special-case fast paths for specific query shapes; the
-  other files in `execution/` (`radix_count_agg`, `int_group_agg`,
-  `topk_varchar`, ...) are such paths split out of it.
+  other files in `execution/` (`count_group_agg`, `literal_emit_filter`,
+  ...) are such paths split out of it.
 - `src/execution/expression_executor.cpp` (5,100 lines) is every scalar
   function and cast. A new function also needs its entry in the function
   registry of `src/binder/binder.cpp` (arity, argument and return types;
   any name outside it is refused) and in `docs/dialect.md`, which
   `tools/check_dialect.sh` holds to the registry in CI.
-- `src/main/connection.cpp` (3,100 lines) does far more than dispatch:
-  DDL, DML, `COPY`, table functions and several rewrites of the parsed
-  statement happen here before or instead of the pipeline.
+- `src/main/connection.cpp` (2,300 lines) does far more than dispatch:
+  DDL, DML, `generate_series`, views, CTEs and several rewrites of the
+  parsed statement happen here before or instead of the pipeline.
 - SQL reads and writes no file (design §2). The parser refuses every route
   before anything is opened: the file table functions (`read_csv`,
   `read_parquet`, `read_json`, ...), a path used as a table, `DESCRIBE` of
   either, `COPY` and `CREATE LIVE VIEW` (`RefuseFileAccess` in
-  `src/parser/parser.cpp`). `connection.cpp` still holds its handlers for
-  them, no longer reached; Stage 11 removes them with the readers.
-- `src/storage/` is both the table storage (in memory, with a checkpointed
-  database file) and the file readers. `parquet.cpp` and the CSV and JSON
-  readers are still compiled and tested through their C++ API; doctests
-  reach the Parquet scan operator through a table set up with the catalog
-  (`test/unit/parquet_table.hpp`). The SQLite, Excel, Avro and Arrow IPC
-  readers are refused in their constructors too.
+  `src/parser/parser.cpp`). Nothing is behind the refusals: the engine has
+  no file reader since Stage 11 (design L28), and files reach it as Arrow
+  C streams through zugodb.
+- `src/storage/` is the table storage: in memory, with a checkpointed
+  database file. It compresses nothing.
 - The database file is format version 1001 with a CRC-32 over the whole
   file (`Checkpoint::ComputeChecksum`; layout in design L11). A change to
   what `Checkpoint::Save` writes bumps `SLOTHDB_VERSION` in the same
@@ -153,13 +150,13 @@ breaks:
 
 ## What the R package takes
 
-`tools/vendor.yaml` in zugodb copies `LICENSE`, `include/`, `src/` (without
-its CMake file), and from `third_party/` the zstd
-decompressor, `fastpforlib` and `snappy`. It builds them from a generated
-`Makevars`, not from CMake, so:
+`tools/vendor.yaml` in zugodb copies `LICENSE`, `include/` and `src/`
+(without its CMake file); nothing from `third_party/` since Stage 11, which
+removed zstd, `fastpforlib` and `snappy` (`tools/check_symbols.sh` keeps
+them out). It builds them from a generated `Makevars`, not from CMake, so:
 
-- moving, renaming or adding a directory under `src/`, `include/` or those
-  three `third_party/` directories changes the R package's build;
+- moving, renaming or adding a directory under `src/` or `include/`
+  changes the R package's build;
 - a compile definition or include path set only in CMake does not reach it.
 
 An engine change reaches the R package as a pull request here, a release

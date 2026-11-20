@@ -170,14 +170,15 @@ keeps all of it.
 ([zugodb §16.3][zdesign]) is a new one.
 
 No large file is split or reordered before the bar of §5 holds:
-`physical_planner.cpp` is 14,600 lines of special cases, and a
+`physical_planner.cpp` is 5,900 lines of special cases (14,600 before the
+readers went, L28), and a
 restructuring with no measure of correctness hides regressions.
 
 ## 7. The contract with zugodb
 
-zugodb copies `LICENSE`, `include/`, `src/` and, from `third_party/`, the
-zstd decompressor, `fastpforlib` and `snappy`, and compiles them without
-CMake. So:
+zugodb copies `LICENSE`, `include/` and `src/`, and compiles them without
+CMake; since Stage 11 it copies nothing from `third_party/` (L28), which
+held the zstd decompressor, `fastpforlib` and `snappy` until then. So:
 
 - a change under those paths reaches users only by a release tag here and
   a new pin there;
@@ -707,6 +708,67 @@ minor version.
     | `storage/fast_csv_reader.cpp`, `csv_reader.cpp`, `json_reader.cpp` (five) | `ReadChunk` and the JSON parse stop at `VECTOR_SIZE` | the C++ API only; no doctest crosses 2048 rows, recorded as bounded by the loop (Stage 11 removes them) |
     | `storage/sqlite_scanner.cpp`, `avro_reader.cpp`, `arrow_ipc.cpp` (six) | flush at `VECTOR_SIZE` | unreachable: refused in their constructors |
 
+- **L28 (2026-11-20, Stage 11, decided with an advisor).** The cut of the
+  file readers, and the answer to LQ2.
+  - The sizing (LQ2), at `ce2a75d` (v0.3.0). zstd (`third_party/zstd`,
+    39 files, 23,958 lines), `snappy` (4,793) and `fastpforlib` (2,621)
+    were used by `src/storage/parquet.cpp` alone, and miniz
+    (`src/storage/miniz.{c,h}`, 9,255) by `parquet.cpp` and
+    `excel_reader.cpp`. The database file needs none of them:
+    `Checkpoint::Save` and `Load` write and read uncompressed columns with
+    a CRC-32, and include nothing from `storage/compression/`. The readers
+    were 8,319 lines (Parquet 3,692, CSV 1,386, JSON 1,355, SQLite, Excel,
+    Avro and Arrow IPC 1,886), fed in `physical_planner.cpp` by six scan
+    operators and the Parquet and CSV fast paths of `ORDER BY ... LIMIT`,
+    the aggregates, `GROUP BY`, `COUNT(DISTINCT)` and the hash join, and
+    in `connection.cpp` by the handlers of `COPY`, the file table
+    functions, a path used as a table, `DESCRIBE` of a file and
+    `CREATE LIVE VIEW`, unreached since Stage 2 (L10).
+  - Removed with the readers: each of those, the catalog's file-scan and
+    live-view fields (`IsFileScan`, `SetParquetPath`, the cached
+    `ParquetReader`, `MarkLiveView`, ...), `CopyStatement` and
+    `CreateViewStatement::is_live`, `file_glob` and `hive_partition`,
+    and the execution helpers only the fast paths called
+    (`dict_histogram`, `radix_count_agg`, `int_group_agg`,
+    `topk_varchar`, `string_dedup`, `radix_multi_agg`, `inline_row_agg`,
+    `str_group_distinct`, `substring_search`, `simple_i64_count_map`,
+    `topn_filter_pass.hpp`; 4,278 lines). A helper any remaining path uses
+    stays as it is. `src/storage/compression/` goes too: SlothDB's column
+    compression, which no part of the engine called, only its doctest.
+    `parser.cpp` is not touched: each `RefuseFileAccess` stays as Stage 2
+    wrote it, so every route is refused as before, now with nothing
+    behind it.
+  - `WorkerSite::PIPELINE`, the Parquet scan's decode workers, goes; no
+    query reaches `ParallelFor` any more, and its doctest calls it at its
+    API, as the thread pool's does.
+  - Tests. The SQL refusal cases of the deleted reader tests
+    (`test_csv.cpp`, `test_json_fileio.cpp`, `test_sqlite.cpp`,
+    `test_arrow.cpp`, `test_parquet.cpp`) move into `test_refused.cpp`
+    with their names and assertions; the Parquet files they give SQL are
+    the format's magic bytes, not a file the removed writer made. The
+    thread, worker-error and chunk cases driven through the Parquet scan
+    go with it, not re-pointed at a table, since they tested the decode
+    pipeline; the in-memory cases stay. The fixtures `groups.parquet`,
+    `damaged_zstd.parquet`, `simple.sqlite` and
+    `tools/make_parquet_fixtures.py` go.
+  - A second golden file, `test/fixtures/written_by_v0.3.0.db`, written
+    once by the shell built at `v0.3.0` (`tools/make_db_fixtures.sh
+    v0.3.0`) and never regenerated, is read back against its rows and
+    joins the bit-flip and truncation loop. The format is unchanged
+    (1001): it is byte for byte `golden_v1001.db`, as is a file the
+    shell of this stage writes.
+  - `tools/check_symbols.sh` runs `nm` on `libslothdb.a`, not demangled,
+    and fails on a symbol of zstd, snappy, fastpforlib or miniz
+    (`ZSTD_`, `HUF_`, `FSE_`, `snappy`, `mz_`, `tinfl_`, `tdefl_`,
+    `FastPForLib`, `fastunpack`, `fastpack`), on a library with no engine
+    symbol, and on any of the removed paths coming back. It runs in each
+    leg of `test` and in `mingw`, beside `check_dialect.sh`.
+  - Left for a later clean-up, not this stage, as they change no result:
+    the column mask `PlanProjection` hands to an `ORDER BY` below it
+    (`SetParentProjectionCols`), which only the Parquet top-k read, and
+    comments in `physical_planner.cpp` that still name the Parquet
+    paths.
+
 ## 9. Open questions
 
 - **LQ1 (settled 2026-11-20, Stage 6).** Which DuckDB tag is pinned, and
@@ -723,8 +785,10 @@ minor version.
   `test/conformance/<platform>/totals.tsv` and `counts.tsv`; the job runs
   under ten minutes (about 3.5 on Linux and 7 on macOS, build included), so the
   subset is not cut further.
-- **LQ2.** When the engine's readers are cut, what else in `src/storage/`
-  still needs zstd, snappy or miniz? [zugodb §7.5][zdesign] says the cut
-  is sized first; the sizing is the first work of that stage.
+- **LQ2 (settled 2026-11-20, Stage 11).** When the engine's readers are
+  cut, what else in `src/storage/` still needs zstd, snappy or miniz?
+  Nothing: only `parquet.cpp` and `excel_reader.cpp` used them, and the
+  database file's own format compresses nothing. The sizing and the cut
+  are L28.
 
 [zdesign]: https://github.com/pedrobtz/zugodb/blob/main/.agents/design.md

@@ -33,6 +33,8 @@ jobs:
         run: cmake --build build -j4
       - name: Check docs/dialect.md against the binder's functions
         run: tools/check_dialect.sh
+      - name: Check that no symbol of a removed library is left
+        run: tools/check_symbols.sh build/src/libslothdb.a
       - name: Test
         run: build/test/slothdb_tests
 
@@ -131,6 +133,8 @@ jobs:
         run: cmake --build build
       - name: Check docs/dialect.md against the binder's functions
         run: tools/check_dialect.sh
+      - name: Check that no symbol of a removed library is left
+        run: tools/check_symbols.sh build/src/libslothdb.a
       - name: Test
         run: build/test/slothdb_tests.exe
 

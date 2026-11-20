@@ -12,10 +12,13 @@ a project of its own. Defects found here are reported upstream
 ## How it differs from SlothDB
 
 - **It refuses what it cannot do right.** Where SlothDB returned a wrong value
-  with no error, libzugodb raises one: Parquet columns whose logical type the
-  reader cannot decode, JSON its readers would misread, SlothDB's private
-  Arrow format, the SQLite, Excel and Avro readers, `ROLLBACK` (there is no
-  undo), `STRFTIME` without a format.
+  with no error, libzugodb raises one: `ROLLBACK` (there is no undo) and
+  `STRFTIME` without a format, among others.
+- **It reads and writes no file from SQL.** SlothDB's Parquet, CSV, JSON,
+  SQLite, Excel, Avro and Arrow readers are removed, with the zstd, snappy
+  and FastPFor libraries they used; `read_csv()`, `COPY` and the other file
+  routes are refused. Files reach the engine as Arrow C streams, through
+  zugodb.
 - **It is offline and loads no code.** A remote path (`http://`, `https://`,
   `s3://`) is an error, and the HTTP client, the extension loader and the
   natural-language `ask` module (which downloads a model) are removed.

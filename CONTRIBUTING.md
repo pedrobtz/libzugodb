@@ -43,10 +43,10 @@ Tests are doctest cases under `test/unit/<step>/`, all linked into
 
 ## What zugodb vendors
 
-zugodb copies `LICENSE`, `include/`, `src/` and, from `third_party/`,
-`zstd`, `fastpforlib` and `snappy`, and compiles them without CMake. A
-definition or include path set only in CMake does not reach it, and a path
-moved, added or removed there changes zugodb's build.
+zugodb copies `LICENSE`, `include/` and `src/`, and compiles them without
+CMake; it copies nothing from `third_party/` since 0.4.0. A definition or
+include path set only in CMake does not reach it, and a path moved, added
+or removed there changes zugodb's build.
 
 ## Releases
 
