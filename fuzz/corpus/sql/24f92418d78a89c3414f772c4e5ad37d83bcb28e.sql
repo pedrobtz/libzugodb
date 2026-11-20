@@ -1,0 +1,1 @@
+CREATE OR REPLACE TABLE reuse_probe AS SELECT i id, (CASE WHEN i%4=0 THEN NULL WHEN i%4=1 THEN [1,NULL] WHEN i%4=2 THEN [2,0] ELSE [0,1] END)::{type} v FROM range(2050) t(i);

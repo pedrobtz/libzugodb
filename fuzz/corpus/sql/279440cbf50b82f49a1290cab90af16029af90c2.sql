@@ -1,0 +1,1 @@
+SELECT a IS NULL, a IS NOT NULL, rowid IS NULL, (a = NULL) IS NULL FROM test ORDER BY b

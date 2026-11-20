@@ -1,0 +1,1 @@
+SELECT COUNT(t1.rowid) FROM t1, v0 RIGHT JOIN t0 ON t1.c1=t0.c1 AND v0.c0=t0.c0;

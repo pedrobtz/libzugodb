@@ -1,0 +1,1 @@
+select * from (select 42 as a, 'asdf' as b) sq2, (select 42 as a, NULL::varchar as b) sq1 where sq1.b <> sq2.b;

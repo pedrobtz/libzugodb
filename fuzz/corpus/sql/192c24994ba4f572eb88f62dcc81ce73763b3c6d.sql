@@ -1,0 +1,1 @@
+SELECT 'ü'::BLOB

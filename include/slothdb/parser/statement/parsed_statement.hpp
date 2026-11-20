@@ -190,6 +190,9 @@ class DescribeStatement : public ParsedStatement {
 public:
     DescribeStatement() : ParsedStatement(StatementType::DESCRIBE) {}
     ParsedStmtPtr inner;
+    // DESCRIBE <name>: the name, so its columns' NOT NULL and PRIMARY KEY
+    // are reported as DuckDB's are; empty for DESCRIBE <query>.
+    std::string table_name;
 };
 
 // PRAGMA statement: `PRAGMA <name>` or `PRAGMA <name>('arg')`.

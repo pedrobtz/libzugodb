@@ -1,0 +1,1 @@
+SELECT STRING_AGG(g::VARCHAR, ',' ORDER BY x, y) FROM strings ORDER BY 1

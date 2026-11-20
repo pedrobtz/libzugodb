@@ -1,0 +1,1 @@
+INSERT INTO t2(c0) VALUES (2);

@@ -1,0 +1,1 @@
+SELECT EXTRACT(millennium FROM cast('2001-10-10' AS DATE));

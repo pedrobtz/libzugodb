@@ -1,0 +1,1 @@
+SELECT typeof(avg(TIME '12:00:00' ) EXPORT_STATE);

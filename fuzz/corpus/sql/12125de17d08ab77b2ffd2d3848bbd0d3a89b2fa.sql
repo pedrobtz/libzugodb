@@ -1,0 +1,1 @@
+CREATE TABLE tbl_s (col0 STRUCT(x INTEGER), col1 STRUCT(x INTEGER));

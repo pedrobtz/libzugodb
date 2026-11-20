@@ -1,0 +1,1 @@
+INSERT INTO issue24045_a VALUES (1);

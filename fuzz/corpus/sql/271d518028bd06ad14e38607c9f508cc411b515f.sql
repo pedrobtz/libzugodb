@@ -1,0 +1,1 @@
+INSERT INTO rnums VALUES (11),(19),(25),(100);

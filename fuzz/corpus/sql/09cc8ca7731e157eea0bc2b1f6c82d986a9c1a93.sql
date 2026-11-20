@@ -1,0 +1,1 @@
+INSERT INTO dates VALUES ('1993-02-29')

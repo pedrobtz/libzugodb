@@ -55,7 +55,7 @@ test/sql/aggregate/aggregates/mode_rewrite_memory.test	left out: require exact_v
 test/sql/aggregate/aggregates/quantile_memory_limit.test	run	2	1	1	0	0	0	0	0	0
 test/sql/aggregate/aggregates/string_agg_union.test	run	2	2	0	0	0	0	0	0	0
 test/sql/aggregate/aggregates/test_aggr_string.test	run	13	10	1	0	0	2	0	0	0
-test/sql/aggregate/aggregates/test_aggregate_types.test	run	25	20	5	0	0	0	0	0	0
+test/sql/aggregate/aggregates/test_aggregate_types.test	run	25	21	4	0	0	0	0	0	0
 test/sql/aggregate/aggregates/test_aggregate_types_scalar.test	run	34	21	13	0	0	0	0	0	0
 test/sql/aggregate/aggregates/test_any_value.test	run	109	3	106	0	0	0	0	0	0
 test/sql/aggregate/aggregates/test_any_value_noninlined.test	run	10	2	8	0	0	0	0	0	0
@@ -134,12 +134,12 @@ test/sql/aggregate/distinct/grouped/issue_5070.test	run	1	1	0	0	0	0	0	0	0
 test/sql/aggregate/distinct/grouped/multiple_grouping_sets.test	run	21	2	19	0	0	0	0	0	0
 test/sql/aggregate/distinct/grouped/string_agg.test	run	8	3	5	0	0	0	0	0	0
 test/sql/aggregate/distinct/issue19616.test	run	12	2	10	0	0	0	0	0	0
-test/sql/aggregate/distinct/issue2656.test	run	6	1	2	0	0	3	0	0	0
+test/sql/aggregate/distinct/issue2656.test	run	6	5	1	0	0	0	0	0	0
 test/sql/aggregate/distinct/issue8505.test	run	1	1	0	0	0	0	0	0	0
 test/sql/aggregate/distinct/issue9241.test	run	4	2	2	0	0	0	0	0	0
 test/sql/aggregate/distinct/rewrite/distinct_aggregate_rewrite.test	run	52	20	29	0	0	3	0	0	0
 test/sql/aggregate/distinct/rewrite/distinct_aggregate_rewrite_join_order.test	run	6	0	6	0	0	0	0	0	0
-test/sql/aggregate/distinct/test_distinct.test	run	11	8	3	0	0	0	0	0	0
+test/sql/aggregate/distinct/test_distinct.test	run	11	9	2	0	0	0	0	0	0
 test/sql/aggregate/distinct/test_distinct_on.test	run	27	5	22	0	0	0	0	0	0
 test/sql/aggregate/distinct/test_distinct_on_columns.test	run	25	9	16	0	0	0	0	0	0
 test/sql/aggregate/distinct/test_distinct_order_by.test	run	8	7	1	0	0	0	0	0	0
@@ -183,6 +183,8 @@ test/sql/aggregate/quantile_fun.test	left out: directive set
 test/sql/aggregate/sparse_clustered_aggregation.test	run	3010	1	3009	0	0	0	0	0	0
 test/sql/aggregate/variant/variant_group_object.test	run	26	8	18	0	0	0	0	0	0
 test/sql/aggregate/variant/variant_group_object_shredded.test	left out: a database file									
+test/sql/binder/test_case_insensitive_binding.test	run	43	37	6	0	0	0	0	0	0
+test/sql/catalog/test_quoted_column_name.test	run	10	9	1	0	0	0	0	0	0
 test/sql/filter/filter_cache.test	run	4	0	4	0	0	0	0	0	0
 test/sql/filter/filter_cache_dictionary.test	left out: a database file									
 test/sql/filter/null_selection.test	left out: a database file									
@@ -206,20 +208,20 @@ test/sql/filter/test_zonemap_segment.test	left out: a database file
 test/sql/filter/transitive_filter_bounds.test	run	29	14	15	0	0	0	0	0	0
 test/sql/function/date/date_add.test	run	4	2	2	0	0	0	0	0	0
 test/sql/function/date/date_diff_extreme_dates.test	run	7	3	4	0	0	0	0	0	0
-test/sql/function/date/date_part_stats.test	run	78	27	43	0	0	8	0	0	0
-test/sql/function/date/date_trunc_4202.test	run	6	5	1	0	0	0	0	0	0
+test/sql/function/date/date_part_stats.test	run	78	24	52	0	0	2	0	0	0
+test/sql/function/date/date_trunc_4202.test	run	6	6	0	0	0	0	0	0	0
 test/sql/function/date/date_trunc_min_date.test	run	3	2	1	0	0	0	0	0	0
 test/sql/function/date/date_trunc_stats.test	run	6	3	3	0	0	0	0	0	0
 test/sql/function/date/date_trunc_stats_out_of_range.test	run	5	1	1	0	0	3	0	0	0
 test/sql/function/date/strftime_iso_year_range.test	run	2	0	2	0	0	0	0	0	0
-test/sql/function/date/test_date_part.test	run	229	21	178	0	0	30	0	0	0
+test/sql/function/date/test_date_part.test	run	229	21	182	0	0	26	0	0	0
 test/sql/function/date/test_date_trunc.test	run	76	10	45	0	0	21	0	0	0
 test/sql/function/date/test_extract.test	run	20	19	1	0	0	0	0	0	0
 test/sql/function/date/test_extract_edge_cases.test	run	66	66	0	0	0	0	0	0	0
 test/sql/function/date/test_extract_month.test	run	2	0	2	0	0	0	0	0	0
 test/sql/function/date/test_extract_year.test	run	4	0	4	0	0	0	0	0	0
-test/sql/function/date/test_strftime.test	run	28	15	8	0	0	5	0	0	0
-test/sql/function/date/test_strftime_exhaustive.test	run	46	2	6	0	0	38	0	0	0
+test/sql/function/date/test_strftime.test	run	28	18	8	0	0	2	0	0	0
+test/sql/function/date/test_strftime_exhaustive.test	run	46	3	6	0	0	37	0	0	0
 test/sql/function/date/test_time_bucket_date.test	run	64	25	39	0	0	0	0	0	0
 test/sql/function/date/yearweek_bc_statistics.test	run	7	0	7	0	0	0	0	0	0
 test/sql/function/numeric/abs.test	run	1	1	0	0	0	0	0	0	0
@@ -241,11 +243,11 @@ test/sql/function/numeric/test_mod.test	run	9	6	3	0	0	0	0	0	0
 test/sql/function/numeric/test_nextafter.test	run	18	6	12	0	0	0	0	0	0
 test/sql/function/numeric/test_pg_math.test	run	36	29	4	0	0	3	0	0	0
 test/sql/function/numeric/test_pow.test	run	13	9	2	0	0	2	0	0	0
-test/sql/function/numeric/test_random.test	run	32	9	23	0	0	0	0	0	0
+test/sql/function/numeric/test_random.test	run	32	6	26	0	0	0	0	0	0
 test/sql/function/numeric/test_round.test	run	17	16	1	0	0	0	0	0	0
 test/sql/function/numeric/test_round_even.test	run	20	1	19	0	0	0	0	0	0
 test/sql/function/numeric/test_round_integers.test	run	18	3	6	0	0	9	0	0	0
-test/sql/function/numeric/test_sign_bit.test	run	19	5	13	0	0	1	0	0	0
+test/sql/function/numeric/test_sign_bit.test	run	19	5	14	0	0	0	0	0	0
 test/sql/function/numeric/test_trigo.test	run	77	8	11	0	0	58	0	0	0
 test/sql/function/numeric/test_trunc.test	run	47	18	29	0	0	0	0	0	0
 test/sql/function/numeric/test_trunc_precision.test	run	51	18	33	0	0	0	0	0	0
@@ -279,7 +281,7 @@ test/sql/function/string/regex_search.test	run	40	13	27	0	0	0	0	0	0
 test/sql/function/string/regex_single_byte.test	run	22	15	7	0	0	0	0	0	0
 test/sql/function/string/regexp_split_to_table.test	run	3	0	3	0	0	0	0	0	0
 test/sql/function/string/regexp_unicode_literal.test	run	9	3	6	0	0	0	0	0	0
-test/sql/function/string/sha1.test	run	9	5	3	0	0	1	0	0	0
+test/sql/function/string/sha1.test	run	9	6	3	0	0	0	0	0	0
 test/sql/function/string/sha256.test	run	7	4	3	0	0	0	0	0	0
 test/sql/function/string/strip_accents.test	run	8	5	3	0	0	0	0	0	0
 test/sql/function/string/test_array_extract.test	run	21	4	17	0	0	0	0	0	0
@@ -288,7 +290,7 @@ test/sql/function/string/test_bar.test	run	34	6	28	0	0	0	0	0	0
 test/sql/function/string/test_bit_length.test	run	8	8	0	0	0	0	0	0	0
 test/sql/function/string/test_caseconvert.test	run	12	2	10	0	0	0	0	0	0
 test/sql/function/string/test_complex_unicode.test	run	18	3	15	0	0	0	0	0	0
-test/sql/function/string/test_concat.test	run	12	6	1	0	0	5	0	0	0
+test/sql/function/string/test_concat.test	run	12	7	1	0	0	4	0	0	0
 test/sql/function/string/test_concat_binding.test	run	15	5	10	0	0	0	0	0	0
 test/sql/function/string/test_concat_function.test	run	10	10	0	0	0	0	0	0	0
 test/sql/function/string/test_concat_ws.test	run	43	26	17	0	0	0	0	0	0
@@ -309,7 +311,7 @@ test/sql/function/string/test_instr_utf8.test	run	13	13	0	0	0	0	0	0	0
 test/sql/function/string/test_issue_1812.test	run	9	9	0	0	0	0	0	0	0
 test/sql/function/string/test_jaccard.test	run	27	7	20	0	0	0	0	0	0
 test/sql/function/string/test_jaro_winkler.test	run	42	0	42	0	0	0	0	0	0
-test/sql/function/string/test_left.test	run	38	18	14	0	0	6	0	0	0
+test/sql/function/string/test_left.test	run	38	27	11	0	0	0	0	0	0
 test/sql/function/string/test_length.test	run	6	3	1	0	0	2	0	0	0
 test/sql/function/string/test_levenshtein.test	run	49	11	38	0	0	0	0	0	0
 test/sql/function/string/test_like.test	run	57	57	0	0	0	0	0	0	0
@@ -323,7 +325,7 @@ test/sql/function/string/test_regex_match_positions.test	run	8	3	5	0	0	0	0	0	0
 test/sql/function/string/test_repeat.test	run	15	14	1	0	0	0	0	0	0
 test/sql/function/string/test_replace.test	run	14	14	0	0	0	0	0	0	0
 test/sql/function/string/test_reverse.test	run	9	9	0	0	0	0	0	0	0
-test/sql/function/string/test_right.test	run	41	19	16	0	0	6	0	0	0
+test/sql/function/string/test_right.test	run	41	28	13	0	0	0	0	0	0
 test/sql/function/string/test_similar_to.test	run	27	3	24	0	0	0	0	0	0
 test/sql/function/string/test_split_part.test	run	19	19	0	0	0	0	0	0	0
 test/sql/function/string/test_starts_with_function.test	run	12	12	0	0	0	0	0	0	0
@@ -443,7 +445,7 @@ test/sql/join/mark/inferred_groups.test	run	45	10	35	0	0	0	0	0	0
 test/sql/join/mark/nested_operator_semantics.test	run	32	0	32	0	0	0	0	0	0
 test/sql/join/mark/residual_predicate.test	run	18	8	10	0	0	0	0	0	0
 test/sql/join/mark/residual_vector_reuse.test	run	35	2	33	0	0	0	0	0	0
-test/sql/join/mark/test_null_safe_semi_uncommitted_stats.test	run	38	27	11	0	0	0	0	0	0
+test/sql/join/mark/test_null_safe_semi_uncommitted_stats.test	run	38	20	18	0	0	0	0	0	0
 test/sql/join/mark/tuple_inequality.test	run	40	0	40	0	0	0	0	0	0
 test/sql/join/mark/tuple_value_semantics.test	run	12	0	12	0	0	0	0	0	0
 test/sql/join/natural/natural_join.test	run	41	22	19	0	0	0	0	0	0
@@ -482,7 +484,7 @@ test/sql/join/semianti/test_simple_anti_join.test	run	11	7	4	0	0	0	0	0	0
 test/sql/join/set_operators/test_set_operator_reordering_with_delim_joins.test	run	2	1	1	0	0	0	0	0	0
 test/sql/join/test_between_null_bound_join.test	run	27	4	21	0	0	2	0	0	0
 test/sql/join/test_complex_join_expr.test	run	9	6	1	0	0	2	0	0	0
-test/sql/join/test_complex_range_join.test	run	20	0	20	0	0	0	0	0	0
+test/sql/join/test_complex_range_join.test	run	20	2	18	0	0	0	0	0	0
 test/sql/join/test_join_always_true_conditions.test	run	18	12	6	0	0	0	0	0	0
 test/sql/join/test_join_by.test	run	20	10	10	0	0	0	0	0	0
 test/sql/join/test_join_on_aggregates.test	run	6	6	0	0	0	0	0	0	0
@@ -490,6 +492,8 @@ test/sql/join/test_merge_join_predicate.test	run	10	5	5	0	0	0	0	0	0
 test/sql/join/test_nested_inequality.test	run	12	0	12	0	0	0	0	0	0
 test/sql/join/test_predicate_binding.test	run	6	3	3	0	0	0	0	0	0
 test/sql/join/test_string_payload.test	run	5	5	0	0	0	0	0	0	0
+test/sql/keywords/escaped_quotes_expressions.test	run	15	0	15	0	0	0	0	0	0
+test/sql/keywords/keywords_in_expressions.test	run	17	2	15	0	0	0	0	0	0
 test/sql/order/hugeint_order_by_extremes.test	run	4	0	4	0	0	0	0	0	0
 test/sql/order/issue_11936.test	run	3	0	3	0	0	0	0	0	0
 test/sql/order/limit_full_outer_join.test	run	6	5	1	0	0	0	0	0	0
@@ -519,6 +523,9 @@ test/sql/order/test_order_unnest.test	run	8	0	8	0	0	0	0	0	0
 test/sql/order/top_n_issue_21623.test	left out: require json									
 test/sql/order/top_n_limit_zero.test	run	506	6	500	0	0	0	0	0	0
 test/sql/order/top_n_nulls.test	left out: require parquet									
+test/sql/parser/backtick_identifiers.test	run	49	30	19	0	0	0	0	0	0
+test/sql/parser/empty_quoted_identifier.test	run	3	3	0	0	0	0	0	0	0
+test/sql/parser/unreserved_keyword_casing.test	run	2	2	0	0	0	0	0	0	0
 test/sql/subquery/any_all/issue_2999.test	run	5	4	1	0	0	0	0	0	0
 test/sql/subquery/any_all/subquery_in.test	run	6	3	3	0	0	0	0	0	0
 test/sql/subquery/any_all/test_any_all.test	run	17	5	12	0	0	0	0	0	0
@@ -662,7 +669,7 @@ test/sql/types/float/nan_aggregate.test	run	17	6	3	0	0	8	0	0	0
 test/sql/types/float/nan_aggregates.test	run	14	4	8	0	0	2	0	0	0
 test/sql/types/float/nan_arithmetic.test	run	58	30	28	0	0	0	0	0	0
 test/sql/types/float/nan_cast.test	run	195	159	36	0	0	0	0	0	0
-test/sql/types/float/nan_functions.test	run	96	20	46	0	0	30	0	0	0
+test/sql/types/float/nan_functions.test	run	96	20	48	0	0	28	0	0	0
 test/sql/types/float/nan_join.test	run	16	4	6	0	0	6	0	0	0
 test/sql/types/float/nan_minmax_order.test	run	14	0	14	0	0	0	0	0	0
 test/sql/types/float/nan_ordering.test	run	29	5	8	0	0	16	0	0	0
@@ -694,6 +701,7 @@ test/sql/types/numeric/usmallint_try_cast.test	run	30	9	21	0	0	0	0	0	0
 test/sql/types/numeric/utinyint_try_cast.test	run	29	7	22	0	0	0	0	0	0
 test/sql/types/string/test_big_strings.test	run	6	6	0	0	0	0	0	0	0
 test/sql/types/string/test_unicode.test	run	9	8	1	0	0	0	0	0	0
+test/sql/types/test_quotes.test	run	22	4	18	0	0	0	0	0	0
 test/sql/types/time/test_time.test	run	14	14	0	0	0	0	0	0	0
 test/sql/types/time/test_time_2411.test	run	5	5	0	0	0	0	0	0	0
 test/sql/types/time/test_time_ns.test	run	42	22	20	0	0	0	0	0	0
@@ -710,7 +718,7 @@ test/sql/types/timestamp/bc_timestamp.test	run	3	1	2	0	0	0	0	0	0
 test/sql/types/timestamp/infinity_cast_coverage.test	left out: require icu									
 test/sql/types/timestamp/test_incorrect_timestamp.test	run	15	15	0	0	0	0	0	0	0
 test/sql/types/timestamp/test_infinite_time.test	run	125	17	108	0	0	0	0	0	0
-test/sql/types/timestamp/test_timestamp.test	run	31	25	4	0	0	2	0	0	0
+test/sql/types/timestamp/test_timestamp.test	run	31	25	5	0	0	1	0	0	0
 test/sql/types/timestamp/test_timestamp_2411.test	run	5	5	0	0	0	0	0	0	0
 test/sql/types/timestamp/test_timestamp_auto_casting.test	run	5	0	5	0	0	0	0	0	0
 test/sql/types/timestamp/test_timestamp_ms.test	run	2	2	0	0	0	0	0	0	0
@@ -755,7 +763,7 @@ test/sql/window/test_naive_aggregation.test	run	20	4	16	0	0	0	0	0	0
 test/sql/window/test_negative_range.test	run	10	9	1	0	0	0	0	0	0
 test/sql/window/test_no_default_window_spec.test	run	7	2	5	0	0	0	0	0	0
 test/sql/window/test_nthvalue.test	run	14	4	10	0	0	0	0	0	0
-test/sql/window/test_ntile.test	run	20	15	5	0	0	0	0	0	0
+test/sql/window/test_ntile.test	run	20	19	1	0	0	0	0	0	0
 test/sql/window/test_order_by_all.test	run	2	1	1	0	0	0	0	0	0
 test/sql/window/test_parallel_group_cleanup.test	run	19	3	16	0	0	0	0	0	0
 test/sql/window/test_partition_constant_arguments.test	run	1	0	1	0	0	0	0	0	0
@@ -774,7 +782,7 @@ test/sql/window/test_streaming_window.test	run	59	17	42	0	0	0	0	0	0
 test/sql/window/test_streaming_window_distinct.test	run	3	0	3	0	0	0	0	0	0
 test/sql/window/test_thread_count.test	left out: reads files									
 test/sql/window/test_tpcc_results.test	left out: reads files									
-test/sql/window/test_tpcds_q49.test	run	5	1	4	0	0	0	0	0	0
+test/sql/window/test_tpcds_q49.test	run	5	0	5	0	0	0	0	0	0
 test/sql/window/test_value_exclude.test	run	6	3	3	0	0	0	0	0	0
 test/sql/window/test_value_orderby.test	run	10	3	7	0	0	0	0	0	0
 test/sql/window/test_volatile_independence.test	left out: directive set									
@@ -800,11 +808,11 @@ test/sql/window/test_window_order_collate.test	run	10	0	10	0	0	0	0	0	0
 test/sql/window/test_window_rows.test	run	38	6	32	0	0	0	0	0	0
 test/sql/window/test_window_segment_tree_error.test	run	11	10	1	0	0	0	0	0	0
 test/sql/window/test_window_string_agg.test	run	4	1	3	0	0	0	0	0	0
-test/sql/window/test_window_tpcds.test	run	16	9	7	0	0	0	0	0	0
+test/sql/window/test_window_tpcds.test	run	16	7	9	0	0	0	0	0	0
 test/sql/window/test_window_types.test	run	60	0	60	0	0	0	0	0	0
 test/sql/window/test_window_unnest_error.test	run	8	6	2	0	0	0	0	0	0
 test/sql/window/test_window_value_edges.test	run	31	4	27	0	0	0	0	0	0
-test/sql/window/test_window_wisconsin.test	run	25	14	9	0	0	2	0	0	0
+test/sql/window/test_window_wisconsin.test	run	25	15	9	0	0	1	0	0	0
 test/sql/window/window_distinct_memory_limit.test	run	4	2	2	0	0	0	0	0	0
 test/sql/window/window_expression_comparison.test	run	4	2	2	0	0	0	0	0	0
 test/sql/window/window_mtcars.test	run	34	0	34	0	0	0	0	0	0

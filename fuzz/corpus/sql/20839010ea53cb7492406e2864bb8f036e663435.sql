@@ -1,0 +1,8 @@
+SELECT s,
+	nth_value(s, 2 IGNORE NULLS) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+FROM (VALUES 
+	(NULL), 
+	('A'), 
+	(NULL), 
+	('B')
+	) t(s)

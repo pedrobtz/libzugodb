@@ -1,0 +1,1 @@
+SELECT '01:00:00+02'::TIMETZ AS ttz

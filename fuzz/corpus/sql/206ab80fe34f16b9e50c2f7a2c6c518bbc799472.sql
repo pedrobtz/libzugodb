@@ -1,0 +1,1 @@
+SELECT 1::REAL + 1::BIGINT

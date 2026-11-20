@@ -1,0 +1,1 @@
+SELECT '4.9e-11'::DECIMAL(18,4)

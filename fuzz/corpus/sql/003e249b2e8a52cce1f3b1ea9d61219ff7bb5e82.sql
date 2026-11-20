@@ -1,0 +1,1 @@
+SELECT strftime(TIMESTAMP '12345-06-01 10:00:00', '%G-%Y %H')

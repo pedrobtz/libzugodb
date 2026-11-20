@@ -187,24 +187,24 @@ TEST_CASE("Advanced - STRING_AGG") {
 TEST_CASE("Advanced - STRFTIME") {
     Database db;
     Connection conn(db);
-    conn.Query("CREATE TABLE ts (t BIGINT)");
-    conn.Query("INSERT INTO ts VALUES (1718451000000000)"); // 2024-06-15
+    conn.Query("CREATE TABLE ts (t TIMESTAMP, b BIGINT)");
+    conn.Query("INSERT INTO ts VALUES (TIMESTAMP '2024-06-15 12:30:00', 1718451000000000)");
 
     // zuslothdb patch 0005: the one-argument form is refused, not a crash.
     CHECK_THROWS(conn.Query("SELECT STRFTIME(t) FROM ts"));
     auto r = conn.Query("SELECT STRFTIME(t, '%Y-%m-%d') FROM ts");
-    auto val = r.GetValue(0, 0).GetValue<std::string>();
-    CHECK(val.find("2024") != std::string::npos);
-    CHECK(val.find("06") != std::string::npos);
+    CHECK(r.GetValue(0, 0).GetValue<std::string>() == "2024-06-15");
+    // DuckDB has no STRFTIME of a BIGINT (Stage 9).
+    CHECK_THROWS(conn.Query("SELECT STRFTIME(b, '%Y-%m-%d') FROM ts"));
 }
 
 TEST_CASE("Advanced - DATE_ADD") {
+    // DuckDB's date_add(date, interval) and the MySQL date_add(unit, n, t)
+    // differ; the engine has no INTERVAL, so DATE_ADD is refused and
+    // date + n is DuckDB's arithmetic (Stage 9, design L4).
     Database db;
     Connection conn(db);
-    conn.Query("CREATE TABLE ts (t BIGINT)");
-    conn.Query("INSERT INTO ts VALUES (1718451000000000)");
-
-    auto r = conn.Query("SELECT DATE_ADD('DAY', 1, t) FROM ts");
-    auto added = r.GetValue(0, 0).GetValue<int64_t>();
-    CHECK(added == 1718451000000000LL + 86400LL * 1000000);
+    conn.Query("CREATE TABLE ts (t TIMESTAMP)");
+    conn.Query("INSERT INTO ts VALUES (TIMESTAMP '2024-06-15 12:30:00')");
+    CHECK_THROWS(conn.Query("SELECT DATE_ADD('DAY', 1, t) FROM ts"));
 }

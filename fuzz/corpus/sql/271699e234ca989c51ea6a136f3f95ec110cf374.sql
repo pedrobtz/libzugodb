@@ -1,0 +1,1 @@
+SELECT TRY_CAST(s AS UBIGINT) FROM strings

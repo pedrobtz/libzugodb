@@ -1,0 +1,1 @@
+SELECT * FROM integers LEFT OUTER JOIN integers2 ON 1=2 ORDER BY i;

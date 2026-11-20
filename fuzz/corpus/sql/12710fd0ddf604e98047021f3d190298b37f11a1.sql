@@ -1,0 +1,1 @@
+SELECT formatReadableDecimalSize(500);

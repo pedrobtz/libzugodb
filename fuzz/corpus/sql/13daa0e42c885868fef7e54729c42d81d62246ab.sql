@@ -1,0 +1,1 @@
+SELECT even(45::DOUBLE), even(-35::DOUBLE)

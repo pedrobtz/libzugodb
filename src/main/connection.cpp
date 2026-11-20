@@ -657,6 +657,21 @@ QueryResult Connection::RunStatements(const std::string &sql) {
         }
     }
 
+    // No transactions (design L26, CLAUDE.md): BEGIN, COMMIT and ROLLBACK
+    // are refused, the whole batch before any of it runs. BEGIN and COMMIT
+    // were accepted around autocommitted statements, so a statement after
+    // a failed one inside them was kept where DuckDB rolls the whole
+    // transaction back, and later queries saw rows DuckDB's do not.
+    for (auto &stmt : statements) {
+        auto t = stmt->GetType();
+        if (t == StatementType::BEGIN_TXN || t == StatementType::COMMIT_TXN ||
+            t == StatementType::ROLLBACK_TXN) {
+            throw NotImplementedException(
+                "Transactions are not supported: every statement commits as it runs, and "
+                "BEGIN, COMMIT and ROLLBACK are refused");
+        }
+    }
+
     QueryResult final_result;
     for (auto &stmt : statements) {
         idx_t stmt_idx = static_cast<idx_t>(&stmt - statements.data());
@@ -707,23 +722,18 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                         Value::INTEGER(static_cast<int32_t>(i)),
                         Value::VARCHAR(cols[i].name),
                         Value::VARCHAR(cols[i].type.ToString()),
-                        Value::BOOLEAN(false),
+                        // DuckDB's: NOT NULL and PRIMARY KEY (it gave false
+                        // for both, Stage 9).
+                        Value::BOOLEAN(cols[i].not_null || cols[i].is_primary_key),
                         Value(),
-                        Value::BOOLEAN(false)});
+                        Value::BOOLEAN(cols[i].is_primary_key)});
                 }
                 continue;
             }
             if (name == "DATABASE_LIST") {
-                final_result.column_names = {"seq", "name", "file"};
-                final_result.column_types = {
-                    LogicalType::BIGINT(), LogicalType::VARCHAR(),
-                    LogicalType::VARCHAR()};
-                // No ATTACH support yet; always the single in-memory database.
-                final_result.rows.push_back({
-                    Value::BIGINT(0),
-                    Value::VARCHAR("memory"),
-                    Value()});
-                continue;
+                // DuckDB's seq is the database's internal object id, which
+                // the engine has none of: refused (Stage 9).
+                throw NotImplementedException("PRAGMA database_list is not supported");
             }
             throw BinderException("Unknown PRAGMA: " + pr.name);
         }
@@ -756,11 +766,23 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 return pi == pat.size();
             };
 
+            // DuckDB has no LIKE on SHOW, and no SHOW COLUMNS: both were
+            // accepted (Stage 9).
+            if (!sh.like_pattern.empty()) {
+                throw ParserException("SHOW ... LIKE is not supported");
+            }
+            if (sh.kind == ShowStatement::Kind::COLUMNS) {
+                throw ParserException("SHOW COLUMNS is not supported; DESCRIBE gives a table's columns");
+            }
             if (sh.kind == ShowStatement::Kind::TABLES) {
                 final_result.column_names = {"name"};
                 final_result.column_types = {LogicalType::VARCHAR()};
                 auto &schema = db_.GetCatalog().GetSchema();
-                for (const auto &name : schema.GetTableNames()) {
+                // In DuckDB's order, by name, byte by byte; it was the hash
+                // map's order.
+                auto names = schema.GetTableNames();
+                std::sort(names.begin(), names.end());
+                for (const auto &name : names) {
                     if (like_match(name, sh.like_pattern)) {
                         final_result.rows.push_back({Value::VARCHAR(name)});
                     }
@@ -844,12 +866,23 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 LogicalType::VARCHAR(), LogicalType::VARCHAR(),
                 LogicalType::VARCHAR(), LogicalType::VARCHAR(),
                 LogicalType::VARCHAR(), LogicalType::VARCHAR()};
+            // DESCRIBE <table>: DuckDB's null is NO for a NOT NULL or PRIMARY
+            // KEY column and key PRI for the latter (they were YES and NULL,
+            // Stage 9). A query's columns are all YES.
+            TableCatalogEntry *described =
+                desc.table_name.empty() ? nullptr : db_.GetCatalog().GetTable(desc.table_name);
             for (idx_t i = 0; i < names.size(); i++) {
+                bool not_null = false, pk = false;
+                if (described && i < described->GetColumns().size()) {
+                    auto &c = described->GetColumns()[i];
+                    not_null = c.not_null || c.is_primary_key;
+                    pk = c.is_primary_key;
+                }
                 final_result.rows.push_back({
                     Value::VARCHAR(names[i]),
                     Value::VARCHAR(types[i].ToString()),
-                    Value::VARCHAR("YES"),
-                    Value(), Value(), Value()});
+                    Value::VARCHAR(not_null ? "NO" : "YES"),
+                    pk ? Value::VARCHAR("PRI") : Value(), Value(), Value()});
             }
             continue;
         }
@@ -1103,6 +1136,13 @@ QueryResult Connection::RunStatements(const std::string &sql) {
             auto old_types = entry->GetTypes();
 
             if (alter.action == AlterTableStatement::AlterAction::ADD_COLUMN) {
+                // A name the table has, in any case, is DuckDB's error.
+                for (auto &c : old_cols) {
+                    if (IdentifierEquals(c.name, alter.column_name)) {
+                        throw CatalogException("Column with name \"" + alter.column_name +
+                                               "\" already exists");
+                    }
+                }
                 // Scan all data, add NULL for new column, rebuild.
                 Binder binder(db_.GetCatalog());
                 auto new_type = binder.ResolveTypeName(alter.column_type);
@@ -1174,6 +1214,12 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 if (rename_idx == INVALID_INDEX)
                     throw CatalogException("Column '" + alter.column_name + "' not found");
 
+                for (idx_t c = 0; c < old_cols.size(); c++) {
+                    if (c != rename_idx && IdentifierEquals(old_cols[c].name, alter.new_column_name)) {
+                        throw CatalogException("Column with name \"" + alter.new_column_name +
+                                               "\" already exists");
+                    }
+                }
                 std::vector<ColumnDefinition> new_cols = old_cols;
                 new_cols[rename_idx].name = alter.new_column_name;
 
@@ -2084,21 +2130,44 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 // Prior code only handled the 2+ arg forms and silently
                 // left start=stop=0 for the 1-arg form, producing an
                 // empty result — fix as a general engine improvement.
-                int64_t start_val = 0, stop_val = 0, step_val = 1;
+                // Each argument is an integer literal, `5` or `-5`; any
+                // other expression was read as a constant's text it was not
+                // (a UnaryMinusExpression cast to ConstantExpression, Stage
+                // 9's SQL fuzzer), and is refused.
                 auto &fa = sel.from_table->function_args;
+                if (fa.empty() || fa.size() > 3) {
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "GENERATE_SERIES takes one to three arguments");
+                }
+                auto literal = [](const ParsedExpression &e) -> int64_t {
+                    const ParsedExpression *x = &e;
+                    bool negative = false;
+                    if (x->GetExpressionType() == ExpressionType::UNARY_MINUS) {
+                        negative = true;
+                        x = static_cast<const UnaryMinusExpression *>(x)->child.get();
+                    }
+                    if (x->GetExpressionType() == ExpressionType::CONSTANT) {
+                        auto &c = static_cast<const ConstantExpression &>(*x);
+                        if (!c.is_null && c.literal_type == TokenType::INTEGER_LITERAL) {
+                            try {
+                                size_t used = 0;
+                                int64_t v = std::stoll(c.value, &used);
+                                if (used == c.value.size()) return negative ? -v : v;
+                            } catch (const std::exception &) {
+                            }
+                        }
+                    }
+                    throw NotImplementedException(
+                        "GENERATE_SERIES arguments other than BIGINT literals are not supported");
+                };
+                int64_t start_val = 0, stop_val = 0, step_val = 1;
                 if (fa.size() == 1) {
-                    auto &e = static_cast<ConstantExpression &>(*fa[0]);
-                    stop_val = std::stoll(e.value);
-                } else if (fa.size() >= 2) {
-                    auto &s = static_cast<ConstantExpression &>(*fa[0]);
-                    start_val = std::stoll(s.value);
-                    auto &e = static_cast<ConstantExpression &>(*fa[1]);
-                    stop_val = std::stoll(e.value);
+                    stop_val = literal(*fa[0]);
+                } else {
+                    start_val = literal(*fa[0]);
+                    stop_val = literal(*fa[1]);
                 }
-                if (fa.size() >= 3) {
-                    auto &st = static_cast<ConstantExpression &>(*fa[2]);
-                    step_val = std::stoll(st.value);
-                }
+                if (fa.size() == 3) step_val = literal(*fa[2]);
 
                 std::string tbl_name = sel.from_table->alias.empty()
                     ? ("__generate_series_" + std::to_string(preproc_uid) + "__") : sel.from_table->alias;
@@ -2123,14 +2192,29 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 entry.SetStorage(storage);
 
                 if (step_val == 0) throw InvalidInputException("GENERATE_SERIES step cannot be 0");
-                static constexpr int64_t MAX_SERIES_ROWS = 10000000; // 10M limit
-                int64_t est_rows = (step_val > 0) ? (stop_val - start_val) / step_val + 1 : 0;
-                if (est_rows > MAX_SERIES_ROWS || est_rows < 0)
+                // The row count in unsigned arithmetic, so that no sum or
+                // difference of the bounds overflows: (stop - start) / step
+                // overflowed, and a negative step was counted as 0 rows and
+                // then ran without the limit.
+                static constexpr uint64_t MAX_SERIES_ROWS = 10000000; // 10M limit
+                uint64_t rows = 0;
+                uint64_t magnitude = step_val > 0 ? static_cast<uint64_t>(step_val)
+                                                  : static_cast<uint64_t>(-(step_val + 1)) + 1;
+                if (step_val > 0 && stop_val >= start_val) {
+                    rows = (static_cast<uint64_t>(stop_val) - static_cast<uint64_t>(start_val)) /
+                               magnitude + 1;
+                } else if (step_val < 0 && stop_val <= start_val) {
+                    rows = (static_cast<uint64_t>(start_val) - static_cast<uint64_t>(stop_val)) /
+                               magnitude + 1;
+                }
+                if (rows > MAX_SERIES_ROWS)
                     throw InvalidInputException("GENERATE_SERIES would produce too many rows (limit: 10M)");
 
-                for (int64_t v = start_val;
-                     (step_val > 0) ? (v <= stop_val) : (v >= stop_val);
-                     v += step_val) {
+                for (uint64_t r = 0; r < rows; r++) {
+                    uint64_t offset = r * magnitude;
+                    int64_t v = static_cast<int64_t>(
+                        step_val > 0 ? static_cast<uint64_t>(start_val) + offset
+                                     : static_cast<uint64_t>(start_val) - offset);
                     DataChunk chunk;
                     chunk.Initialize({LogicalType::BIGINT()});
                     chunk.SetValue(0, 0, Value::BIGINT(v));

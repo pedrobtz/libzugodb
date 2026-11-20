@@ -1,0 +1,1 @@
+CREATE TABLE rnums(y INT);

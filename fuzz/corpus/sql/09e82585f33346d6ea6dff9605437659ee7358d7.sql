@@ -1,0 +1,1 @@
+SELECT '5.5e-10'::DECIMAL

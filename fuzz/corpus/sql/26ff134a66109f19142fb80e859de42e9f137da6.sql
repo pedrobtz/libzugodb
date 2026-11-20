@@ -1,0 +1,1 @@
+DEALLOCATE qualified_star_plan;

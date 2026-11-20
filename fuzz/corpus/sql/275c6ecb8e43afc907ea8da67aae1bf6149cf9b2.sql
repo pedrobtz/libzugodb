@@ -1,0 +1,1 @@
+SELECT '-1e3'::DECIMAL, '-0.1e3'::DECIMAL, '-.1e-1'::DECIMAL, '-0.1e-1'::DECIMAL

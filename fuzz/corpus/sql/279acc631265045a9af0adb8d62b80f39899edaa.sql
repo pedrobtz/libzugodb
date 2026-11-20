@@ -1,0 +1,1 @@
+SELECT COUNT(*) FROM (SELECT g, STRING_AGG(x,',') FROM strings GROUP BY g) t1

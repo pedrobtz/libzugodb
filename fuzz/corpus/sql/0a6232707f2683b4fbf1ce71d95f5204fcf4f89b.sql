@@ -1,0 +1,5 @@
+CREATE OR REPLACE TABLE prf_probe_span (
+	id INTEGER,
+	k BIGINT,
+	g INTEGER
+);

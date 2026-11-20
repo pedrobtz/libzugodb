@@ -1,0 +1,1 @@
+SELECT EXTRACT(dow FROM cast('1793-05-26' AS DATE));

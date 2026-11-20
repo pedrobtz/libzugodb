@@ -1,0 +1,1 @@
+SELECT quantile_cont(t, 0.5) FROM (VALUES (2147483642::INTEGER), (2147483644::INTEGER)) tbl(t)

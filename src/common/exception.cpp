@@ -20,6 +20,11 @@ std::optional<std::string> SlothDBException::GetContext(const std::string &key) 
 }
 
 void SlothDBException::SetQueryLocation(uint32_t line, uint32_t column) {
+    // The position is part of the message, which is all a caller (zugodb)
+    // sees of the error (Stage 9, design §4); once, at the first location.
+    if (line_ == 0 && line > 0) {
+        message_ += " at line " + std::to_string(line) + ", column " + std::to_string(column);
+    }
     line_ = line;
     column_ = column;
     context_["line"] = std::to_string(line);

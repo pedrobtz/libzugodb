@@ -1,0 +1,1 @@
+INSERT INTO int32_dec VALUES (1.23), (4.56);

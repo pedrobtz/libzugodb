@@ -1,0 +1,1 @@
+SELECT finalize(to_aggregate_state(99999999999999999999999999999999999999, 'sum', ['DECIMAL(38,2)']));

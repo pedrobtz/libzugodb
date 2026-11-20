@@ -1,0 +1,1 @@
+SELECT LAST(b) FROM tbl WHERE a=1

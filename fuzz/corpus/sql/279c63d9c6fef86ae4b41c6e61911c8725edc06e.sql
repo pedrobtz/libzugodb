@@ -1,0 +1,1 @@
+CREATE OR REPLACE TABLE probe AS SELECT i-1 AS k FROM range(1100003) t(i);

@@ -4,6 +4,11 @@
 # types/{blob,date,decimal,float,null,numeric,string,time,timestamp},
 # function/{numeric,string,date}. Paths are relative to the corpus root,
 # sorted. A file the runner leaves out is in counts.tsv with its reason.
+# Stage 9 (2026-11-20) adds the files on quoted identifiers, the "" escape,
+# backticks and the case of identifiers: binder/test_case_insensitive_binding,
+# catalog/test_quoted_column_name, keywords/{escaped_quotes,keywords_in}_expressions,
+# parser/{backtick_identifiers,empty_quoted_identifier,unreserved_keyword_casing}
+# and types/test_quotes.
 test/sql/aggregate/aggregate_state_export/approx_count_distinct_export_state.test
 test/sql/aggregate/aggregate_state_export/approx_quantile_export_state.test
 test/sql/aggregate/aggregate_state_export/approx_top_k_export_state.test
@@ -188,6 +193,8 @@ test/sql/aggregate/quantile_fun.test
 test/sql/aggregate/sparse_clustered_aggregation.test
 test/sql/aggregate/variant/variant_group_object.test
 test/sql/aggregate/variant/variant_group_object_shredded.test
+test/sql/binder/test_case_insensitive_binding.test
+test/sql/catalog/test_quoted_column_name.test
 test/sql/filter/filter_cache.test
 test/sql/filter/filter_cache_dictionary.test
 test/sql/filter/null_selection.test
@@ -495,6 +502,8 @@ test/sql/join/test_merge_join_predicate.test
 test/sql/join/test_nested_inequality.test
 test/sql/join/test_predicate_binding.test
 test/sql/join/test_string_payload.test
+test/sql/keywords/escaped_quotes_expressions.test
+test/sql/keywords/keywords_in_expressions.test
 test/sql/order/hugeint_order_by_extremes.test
 test/sql/order/issue_11936.test
 test/sql/order/limit_full_outer_join.test
@@ -524,6 +533,9 @@ test/sql/order/test_order_unnest.test
 test/sql/order/top_n_issue_21623.test
 test/sql/order/top_n_limit_zero.test
 test/sql/order/top_n_nulls.test
+test/sql/parser/backtick_identifiers.test
+test/sql/parser/empty_quoted_identifier.test
+test/sql/parser/unreserved_keyword_casing.test
 test/sql/subquery/any_all/issue_2999.test
 test/sql/subquery/any_all/subquery_in.test
 test/sql/subquery/any_all/test_any_all.test
@@ -699,6 +711,7 @@ test/sql/types/numeric/usmallint_try_cast.test
 test/sql/types/numeric/utinyint_try_cast.test
 test/sql/types/string/test_big_strings.test
 test/sql/types/string/test_unicode.test
+test/sql/types/test_quotes.test
 test/sql/types/time/test_time.test
 test/sql/types/time/test_time_2411.test
 test/sql/types/time/test_time_ns.test

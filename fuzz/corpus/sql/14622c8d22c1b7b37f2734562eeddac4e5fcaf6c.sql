@@ -1,0 +1,1 @@
+select * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t0 WHERE null);

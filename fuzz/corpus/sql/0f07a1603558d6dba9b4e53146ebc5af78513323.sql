@@ -1,0 +1,1 @@
+SELECT i, (WITH i2 AS (SELECT 42+i1.i AS j) SELECT j FROM i2) AS j FROM integers i1 ORDER BY i;

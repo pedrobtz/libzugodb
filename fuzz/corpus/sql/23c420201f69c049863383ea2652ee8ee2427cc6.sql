@@ -1,0 +1,2 @@
+CREATE TABLE null_runs AS
+SELECT i, CASE WHEN i%7<>0 THEN i%31 END AS n FROM range(20003) t(i);

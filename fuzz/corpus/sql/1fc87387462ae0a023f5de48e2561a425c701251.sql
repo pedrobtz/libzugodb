@@ -1,0 +1,1 @@
+SELECT '5e-5'::DECIMAL(18,4)

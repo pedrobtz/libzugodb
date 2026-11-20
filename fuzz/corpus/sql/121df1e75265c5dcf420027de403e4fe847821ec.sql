@@ -1,0 +1,1 @@
+SELECT finalize(list(i ORDER BY i ASC NULLS FIRST) EXPORT_STATE) FROM (VALUES (1), (NULL), (2)) t(i);

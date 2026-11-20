@@ -1,0 +1,8 @@
+SELECT * 
+FROM (
+	SELECT b FROM test as t 
+	GROUP BY b 
+	QUALIFY rank() OVER (PARTITION BY t.b) = 1
+) 
+QUALIFY row_number() OVER (PARTITION BY b) = 1
+ORDER BY 1

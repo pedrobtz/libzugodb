@@ -40,45 +40,33 @@ TEST_CASE("DUAL - SELECT expression") {
 // ============================================================================
 
 TEST_CASE("Timestamp - NOW() returns value") {
+    // DuckDB's NOW() is a TIMESTAMP WITH TIME ZONE in the session's time
+    // zone; the engine has neither, so it is refused (Stage 9, design L26).
     Database db;
     Connection conn(db);
-
-    auto r = conn.Query("SELECT NOW()");
-    CHECK(r.RowCount() == 1);
-    // NOW() returns microseconds since epoch. Should be > 2020-01-01.
-    auto val = r.GetValue(0, 0).GetValue<int64_t>();
-    CHECK(val > 1577836800000000LL); // 2020-01-01 in micros
+    CHECK_THROWS(conn.Query("SELECT NOW()"));
 }
 
 TEST_CASE("Timestamp - CURRENT_TIMESTAMP") {
     Database db;
     Connection conn(db);
-
-    auto r = conn.Query("SELECT CURRENT_TIMESTAMP");
-    CHECK(r.RowCount() == 1);
-    auto val = r.GetValue(0, 0).GetValue<int64_t>();
-    CHECK(val > 1577836800000000LL);
+    CHECK_THROWS(conn.Query("SELECT CURRENT_TIMESTAMP"));
 }
 
 TEST_CASE("Timestamp - CURRENT_DATE") {
+    // DuckDB's is the date in the session's time zone; the engine's was
+    // the UTC date (Stage 9, design L26).
     Database db;
     Connection conn(db);
-
-    auto r = conn.Query("SELECT CURRENT_DATE");
-    CHECK(r.RowCount() == 1);
-    auto val = r.GetValue(0, 0).GetValue<int32_t>();
-    CHECK(val >= 18262); // DATE: days since 1970-01-01, 2020-01-01
-    CHECK(val <= 47481); // 2099-12-31
+    CHECK_THROWS(conn.Query("SELECT CURRENT_DATE"));
 }
 
 TEST_CASE("Timestamp - EXTRACT YEAR/MONTH/DAY") {
     Database db;
     Connection conn(db);
 
-    // 2024-06-15 12:30:00 UTC = 1718451000 epoch seconds
-    // In microseconds: 1718451000000000
-    conn.Query("CREATE TABLE ts (t BIGINT)");
-    conn.Query("INSERT INTO ts VALUES (1718451000000000)");
+    conn.Query("CREATE TABLE ts (t TIMESTAMP)");
+    conn.Query("INSERT INTO ts VALUES (TIMESTAMP '2024-06-15 12:30:00')");
 
     auto r = conn.Query("SELECT EXTRACT(YEAR FROM t) FROM ts");
     CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 2024);
@@ -90,19 +78,20 @@ TEST_CASE("Timestamp - EXTRACT YEAR/MONTH/DAY") {
     CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 15);
 
     r = conn.Query("SELECT EXTRACT(HOUR FROM t) FROM ts");
-    auto hour = r.GetValue(0, 0).GetValue<int64_t>();
-    CHECK(hour >= 0);
-    CHECK(hour <= 23);
+    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 12);
+
+    // DuckDB has no EXTRACT from a BIGINT; the engine read one as
+    // seconds or microseconds by its size (Stage 9).
+    conn.Query("CREATE TABLE b (t BIGINT)");
+    conn.Query("INSERT INTO b VALUES (1718451000000000)");
+    CHECK_THROWS(conn.Query("SELECT EXTRACT(YEAR FROM t) FROM b"));
 }
 
 TEST_CASE("Timestamp - TO_TIMESTAMP") {
+    // DuckDB's TO_TIMESTAMP is a TIMESTAMP WITH TIME ZONE: refused.
     Database db;
     Connection conn(db);
-
-    auto r = conn.Query("SELECT TO_TIMESTAMP(1718451000)");
-    CHECK(r.RowCount() == 1);
-    auto micros = r.GetValue(0, 0).GetValue<int64_t>();
-    CHECK(micros == 1718451000000000LL);
+    CHECK_THROWS(conn.Query("SELECT TO_TIMESTAMP(1718451000)"));
 }
 
 TEST_CASE("Timestamp - NOW() with table") {
@@ -110,9 +99,5 @@ TEST_CASE("Timestamp - NOW() with table") {
     Connection conn(db);
     conn.Query("CREATE TABLE t (x INTEGER)");
     conn.Query("INSERT INTO t VALUES (1)");
-
-    auto r = conn.Query("SELECT x, NOW() FROM t");
-    CHECK(r.RowCount() == 1);
-    CHECK(r.GetValue(0, 0).GetValue<int32_t>() == 1);
-    CHECK(r.GetValue(0, 1).GetValue<int64_t>() > 0);
+    CHECK_THROWS(conn.Query("SELECT x, NOW() FROM t"));
 }

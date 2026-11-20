@@ -31,6 +31,8 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSLOTHDB_BUILD_SHELL=ON ${{ matrix.flags }}
       - name: Build
         run: cmake --build build -j4
+      - name: Check docs/dialect.md against the binder's functions
+        run: tools/check_dialect.sh
       - name: Test
         run: build/test/slothdb_tests
 
@@ -127,6 +129,8 @@ jobs:
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build
+      - name: Check docs/dialect.md against the binder's functions
+        run: tools/check_dialect.sh
       - name: Test
         run: build/test/slothdb_tests.exe
 
@@ -143,6 +147,7 @@ jobs:
       matrix:
         include:
           - { target: checkpoint_load, source: src/storage/checkpoint.cpp, floor: 240 }
+          - { target: sql, source: src/parser/parser.cpp, floor: 800 }
     env:
       FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '3600' || inputs.fuzz_seconds || '120' }}
     steps:

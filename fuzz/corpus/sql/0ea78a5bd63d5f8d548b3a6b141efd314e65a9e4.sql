@@ -1,0 +1,1 @@
+SELECT LAST(i) FROM (VALUES (NULL::INT32)) tbl(i)

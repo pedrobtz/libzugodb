@@ -1,0 +1,4 @@
+SELECT typeof(1::DECIMAL(18,0) + 0.1::DECIMAL(18,18)),
+       1::DECIMAL(18,0) + 0.1::DECIMAL(18,18),
+       typeof(0.1::DECIMAL(18,18) - 1::DECIMAL(18,0)),
+       0.1::DECIMAL(18,18) - 1::DECIMAL(18,0)

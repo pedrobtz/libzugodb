@@ -1,0 +1,1 @@
+INSERT INTO t_double VALUES (4.0, NULL);

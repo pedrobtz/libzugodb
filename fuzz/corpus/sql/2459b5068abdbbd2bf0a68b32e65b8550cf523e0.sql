@@ -1,0 +1,3 @@
+EXPLAIN
+SELECT i, LAG(i, 3000) OVER() AS i1
+FROM range(5000) tbl(i);

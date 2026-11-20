@@ -1,0 +1,1 @@
+explain analyze SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;

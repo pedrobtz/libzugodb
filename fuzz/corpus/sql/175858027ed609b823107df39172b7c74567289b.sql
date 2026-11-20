@@ -1,0 +1,1 @@
+SELECT FIRST(i ORDER BY i) FROM integers

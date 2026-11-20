@@ -1,0 +1,1 @@
+SELECT (2, 0) > ANY(SELECT 1, 0);

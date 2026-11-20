@@ -1,0 +1,1 @@
+CREATE TABLE typed_probes(id INTEGER, g VARCHAR COLLATE nocase, h INTEGER[], v INTEGER);

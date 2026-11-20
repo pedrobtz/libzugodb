@@ -1,0 +1,1 @@
+INSERT INTO l VALUES (1), (2), (3);

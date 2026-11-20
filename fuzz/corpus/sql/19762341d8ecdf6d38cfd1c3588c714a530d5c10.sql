@@ -1,0 +1,1 @@
+SELECT * FROM vals1 WHERE i>=10 AND j>i

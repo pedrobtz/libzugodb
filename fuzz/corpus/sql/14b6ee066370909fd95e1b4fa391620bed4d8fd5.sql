@@ -1,0 +1,1 @@
+INSERT INTO strings VALUES (NULL)

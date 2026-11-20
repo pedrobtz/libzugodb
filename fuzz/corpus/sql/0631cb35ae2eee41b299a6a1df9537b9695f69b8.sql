@@ -1,0 +1,1 @@
+SELECT -i from minima;

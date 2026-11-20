@@ -1,0 +1,1 @@
+SELECT suffix('abcd', 'bcd')

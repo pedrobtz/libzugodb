@@ -1,0 +1,3 @@
+SELECT n, x, (WITH cte AS (SELECT n AS v) SELECT (SELECT v FROM cte WHERE x = 10 LIMIT 1)) AS z
+FROM (VALUES (1,10),(1,20),(2,10),(2,20)) t(n,x)
+ORDER BY n, x

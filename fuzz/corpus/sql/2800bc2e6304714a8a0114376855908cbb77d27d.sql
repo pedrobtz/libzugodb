@@ -1,0 +1,1 @@
+SELECT id FROM t WHERE s ILIKE '%c_zzz%' ESCAPE '\' ORDER BY id

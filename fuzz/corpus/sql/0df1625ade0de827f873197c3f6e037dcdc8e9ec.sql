@@ -1,0 +1,1 @@
+SELECT f FROM floats WHERE f>=1 ORDER BY ALL

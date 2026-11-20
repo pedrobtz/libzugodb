@@ -1,0 +1,1 @@
+SELECT PRODUCT(2) FROM range(100);

@@ -1,0 +1,1 @@
+INSERT INTO t1(c0) VALUES (-18), (NULL);

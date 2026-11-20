@@ -1,0 +1,1 @@
+select bool_and()

@@ -1,0 +1,1 @@
+SELECT typeof(1::UBIGINT + 1::TINYINT)

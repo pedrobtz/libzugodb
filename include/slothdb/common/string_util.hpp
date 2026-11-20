@@ -22,4 +22,33 @@ public:
     static std::string Trim(const std::string &str);
 };
 
+// Identifiers match as DuckDB's do, ignoring the case of ASCII letters,
+// quoted or not (Stage 9, design L26); the spelling a name was created
+// with is kept. Other bytes compare as they are.
+inline char FoldIdentifierChar(char c) {
+    return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
+}
+inline bool IdentifierEquals(const std::string &a, const std::string &b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); i++) {
+        if (FoldIdentifierChar(a[i]) != FoldIdentifierChar(b[i])) return false;
+    }
+    return true;
+}
+struct IdentifierHash {
+    size_t operator()(const std::string &s) const {
+        size_t h = 14695981039346656037ULL & static_cast<size_t>(-1);
+        for (char c : s) {
+            h ^= static_cast<unsigned char>(FoldIdentifierChar(c));
+            h *= static_cast<size_t>(1099511628211ULL);
+        }
+        return h;
+    }
+};
+struct IdentifierEqual {
+    bool operator()(const std::string &a, const std::string &b) const {
+        return IdentifierEquals(a, b);
+    }
+};
+
 } // namespace zugodb

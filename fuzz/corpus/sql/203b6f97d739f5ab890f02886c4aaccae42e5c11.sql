@@ -1,0 +1,1 @@
+SELECT -('0.1'::DECIMAL), -('-0.1'::DECIMAL)

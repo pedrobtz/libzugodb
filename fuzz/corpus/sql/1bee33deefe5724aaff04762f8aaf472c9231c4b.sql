@@ -1,0 +1,1 @@
+INSERT INTO dates VALUES ('1900-1-1')

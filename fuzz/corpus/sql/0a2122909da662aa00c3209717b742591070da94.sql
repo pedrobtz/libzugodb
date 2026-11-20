@@ -1,0 +1,1 @@
+CREATE TABLE pair_l(a INTEGER, x INTEGER);

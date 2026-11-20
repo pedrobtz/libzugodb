@@ -1,0 +1,1 @@
+SELECT sum(i) FROM generate_series(9007199254738944, 9007199254740991) t(i);

@@ -1,0 +1,1 @@
+RESET SESSION pivot_filter_threshold

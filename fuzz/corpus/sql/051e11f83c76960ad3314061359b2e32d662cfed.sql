@@ -1,0 +1,1 @@
+SELECT * FROM integers WHERE i=(SELECT SUM(1))

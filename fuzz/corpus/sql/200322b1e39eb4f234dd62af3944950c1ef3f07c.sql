@@ -1,0 +1,8 @@
+SELECT o.x, EXISTS (
+	SELECT *
+	FROM (VALUES (NULL::INTEGER)) l(a)
+	ANTI JOIN (VALUES (NULL::INTEGER)) r(b)
+		ON l.a IS NOT DISTINCT FROM r.b AND o.x = 10
+) AS ex
+FROM (VALUES (10), (20)) o(x)
+ORDER BY o.x;

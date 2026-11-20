@@ -1,0 +1,1 @@
+SET pivot_filter_threshold=0

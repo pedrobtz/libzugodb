@@ -1,0 +1,1 @@
+SELECT map {1:2} LIMIT (SELECT 5);

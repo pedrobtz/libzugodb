@@ -1,0 +1,1 @@
+SELECT finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(kurtosis(d) EXPORT_STATE), finalize(kurtosis_pop(d) EXPORT_STATE) FROM (SELECT NULL::integer d, g FROM dummy);

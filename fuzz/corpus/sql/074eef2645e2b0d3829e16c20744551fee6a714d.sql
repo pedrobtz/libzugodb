@@ -1,0 +1,1 @@
+INSERT INTO t_decimal VALUES (1.00, 2.00);

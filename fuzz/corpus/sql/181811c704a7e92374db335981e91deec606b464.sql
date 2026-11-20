@@ -1,0 +1,1 @@
+CREATE TABLE u(e FLOAT[3]);

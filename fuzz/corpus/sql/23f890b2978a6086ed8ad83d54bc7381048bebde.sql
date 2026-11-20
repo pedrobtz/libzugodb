@@ -1,0 +1,1 @@
+SELECT i, (WITH i2 AS (SELECT 42 WHERE i1.i>2) SELECT * FROM i2) AS j FROM integers i1 ORDER BY i;

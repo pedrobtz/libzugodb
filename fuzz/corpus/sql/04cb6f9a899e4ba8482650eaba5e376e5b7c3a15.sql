@@ -1,0 +1,1 @@
+SELECT g, finalize(sum(d) EXPORT_STATE)::integer, finalize(avg(d) EXPORT_STATE)::integer, finalize(count(d) EXPORT_STATE), finalize(min(d) EXPORT_STATE), finalize(max(d) EXPORT_STATE), finalize(stddev(d) EXPORT_STATE)::integer, finalize(first(d) EXPORT_STATE), finalize(last(d) EXPORT_STATE) FROM dummy GROUP BY g ORDER BY g;

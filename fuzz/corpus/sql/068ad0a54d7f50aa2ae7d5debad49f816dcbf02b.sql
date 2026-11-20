@@ -1,0 +1,1 @@
+INSERT INTO table1 VALUES (NULL, 2), (1, NULL);

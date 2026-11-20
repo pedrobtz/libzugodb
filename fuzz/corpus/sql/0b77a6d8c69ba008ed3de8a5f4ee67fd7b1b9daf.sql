@@ -1,0 +1,8 @@
+SELECT
+    x,
+    (x + 1) IS DISTINCT FROM NULL,
+    (x + 1) IS NOT DISTINCT FROM NULL,
+    NULL IS DISTINCT FROM (x + 1),
+    NULL IS NOT DISTINCT FROM (x + 1)
+FROM (VALUES (NULL), (1), (2)) t(x)
+ORDER BY x

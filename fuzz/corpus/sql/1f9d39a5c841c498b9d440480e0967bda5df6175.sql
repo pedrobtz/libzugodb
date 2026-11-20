@@ -1,0 +1,1 @@
+CREATE TABLE table1(x INTEGER, y INTEGER);

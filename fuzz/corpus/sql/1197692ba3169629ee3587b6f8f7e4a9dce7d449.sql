@@ -1,0 +1,1 @@
+SELECT EXTRACT(hour FROM d) FROM dates;

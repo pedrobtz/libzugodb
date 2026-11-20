@@ -1,0 +1,1 @@
+CREATE TABLE utinyint_limits AS SELECT (0)::UTINYINT min, 255::UTINYINT max

@@ -1,4 +1,5 @@
 #include "slothdb/storage/checkpoint.hpp"
+#include "slothdb/common/string_util.hpp"
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/crc32.hpp"
 #include "slothdb/common/types/value.hpp"
@@ -402,7 +403,10 @@ struct LoadedTable {
 // One table: its name, its columns, its row count and its rows.
 LoadedTable ReadTable(BoundedReader &in) {
     LoadedTable table;
+    auto name_at = in.Offset();
     table.name = in.String("a table name");
+    // SQL makes no empty name: "" is DuckDB's error (Stage 9, design L26).
+    if (table.name.empty()) Damaged("a table with no name" + At(name_at));
 
     auto at = in.Offset();
     auto num_cols = in.Get<uint32_t>("a column count");
@@ -415,13 +419,22 @@ LoadedTable ReadTable(BoundedReader &in) {
     table.columns.reserve(num_cols);
     types.reserve(num_cols);
     for (uint32_t c = 0; c < num_cols; c++) {
+        auto col_at = in.Offset();
         auto col_name = in.String("a column name");
+        if (col_name.empty()) Damaged("a column with no name" + At(col_at));
         at = in.Offset();
         auto tag = in.Get<uint8_t>("a column type");
         if (!KnownColumnType(tag)) {
             Damaged("unknown column type " + std::to_string(tag) + At(at));
         }
         LogicalType type(static_cast<LogicalTypeId>(tag));
+        // A column name the table already has, ignoring ASCII case, is
+        // one SQL cannot make (design L26); the catalog would rename it.
+        for (auto &prev : table.columns) {
+            if (IdentifierEquals(prev.name, col_name)) {
+                Damaged("a second column of the same name" + At(at));
+            }
+        }
         table.columns.emplace_back(col_name, type);
         types.push_back(type);
     }
@@ -518,7 +531,9 @@ void Checkpoint::Load(Catalog &catalog, const std::string &path) {
     // leaves the catalog as it was.
     std::vector<LoadedTable> tables;
     tables.reserve(num_tables);
-    std::unordered_set<std::string> names;
+    // Names compare as identifiers do, ignoring ASCII case (design L26):
+    // SQL cannot make two tables `t` and `T`.
+    std::unordered_set<std::string, IdentifierHash, IdentifierEqual> names;
     for (uint32_t t = 0; t < num_tables; t++) {
         at = in.Offset();
         tables.push_back(ReadTable(in));

@@ -1,0 +1,1 @@
+select '123.4'::DECIMAL(4,1)::VARCHAR

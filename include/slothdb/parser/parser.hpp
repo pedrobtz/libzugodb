@@ -66,6 +66,9 @@ private:
     const Token &ExpectIdentifier(const std::string &context);
     static bool IsIdentifierOrNonReserved(TokenType t);
     bool IsAtEnd() const;
+    // An unquoted identifier spelled `word` (upper case), for the words the
+    // parser matches by text; "show" in quotes is a name, not SHOW.
+    bool CheckWord(const char *word) const;
 
     // Keyword matching (case-insensitive by token type).
     bool CheckKeyword(TokenType kw) const;

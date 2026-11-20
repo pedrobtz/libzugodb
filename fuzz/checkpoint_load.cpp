@@ -13,9 +13,8 @@
 //     and the rows of SELECT *, and its rows scan from storage;
 //   - the database is closed, which saves it, and opened again: the second
 //     open succeeds and gives the same tables and the same rows.
-// The SQL checks skip a table whose name holds a double quote: the
-// tokenizer has no escape for one inside a quoted identifier, so SQL can
-// neither create nor name such a table (its rows are still compared).
+// A table is named in SQL as a quoted identifier, its quotes doubled
+// (Stage 9 gave the tokenizer the "" escape).
 // A refusal (an exception from the Database constructor) is a pass. Any
 // crash, hang, sanitizer report or broken oracle fails (__builtin_trap).
 //
@@ -69,7 +68,12 @@ bool WriteFile(const std::vector<uint8_t> &bytes) {
 }
 
 std::string QuoteIdentifier(const std::string &name) {
-    return "\"" + name + "\"";
+    std::string out = "\"";
+    for (char c : name) {
+        out += c;
+        if (c == '"') out += '"';
+    }
+    return out + "\"";
 }
 
 std::string Text(const Value &v) {
@@ -111,7 +115,6 @@ std::string Snapshot(Database &db) {
         }
         Check(scanned == rows);
 
-        if (name.find('"') != std::string::npos) continue;
         auto table = QuoteIdentifier(name);
         auto count = conn.Query("SELECT count(*) FROM " + table);
         Check(count.RowCount() == 1);

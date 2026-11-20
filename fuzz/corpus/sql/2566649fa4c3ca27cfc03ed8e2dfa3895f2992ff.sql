@@ -1,0 +1,1 @@
+SELECT prefix('abcdefghijklmnopqrstuvwxyz', 'abcfefghijklmnopqrstuvwx')

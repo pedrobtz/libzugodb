@@ -1,0 +1,1 @@
+SELECT id, s FROM t WHERE id % 100 = 7 ORDER BY id LIMIT 5

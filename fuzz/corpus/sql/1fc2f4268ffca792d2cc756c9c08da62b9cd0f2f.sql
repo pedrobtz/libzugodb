@@ -1,0 +1,1 @@
+SELECT b, SUM(a) FROM test GROUP BY b HAVING SUM(a)+10>28;

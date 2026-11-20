@@ -1,0 +1,6 @@
+SELECT LIST(x) OVER (
+  ORDER BY (nextval('w2nw_val024_seq') % 2 = 0), x
+  ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+) AS actual
+FROM (VALUES (1), (2), (3), (4), (5)) AS t(x)
+LIMIT 1;

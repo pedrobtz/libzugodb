@@ -1,0 +1,1 @@
+UPDATE v SET y = NULL WHERE y = 2;

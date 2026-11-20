@@ -1,0 +1,1 @@
+SELECT i FROM integers i1 ORDER BY (WITH i2 AS (SELECT 100-i1.i as j) SELECT j FROM i2);

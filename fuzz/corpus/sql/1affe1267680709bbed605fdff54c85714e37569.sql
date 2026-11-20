@@ -1,0 +1,1 @@
+INSERT INTO blobs VALUES ('FF'::BYTEA)

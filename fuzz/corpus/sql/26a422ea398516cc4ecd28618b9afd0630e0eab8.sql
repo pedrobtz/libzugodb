@@ -1,0 +1,1 @@
+SELECT FIRST(b) FROM tbl WHERE a=0

@@ -1,0 +1,1 @@
+select regr_intercept(*)

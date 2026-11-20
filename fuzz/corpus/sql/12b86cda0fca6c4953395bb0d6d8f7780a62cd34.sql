@@ -1,0 +1,1 @@
+SELECT (SELECT EXISTS(SELECT * FROM integers WHERE i>2)) FROM integers;

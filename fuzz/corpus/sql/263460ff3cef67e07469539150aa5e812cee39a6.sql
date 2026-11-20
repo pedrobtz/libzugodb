@@ -1,0 +1,1 @@
+CREATE TABLE lhs AS SELECT * FROM (VALUES (1), (2)) t(i);

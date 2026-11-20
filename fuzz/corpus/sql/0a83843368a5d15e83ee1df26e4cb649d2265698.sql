@@ -1,0 +1,1 @@
+SELECT '\\b12'::BLOB

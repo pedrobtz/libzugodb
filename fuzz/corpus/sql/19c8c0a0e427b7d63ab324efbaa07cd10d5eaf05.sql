@@ -1,0 +1,1 @@
+CREATE TABLE ascii_only(a VARCHAR, b VARCHAR);

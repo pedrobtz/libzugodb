@@ -1,0 +1,1 @@
+CREATE TABLE regex(s STRING)

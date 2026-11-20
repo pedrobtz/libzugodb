@@ -1,0 +1,3 @@
+SELECT
+   LIST(DISTINCT col0) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS result
+FROM (VALUES ({'key': 'A'}), ({'key': 'B'}), ({'key': 'A'}))

@@ -1,0 +1,1 @@
+ALTER TABLE `my table` ADD COLUMN `c col` INTEGER DEFAULT 3;

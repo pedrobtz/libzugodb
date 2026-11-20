@@ -1,0 +1,1 @@
+SELECT i::DOUBLE FROM bigints ORDER BY i

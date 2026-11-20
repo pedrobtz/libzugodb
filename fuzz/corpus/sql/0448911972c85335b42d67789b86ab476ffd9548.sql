@@ -1,0 +1,1 @@
+SELECT COVAR_SAMP(1, 2, 3)

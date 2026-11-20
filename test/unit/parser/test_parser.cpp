@@ -283,3 +283,96 @@ TEST_CASE("Parser - function with DISTINCT") {
     CHECK(fn.function_name == "COUNT");
     CHECK(fn.is_distinct == true);
 }
+
+// ============================================================================
+// Stage 9 (#13, design §4): quoted identifiers, positions, statement ends.
+// ============================================================================
+
+#include "slothdb/main/connection.hpp"
+#include "slothdb/main/database.hpp"
+
+#include <string>
+
+TEST_CASE("Stage 9: a name holding \" round-trips through CREATE TABLE, INSERT and SELECT") {
+    // DuckDB reads "" inside a quoted identifier as one ": "TA""BLE" is
+    // TA"BLE (keywords/escaped_quotes_expressions.test). The tokenizer
+    // stopped at the first ", so no such name could be made or named.
+    auto stmts = Parser::Parse("SELECT \"COL\"\"UMN\" FROM \"TA\"\"BLE\"");
+    REQUIRE(stmts.size() == 1);
+    auto &sel = static_cast<SelectStatement &>(*stmts[0]);
+    CHECK(sel.from_table->table_name == "TA\"BLE");
+    CHECK(static_cast<ColumnRefExpression &>(*sel.select_list[0]).column_name == "COL\"UMN");
+
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE \"TA\"\"BLE\" (\"COL\"\"UMN\" VARCHAR, \"x\"\"\" INTEGER)");
+    conn.Query("INSERT INTO \"TA\"\"BLE\" (\"COL\"\"UMN\", \"x\"\"\") VALUES ('ALL', 7)");
+    auto r = conn.Query("SELECT \"COL\"\"UMN\", \"TA\"\"BLE\".\"x\"\"\" FROM \"TA\"\"BLE\"");
+    REQUIRE(r.RowCount() == 1);
+    CHECK(r.column_names == std::vector<std::string>{"COL\"UMN", "x\""});
+    CHECK(r.GetValue(0, 0).GetValue<std::string>() == "ALL");
+    CHECK(r.GetValue(0, 1).GetValue<int32_t>() == 7);
+    // Backticks are DuckDB's other delimiter, with the same escape.
+    auto b = conn.Query("SELECT `COL\"UMN` AS `a``b` FROM `TA\"BLE`");
+    CHECK(b.column_names == std::vector<std::string>{"a`b"});
+    // An empty quoted name is DuckDB's error (parser/empty_quoted_identifier.test).
+    CHECK_THROWS_AS(Parser::Parse("SELECT \"\""), ParserException);
+    CHECK_THROWS_AS(Parser::Parse("CREATE TABLE t(``)"), ParserException);
+    CHECK_THROWS_AS(Parser::Parse("SELECT \"abc"), ParserException);
+}
+
+TEST_CASE("Stage 9: names match ignoring case and keep their spelling") {
+    // DuckDB: identifiers are case-insensitive, quoted or not, and a result
+    // column takes the catalog's spelling (binder/test_case_insensitive_binding.test).
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE Foo (Bar INTEGER)");
+    conn.Query("INSERT INTO foo VALUES (1)");
+    auto r = conn.Query("SELECT bar, \"BAR\" FROM \"FOO\"");
+    CHECK(r.column_names == std::vector<std::string>{"Bar", "Bar"});
+    CHECK(r.GetValue(0, 0).GetValue<int32_t>() == 1);
+    CHECK_THROWS(conn.Query("CREATE TABLE FOO (x INTEGER)"));
+    CHECK_THROWS(conn.Query("CREATE TABLE t (a INTEGER, A INTEGER)"));
+    CHECK_THROWS(conn.Query("ALTER TABLE foo ADD COLUMN BAR INTEGER"));
+    CHECK_THROWS(conn.Query("SELECT * FROM foo AS x, foo AS X"));
+    auto s = conn.Query("SELECT * FROM (SELECT 1 AS a, 2 AS A) t");
+    CHECK(s.column_names == std::vector<std::string>{"a", "A_1"});
+}
+
+TEST_CASE("Stage 9: a parser error carries its position") {
+    auto message = [](const std::string &sql) -> std::string {
+        try {
+            Parser::Parse(sql);
+        } catch (const ParserException &e) {
+            CHECK(e.GetLine() > 0);
+            return e.what();
+        }
+        return "";
+    };
+    CHECK(message("SELECT 1 FROM") .find("at line 1, column 14") != std::string::npos);
+    CHECK(message("SELECT 1\nFROM t WHERE") .find("at line 2, column 13") != std::string::npos);
+    CHECK(message("SELECT 'abc") .find("at line 1, column 8") != std::string::npos);
+    CHECK(message("SELECT \"\"") .find("at line 1, column 8") != std::string::npos);
+    CHECK(message("SELECT 1 ? 2") .find("at line 1, column 10") != std::string::npos);
+    // Column aliases past a subquery's select list: an error with a position.
+    CHECK(message("SELECT * FROM (SELECT 1) t(a, b)").find("at line 1") != std::string::npos);
+}
+
+TEST_CASE("Stage 9: no statement is skipped silently") {
+    // A statement ends at ; or the end of the text. SELECT 1 SELECT 2 ran
+    // as two statements; DuckDB's is a syntax error.
+    CHECK_THROWS_AS(Parser::Parse("SELECT 1 SELECT 2"), ParserException);
+    CHECK_THROWS_AS(Parser::Parse("SELECT 1 2"), ParserException);
+    CHECK_THROWS_AS(Parser::Parse("VALUES (1) ORDER BY 1 NULLS FIRST"), ParserException);
+    CHECK(Parser::Parse("SELECT 1; SELECT 2;").size() == 2);
+    CHECK(Parser::Parse(";;SELECT 1;;").size() == 1);
+    // A CTE's column aliases name its columns; they were skipped, token by
+    // token, so `WITH t(b, a) AS (SELECT 1 AS a, 2 AS b) SELECT a` gave 1
+    // where DuckDB gives 2.
+    Database db;
+    Connection conn(db);
+    auto r = conn.Query("WITH t(b, a) AS (SELECT 1 AS a, 2 AS b) SELECT a FROM t");
+    CHECK(r.GetValue(0, 0).GetValue<int32_t>() == 2);
+    CHECK_THROWS(conn.Query("WITH t(a, b, c) AS (SELECT 1, 2) SELECT * FROM t"));
+    CHECK_THROWS(conn.Query("WITH t(a) AS (SELECT * FROM (SELECT 1) s) SELECT a FROM t"));
+}

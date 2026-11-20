@@ -1,0 +1,1 @@
+INSERT INTO vals1 SELECT DISTINCT(i), i-1 FROM vals1 ORDER by i

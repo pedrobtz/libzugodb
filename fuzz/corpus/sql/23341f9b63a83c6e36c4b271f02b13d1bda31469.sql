@@ -1,0 +1,1 @@
+SELECT b, SUM(a) AS sum FROM test GROUP BY b HAVING COUNT(*) = 1 ORDER BY b;

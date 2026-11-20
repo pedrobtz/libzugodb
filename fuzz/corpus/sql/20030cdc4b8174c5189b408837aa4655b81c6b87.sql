@@ -1,0 +1,1 @@
+SELECT * FROM integers WHERE 1 IN (SELECT 1) ORDER BY i

@@ -1,0 +1,1 @@
+SELECT * FROM integers WHERE i=(SELECT 1, 2)

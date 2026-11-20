@@ -1,0 +1,1 @@
+SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM integers WHERE x > 100

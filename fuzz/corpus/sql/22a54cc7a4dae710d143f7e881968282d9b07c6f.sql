@@ -1,0 +1,1 @@
+CHECKPOINT prf_string_nul_stats;

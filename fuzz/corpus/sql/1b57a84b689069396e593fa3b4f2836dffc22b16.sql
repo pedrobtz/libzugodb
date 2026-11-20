@@ -1,0 +1,1 @@
+select 'infinity'::TIME;

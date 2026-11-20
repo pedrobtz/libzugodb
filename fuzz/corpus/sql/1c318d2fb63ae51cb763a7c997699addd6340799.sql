@@ -1,0 +1,1 @@
+SELECT DISTINCT ON (false) a, b FROM t ORDER BY a, b

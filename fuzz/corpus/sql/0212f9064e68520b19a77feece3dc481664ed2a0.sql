@@ -1,0 +1,1 @@
+CREATE TABLE emojis(id INTEGER, s VARCHAR);

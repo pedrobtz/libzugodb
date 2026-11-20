@@ -1,0 +1,1 @@
+SELECT DISTINCT ON (2) j, k FROM integers ORDER BY 2

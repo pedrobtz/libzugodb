@@ -1,0 +1,1 @@
+SELECT id FROM t WHERE s ILIKE '%DÉJÀ%' ORDER BY id

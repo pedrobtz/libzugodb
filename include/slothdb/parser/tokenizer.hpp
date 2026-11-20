@@ -203,6 +203,9 @@ struct Token {
     std::string value;      // Raw text of the token.
     uint32_t line;
     uint32_t column;
+    // A delimited identifier ("x" or `x`): never a keyword or a word the
+    // parser matches by its text (SHOW, REPLACE, ...).
+    bool quoted = false;
 
     Token() : type(TokenType::INVALID), line(0), column(0) {}
     Token(TokenType type, const std::string &value, uint32_t line, uint32_t column)

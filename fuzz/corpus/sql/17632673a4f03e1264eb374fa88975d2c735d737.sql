@@ -1,0 +1,1 @@
+SELECT FIRST(i) FROM (VALUES (NULL::INT32)) tbl(i)

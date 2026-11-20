@@ -1,0 +1,1 @@
+CREATE TABLE pair_s_null(a INTEGER, b INTEGER);

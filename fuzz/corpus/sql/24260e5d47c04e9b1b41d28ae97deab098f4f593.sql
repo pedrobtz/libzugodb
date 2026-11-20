@@ -1,0 +1,1 @@
+CREATE TABLE issue24045_d(y INTEGER);

@@ -1,0 +1,5 @@
+SELECT
+	SUM(v) OVER (PARTITION BY a, a) AS w_aa,
+	SUM(v) OVER (PARTITION BY a) AS w_a
+FROM src
+ORDER BY b;

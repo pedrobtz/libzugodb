@@ -548,6 +548,69 @@ minor version.
   in Stage 11. The plan across the package family is
   [pedrobtz/packages `zugodb.md`](https://github.com/pedrobtz/packages/blob/main/zugodb.md).
 
+- **L26 (2026-11-20, Stage 9, decided with an advisor).** What the parser
+  and binder accept, and how it is written down.
+  - Identifiers. `"..."` and DuckDB's `` `...` `` delimit a name, a doubled
+    delimiter is one, an empty one is an error. Names of tables, views,
+    columns, CTEs and aliases match ignoring ASCII case, quoted or not, and
+    keep their spelling; a bare column's result name is the catalog's. Two
+    names equal under that rule are refused in `CREATE TABLE`, `ALTER
+    TABLE` and one `FROM`; in a subquery, a view or `CREATE TABLE AS` the
+    later one becomes `name_1`, `name_2`, ... as DuckDB's does
+    (`SchemaCatalogEntry::CreateTable`). `Checkpoint::Load` refuses a file
+    with two such table or column names, or an empty one: SQL can make
+    neither (amends L12).
+  - Statements. A statement ends at `;` or the end of the text; a token
+    after a complete statement is a parser error. Every parser error's
+    message ends with its line and column. A CTE's column aliases name its
+    columns. `BEGIN`, `COMMIT` and `ROLLBACK` are refused, the batch before
+    any of it runs: a statement after a failed one inside `BEGIN ... COMMIT`
+    was kept where DuckDB rolls the transaction back, and no undo can fix
+    that. `PRAGMA database_list`, `SHOW ... LIKE` and `SHOW COLUMNS` are
+    refused; `DESCRIBE`, `PRAGMA table_info` and `SHOW TABLES` give DuckDB's
+    rows.
+  - The function registry. One list in `src/binder/binder.cpp`, between
+    `BEGIN` and `END FUNCTION REGISTRY`, holds every scalar function (with
+    DuckDB's argument counts), aggregate and window function the engine
+    computes; any other name is an error at bind time, where it bound as an
+    `INTEGER` and failed per row or gave a value DuckDB never gives.
+    `docs/dialect.md` lists the same names, `tools/check_dialect.sh` (run by
+    the `ci` jobs) compares the two, and a doctest calls each one. The
+    binder checks the argument types of the text, number and date functions
+    against DuckDB's (a `BOOLEAN` read as a `string_t` overflowed a heap
+    buffer).
+  - Refused as not DuckDB's (L4): `NVL`, `IIF`, `GETDATE`, `CURDATE`,
+    `CURTIME`, `FROM_UNIXTIME`, `UNIX_TIMESTAMP`, `DATE_FORMAT`,
+    `FORMAT_TIMESTAMP`, `DATEADD`, `TIMESTAMPADD`, `TIMESTAMPDIFF`,
+    `SUBDATE`, `ADDDATE`, `BASE64_ENCODE`, `BASE64_DECODE`, `INITCAP`,
+    `SHA512`, `SHA2_256`, `SHA2_512`, `SHA_1`, `RAND`, `TRUNCATE()`,
+    `STR_TO_DATE` and `DATEDIFF(d1, d2)`. As a provider's (L25): `RANDOM`,
+    `SETSEED`, `UUID`, `GEN_RANDOM_UUID`. As a type or zone the engine does
+    not hold: `NOW`, `CURRENT_TIMESTAMP`, `CURRENT_DATE` (DuckDB's are in
+    the session's time zone), `TO_TIMESTAMP`, `AGE`, `TIMESTAMP ± INTEGER`,
+    `TIMESTAMP - TIMESTAMP` (an `INTERVAL`), `DATE + BIGINT`. As not
+    DuckDB's values: `VERSION`, `CURRENT_DATABASE`. `DATE_ADD` and
+    `DATE_SUB`, whose DuckDB forms take an `INTERVAL` or count complete
+    parts, are refused rather than reimplemented.
+  - Kept and made DuckDB's: `DATE_DIFF` and `DATEDIFF` are `(part, start,
+    end)` and count the part's boundaries with each operand cut down to
+    the part (floor division before 1970), for twelve parts; `STRFTIME` is
+    DuckDB's specifiers formatted by the engine, not the C library's; a
+    condition (`AND`, `OR`, `NOT`, `WHERE`, `HAVING`, `QUALIFY`, `ON`,
+    `CASE WHEN`) of another type is cast to `BOOLEAN`; `CASE`, `COALESCE`,
+    `NULLIF`, `GREATEST` and `LEAST` keep one type as it is, widen numbers,
+    give a string literal the other branch's type, and refuse any other
+    mix. Each was checked against DuckDB's Python package on generated
+    inputs (several hundred values or pairs each).
+  - The SQL fuzzer, `fuzz/sql.cpp`, runs each input against a fixed schema
+    (two tables with every SQL type and NULLs, a view) in a new database at
+    thread caps 1 and 2; its oracle is the same class (a result or an
+    error) and, for a result, the same row and column counts. Values are
+    not compared, as L16 compares classes. Its seeds are 2,000 statements
+    of the subset (`fuzz/make_sql_corpus.sh`); its reach is the edges of
+    `src/parser/parser.cpp`, against a floor in the workflow (800; the
+    first run reached 894 of 3,894).
+
 ## 9. Open questions
 
 - **LQ1 (settled 2026-11-20, Stage 6).** Which DuckDB tag is pinned, and

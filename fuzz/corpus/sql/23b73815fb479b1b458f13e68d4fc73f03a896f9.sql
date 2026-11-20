@@ -1,0 +1,1 @@
+CREATE TABLE seeds(a DOUBLE)

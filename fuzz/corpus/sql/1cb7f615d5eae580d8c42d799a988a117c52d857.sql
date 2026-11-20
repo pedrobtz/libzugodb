@@ -1,0 +1,4 @@
+SELECT i % 3 AS g, LAST(d ORDER BY 5-i), LAST(dt ORDER BY 5-i), LAST(t ORDER BY 5-i), LAST(s ORDER BY 5-i)
+FROM five_dates
+GROUP BY 1
+ORDER BY 1

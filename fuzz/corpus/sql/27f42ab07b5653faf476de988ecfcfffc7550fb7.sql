@@ -1,0 +1,1 @@
+SELECT * FROM tbl t1 LEFT JOIN tbl t2 ON (SELECT t2.a)<100

@@ -1,0 +1,1 @@
+SELECT 'aaa' LIKE 'b%'

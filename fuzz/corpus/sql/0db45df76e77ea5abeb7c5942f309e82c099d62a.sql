@@ -1,0 +1,1 @@
+SELECT histogram(CAST('2021-08-20' AS TIMESTAMP_MS));
