@@ -63,6 +63,18 @@ What follows from it:
   (§5), not from SlothDB's `SQL_REFERENCE.md`, which describes what
   SlothDB meant to accept.
 - New syntax is added only with a recorded DuckDB answer for it.
+- Types the engine does not hold as DuckDB does are refused by name, not
+  aliased (Stage 8): `DECIMAL` and `NUMERIC` (#26; they bound to `DOUBLE`
+  and dropped precision and scale) until a fixed-point type exists, and
+  `TIMESTAMP_S`, `TIMESTAMP_MS`, `TIMESTAMP_NS`, `TIMESTAMPTZ`, `TIMETZ`
+  and `TIMESTAMP(p)` other than `p` of 4 to 6 (they were the engine's
+  microsecond `TIMESTAMP` under another name). `DATETIME` stays, as
+  DuckDB's alias. A decimal literal (`1.5`) stays a `DOUBLE`, where
+  DuckDB types it `DECIMAL`: refusing it would refuse most arithmetic,
+  and the cases where the two differ (`%` of a large integer by a
+  decimal literal, `10.0 % 0.0`) are fixed or refused one by one.
+- The plan text of `EXPLAIN` is the engine's own, not DuckDB's; the
+  conformance runner leaves such queries out (L20).
 
 ## 4. Parser
 
@@ -418,6 +430,68 @@ minor version.
   its arguments. A string result past `UINT32_MAX` bytes, the most a
   `string_t` holds and DuckDB's limit, is refused before it is built
   (`LPAD`, `RPAD`).
+
+- **L19 (2026-11-20, Stage 8, decided with an advisor).** Text to
+  `DATE`, `TIME` and `TIMESTAMP` is read by DuckDB's grammar at the pinned
+  tag (`Value::ParseDate`, `ParseTime`, `ParseTimestamp`): optional
+  spaces, a year of any length and a sign, separators `-`, `/`, `\` or
+  space used twice, one- or two-digit month and day checked against the
+  month's length, an optional ` (BC)`, `epoch`; a time `H[...]:[MM[:[SS[.f]]]]`
+  with hours to 24:00:00 and the fraction past microseconds cut; a
+  timestamp as a date, then `T` or a space, a time and an optional `Z`; a
+  `TIME` that is not a time is read as a timestamp and keeps its time of
+  day, as DuckDB does. Each parse is Ok, Invalid or Unsupported. Invalid
+  is text DuckDB rejects too: an error under `CAST` and NULL under
+  `TRY_CAST`. Unsupported is text DuckDB may read but the engine cannot
+  hold or does not take apart, and is an error under both, so a NULL is
+  never a guess: `infinity` and `-infinity` (no infinite value), a year
+  outside 1 to 9999 (the engine's date functions, `strftime`,
+  `date_diff`, `date_trunc`, were written for those), a UTC offset or a
+  time zone name, text after a date or a time. A date, a time and a
+  timestamp print as DuckDB's (a year before 1 as its BC year with
+  ` (BC)`, the fraction without trailing zeros, 24:00:00), the runner
+  prints a TIME of 24:00:00 too, and a cast from a type DuckDB has no
+  cast from (`INTEGER` to `DATE`) is an error under `TRY_CAST` as well.
+- **L20 (2026-11-20, Stage 8, decided with an advisor).** A query whose
+  expected result holds `<REGEX>:` or `<!REGEX>:` in any column is left
+  out of its file alone and counted in `totals.tsv` (`queries left out:
+  regex results`). DuckDB's runner matches the regex against DuckDB's
+  own text, mostly an `EXPLAIN` plan, which no other engine gives; L14
+  looked in the first column only, so `EXPLAIN` queries ran and counted
+  as wrong. The query is left out rather than its file because a query
+  changes nothing the later cases read. Amends L14.
+- **L21 (2026-11-20, Stage 8, decided with an advisor).** The window
+  operator computes `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `NTILE`, `LAG`,
+  `LEAD`, `FIRST_VALUE`, `LAST_VALUE`, `SUM`, `COUNT`, `AVG`, `MIN` and
+  `MAX`, over a column, with SQL's default frames. The binder refuses,
+  as an allow-list, every other shape: another function, `DISTINCT`,
+  `FILTER`, an argument other than a column (an integer constant for
+  `NTILE` and `LAG`'s offset; `LAG`'s default is refused), an `ORDER BY`
+  key other than a column, more than one key for `RANK`, `DENSE_RANK`
+  and the aggregates (peers were found by the first key), `LAST_VALUE`
+  with `ORDER BY` (its frame ends at the current row's last peer, which
+  is not computed), and `SUM` or `AVG` of a non-numeric column. The
+  planner refuses a running aggregate beside windows over another
+  partition or order (that path took the whole partition) and a `QUALIFY`
+  other than one window compared with a constant (it was not applied).
+  Window aggregates over integers are summed in 64 bits; one past
+  `BIGINT` is refused (DuckDB's is a `HUGEINT`).
+- **L22 (2026-11-20, Stage 8, decided with an advisor).** DuckDB's string
+  functions count code points (`SUBSTRING`, `LEFT`, `RIGHT`, `INSTR`,
+  `STRPOS`, `TRANSLATE`, `LIKE`'s `_`; a `BLOB`'s `SUBSTRING` counts
+  bytes), bytes (`STRLEN`) or grapheme clusters (`LENGTH`, `REVERSE`), and
+  map case with utf8proc's tables (`UPPER`, `LOWER`, `ILIKE`). The engine
+  counts code points and bytes as DuckDB does. It has no grapheme rules:
+  `LENGTH` and `REVERSE` work where every code point is surely a cluster
+  of its own (printable ASCII, Latin-1 to Latin Extended-B, Greek and
+  Cyrillic letters, CJK ideographs, Hangul syllables, emoji pictographs
+  without modifiers, no `\r\n`) and are refused otherwise. It has no case
+  tables yet: `UPPER` and `LOWER` of non-ASCII text are refused, and so is
+  `ILIKE` with a non-ASCII pattern or a string holding U+0130 or U+212A
+  (whose lowercase is ASCII); an ASCII pattern against other text is
+  exact. The interim, per the advisor, is refusal, not a partial table; a
+  complete simple case mapping generated from UnicodeData is a
+  sub-issue of v0.3.0.
 
 ## 9. Open questions
 
