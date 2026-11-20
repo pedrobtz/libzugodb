@@ -225,6 +225,29 @@ struct SetOpRowEqual {
 };
 using SetOpRowSet = std::unordered_set<std::vector<Value>, SetOpRowHash, SetOpRowEqual>;
 
+// `rows` OP `right`, for UNION, INTERSECT and EXCEPT: each a set, so a row
+// is kept once. Rows repeated within the left side were all kept (Stage
+// 10): `SELECT 1 FROM (VALUES (1), (1)) UNION SELECT 2` gave three rows.
+static void ApplyDistinctSetOp(const std::string &op, std::vector<std::vector<Value>> &rows,
+                               std::vector<std::vector<Value>> &right) {
+    SetOpRowSet seen;
+    std::vector<std::vector<Value>> kept;
+    if (op == "UNION") {
+        for (auto *side : {&rows, &right}) {
+            for (auto &row : *side) {
+                if (seen.insert(row).second) kept.push_back(std::move(row));
+            }
+        }
+    } else {
+        SetOpRowSet rk(right.begin(), right.end());
+        const bool want = op == "INTERSECT";
+        for (auto &row : rows) {
+            if ((rk.count(row) > 0) == want && seen.insert(row).second) kept.push_back(std::move(row));
+        }
+    }
+    rows = std::move(kept);
+}
+
 // Apply union-level ORDER BY / LIMIT / OFFSET to a row vector.
 //
 // The parser attaches ORDER BY / LIMIT / OFFSET that appear after a UNION /
@@ -556,21 +579,8 @@ std::shared_ptr<DataTable> MaterializeSelectIntoTable(
             const std::string &op = cur->set_op;
             if (op == "UNION ALL") {
                 for (auto &r : right_rows) rows.push_back(std::move(r));
-            } else if (op == "UNION") {
-                SetOpRowSet seen;
-                for (auto &row : rows) seen.insert(row);
-                for (auto &row : right_rows)
-                    if (seen.insert(row).second) rows.push_back(std::move(row));
-            } else if (op == "INTERSECT") {
-                SetOpRowSet rk(right_rows.begin(), right_rows.end());
-                std::vector<std::vector<Value>> kept;
-                for (auto &row : rows) if (rk.count(row)) kept.push_back(std::move(row));
-                rows = std::move(kept);
-            } else if (op == "EXCEPT") {
-                SetOpRowSet rk(right_rows.begin(), right_rows.end());
-                std::vector<std::vector<Value>> kept;
-                for (auto &row : rows) if (!rk.count(row)) kept.push_back(std::move(row));
-                rows = std::move(kept);
+            } else if (op == "UNION" || op == "INTERSECT" || op == "EXCEPT") {
+                ApplyDistinctSetOp(op, rows, right_rows);
             }
             cur = cur->set_right.get();
         }
@@ -3191,27 +3201,8 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                         for (auto &row : right_rows) {
                             final_result.rows.push_back(std::move(row));
                         }
-                    } else if (op == "UNION") {
-                        SetOpRowSet seen;
-                        for (auto &row : final_result.rows) seen.insert(row);
-                        for (auto &row : right_rows) {
-                            if (seen.insert(row).second)
-                                final_result.rows.push_back(std::move(row));
-                        }
-                    } else if (op == "INTERSECT") {
-                        SetOpRowSet rk(right_rows.begin(), right_rows.end());
-                        std::vector<std::vector<Value>> kept;
-                        for (auto &row : final_result.rows) {
-                            if (rk.count(row)) kept.push_back(std::move(row));
-                        }
-                        final_result.rows = std::move(kept);
-                    } else if (op == "EXCEPT") {
-                        SetOpRowSet rk(right_rows.begin(), right_rows.end());
-                        std::vector<std::vector<Value>> kept;
-                        for (auto &row : final_result.rows) {
-                            if (!rk.count(row)) kept.push_back(std::move(row));
-                        }
-                        final_result.rows = std::move(kept);
+                    } else if (op == "UNION" || op == "INTERSECT" || op == "EXCEPT") {
+                        ApplyDistinctSetOp(op, final_result.rows, right_rows);
                     }
                     cur = cur->set_right.get();
                 }
