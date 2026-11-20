@@ -17,7 +17,11 @@ public:
 
     // Load a database from a file. Refuses a file that BlockManager::OpenFile
     // refuses, then one whose checksum does not match, before reading any
-    // table.
+    // table. Every length, count and offset the file holds is then checked
+    // against the bytes left before it is used, so a file that passes the
+    // checksum but was not written by Save is refused too (design L12).
+    // The tables are added to `catalog` only once the whole file has been
+    // read: a refused file leaves it as it was.
     static void Load(Catalog &catalog, const std::string &path);
 
     // The checksum of a whole database file image: CRC-32 (Crc32 in
@@ -31,26 +35,19 @@ private:
     // pieces.
     static uint32_t ChecksumFile(BlockManager &bm, idx_t size);
 
-    // Serialization helpers.
+    // Serialization helpers. Reading goes through a bounded reader in
+    // checkpoint.cpp.
     static void WriteString(BlockManager &bm, idx_t &offset, const std::string &str);
-    static std::string ReadString(BlockManager &bm, idx_t &offset);
     static void WriteU32(BlockManager &bm, idx_t &offset, uint32_t val);
-    static uint32_t ReadU32(BlockManager &bm, idx_t &offset);
     static void WriteU64(BlockManager &bm, idx_t &offset, uint64_t val);
-    static uint64_t ReadU64(BlockManager &bm, idx_t &offset);
     static void WriteI32(BlockManager &bm, idx_t &offset, int32_t val);
-    static int32_t ReadI32(BlockManager &bm, idx_t &offset);
     static void WriteI64(BlockManager &bm, idx_t &offset, int64_t val);
-    static int64_t ReadI64(BlockManager &bm, idx_t &offset);
     static void WriteDouble(BlockManager &bm, idx_t &offset, double val);
-    static double ReadDouble(BlockManager &bm, idx_t &offset);
     static void WriteU8(BlockManager &bm, idx_t &offset, uint8_t val);
-    static uint8_t ReadU8(BlockManager &bm, idx_t &offset);
 
-    // Serialize/deserialize a Value.
+    // Serialize a Value.
     static void WriteValue(BlockManager &bm, idx_t &offset, const Value &val,
                             const LogicalType &type);
-    static Value ReadValue(BlockManager &bm, idx_t &offset, const LogicalType &type);
 };
 
 } // namespace zugodb
