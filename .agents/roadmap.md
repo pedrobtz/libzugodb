@@ -731,6 +731,33 @@ and the engine carries no zstd of its own.
 - Every `**Tests.**` line holds on all CI jobs.
 - The line count removed is in the pull request, against the sizing.
 
+**Deviations (2026-11-20).**
+
+- The cut is wider than the readers, by L28: `src/storage/compression/`
+  (SlothDB's column compression, which nothing called), `file_glob`,
+  `hive_partition`, the catalog's file-scan and live-view fields,
+  `CopyStatement` and `CreateViewStatement::is_live`, and the eleven
+  execution helpers that only the fast paths called. `parser.cpp` is not
+  touched.
+- The sizing (L28): zstd 23,958 lines, snappy 4,793, fastpforlib 2,621,
+  miniz 9,255, the readers 8,319, the helpers 4,278;
+  `physical_planner.cpp` goes from 14,896 lines to 5,855 and
+  `connection.cpp` from 3,438 to 2,305. In all, 65,909 lines are removed
+  (31,373 of them under `third_party/`) and 461 added.
+- The refusal tests of Stage 2 in `test_refused.cpp` and
+  `test_between_explain_view.cpp` pass unchanged; the 18 refusal cases of
+  the deleted reader tests move into `test_refused.cpp` with their names
+  and assertions, their Parquet files now the format's magic bytes.
+- The thread, worker-error and chunk cases driven through the Parquet
+  scan go with it; `WorkerSite::PIPELINE` goes, and `ParallelFor`, which
+  no query reaches any more, is tested at its API.
+- The second golden file, `test/fixtures/written_by_v0.3.0.db`, is byte
+  for byte `golden_v1001.db`: the format has not changed since Stage 3.
+- The symbol check is `tools/check_symbols.sh`, in each `test` leg and
+  `mingw`; it also checks fastpforlib's and miniz's names and that the
+  removed paths stay removed.
+- #50 (the Parquet fast paths' wrong answers) closes with the code.
+
 **Design.** [§2](design.md#2-scope), LQ2 in
 [§9](design.md#9-open-questions) and [zugodb §7.5][zdesign].
 

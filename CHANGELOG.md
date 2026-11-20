@@ -13,7 +13,8 @@
   No result of a query over a table changes, and the database file's
   format is unchanged (1001); a file written by 0.3.0 is a new golden
   fixture. The Parquet fast paths' wrong answers (#50) go with them.
-- For zugodb's `tools/vendor.yaml`, the paths removed:
+- For zugodb's `tools/vendor.yaml` (pedrobtz/zugodb#71), the paths
+  removed:
   - from `copy`: `third_party/zstd` (all of `LICENSE`, `lib/zstd.h`,
     `lib/zstd_errors.h`, `lib/common`, `lib/decompress`),
     `third_party/fastpforlib` and `third_party/snappy`; and from `exclude`,
