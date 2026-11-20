@@ -12848,7 +12848,9 @@ public:
                 auto &key_vec = probe_chunk_.GetVector(probe_join_col_);
                 std::vector<idx_t> *match_list = nullptr;
 
-                if (use_i64_hash_) {
+                if (nested_loop_) {
+                    match_list = &all_build_rows_;
+                } else if (use_i64_hash_) {
                     // Typed int path - read directly from the Vector data.
                     // NULL-in-probe-key never matches in equi-join semantics.
                     const bool null_probe = !key_vec.GetValidity().RowIsValid(current_probe_row_);
@@ -12885,6 +12887,8 @@ public:
                     }
                     // match_list stays nullptr when null_probe - falls through
                     // to the usual "no match" logic below.
+                } else if (!key_vec.GetValidity().RowIsValid(current_probe_row_)) {
+                    // A NULL probe key matches nothing.
                 } else if (use_linear_cache_ && key_vec.GetType().id() == LogicalTypeId::VARCHAR) {
                     // Ultra-fast: direct bytes from string_t, linear memcmp.
                     auto &s = reinterpret_cast<const string_t *>(key_vec.GetData())[current_probe_row_];
@@ -12975,7 +12979,9 @@ public:
 
     // --- Fuse interface: used by PhysicalHashAggregate to bypass materialization. ---
     void FuseBuild() { if (!built_) { BuildHashTable(); built_ = true; } }
-    bool FuseIsInner() const { return join_type_ == JoinType::INNER; }
+    // The fused path probes the hash table alone: only for an inner join
+    // whose whole condition is one column = column equality.
+    bool FuseIsInner() const { return join_type_ == JoinType::INNER && IsSingleEquiCondition(); }
     bool FuseBuildIsRight() const { return build_is_right_; }
     PhysicalOperator *FuseProbeChild() { return probe_child_; }
     const std::vector<std::vector<Value>> &FuseBuildRows() const { return build_rows_; }
@@ -12997,9 +13003,7 @@ private:
         // this, the build side parses every column even if the consumer only
         // wants one or two - wasteful for wide tables. We derive the join
         // columns from the AST and union them with needed_cols_ (if any).
-        if (!needed_cols_.empty() &&
-            condition_ &&
-            condition_->GetExpressionType() == BoundExpressionType::COMPARISON) {
+        if (!needed_cols_.empty() && IsSingleEquiCondition()) {
             auto &cmp = static_cast<BoundComparison &>(*condition_);
             idx_t left_key = 0, right_key = 0;
             // Classify each side of the equi-join as LEFT- or RIGHT-table
@@ -13165,6 +13169,7 @@ private:
         // of the comparison is classified by its combined column index.
         idx_t left_join_col = 0, right_join_col = 0;
         residual_preds_.clear();
+        nested_loop_ = false;
         auto classify = [&](BoundExpression *e, idx_t &local) -> int {
             if (!e || e->GetExpressionType() != BoundExpressionType::COLUMN_REF) return -1;
             idx_t combined = static_cast<BoundColumnRef &>(*e).column_index;
@@ -13214,6 +13219,35 @@ private:
                 if (!key_set && try_equi_key(c)) { key_set = true; continue; }
                 residual_preds_.push_back(c);
             }
+            nested_loop_ = !key_set;
+        } else {
+            nested_loop_ = true;
+        }
+        if (condition_ && condition_->GetExpressionType() == BoundExpressionType::COMPARISON &&
+            !IsSingleEquiCondition()) {
+            nested_loop_ = true;
+        }
+        if (nested_loop_) {
+            // No equality between a column of each side (`ON i < k`, `ON
+            // TRUE`, `ON i = 1`, `ON a OR b`): every build row is a
+            // candidate for every probe row, and the whole condition is
+            // checked per pair. Before, the hash key defaulted to column 0
+            // of each side and the condition was dropped (Stage 8, #12).
+            residual_preds_.clear();
+            if (condition_) {
+                std::function<void(BoundExpression *)> flatten_all = [&](BoundExpression *e) {
+                    if (e->GetExpressionType() == BoundExpressionType::CONJUNCTION) {
+                        auto &cj = static_cast<BoundConjunction &>(*e);
+                        if (cj.op == "AND" && cj.left && cj.right) {
+                            flatten_all(cj.left.get());
+                            flatten_all(cj.right.get());
+                            return;
+                        }
+                    }
+                    residual_preds_.push_back(e);
+                };
+                flatten_all(condition_.get());
+            }
         }
         // Combined [left][right] schema for residual evaluation.
         if (!residual_preds_.empty()) {
@@ -13254,7 +13288,11 @@ private:
         }
         use_i64_hash_ = is_int_tid(build_key_type) && is_int_tid(probe_key_type_);
 
-        if (use_i64_hash_) {
+        if (nested_loop_) {
+            use_i64_hash_ = false;
+            all_build_rows_.resize(build_rows_.size());
+            for (idx_t i = 0; i < build_rows_.size(); i++) all_build_rows_[i] = i;
+        } else if (use_i64_hash_) {
             // Typed int path - no string allocation per key. Note the build
             // side stores Values (union over all int widths); we have to
             // coerce on the stored type, not blindly call GetValue<int64_t>
@@ -13281,6 +13319,9 @@ private:
             hash_table_i64_.reserve(build_rows_.size() * 2);
         } else {
             for (idx_t i = 0; i < build_rows_.size(); i++) {
+                // NULL never matches in an equi-join (`ToString` of NULL is
+                // "NULL", which would match the string 'NULL').
+                if (build_rows_[i][build_join_col].IsNull()) continue;
                 auto key = build_rows_[i][build_join_col].ToString();
                 hash_table_[key].push_back(i);
             }
@@ -13289,7 +13330,7 @@ private:
         // Build a linear cache for fast low-cardinality probe lookups - faster
         // than a hash map for dimension tables with <256 unique keys. Applies
         // to both the int64 and string paths.
-        use_linear_cache_ = build_rows_.size() <= 256;
+        use_linear_cache_ = !nested_loop_ && build_rows_.size() <= 256;
         if (use_linear_cache_) {
             if (use_i64_hash_) {
                 for (auto &kv : hash_table_i64_) {
@@ -13306,7 +13347,7 @@ private:
 
         // Push projection down to probe child: only the join column + columns
         // that appear in the output and are needed by the caller.
-        if (!needed_cols_.empty()) {
+        if (!needed_cols_.empty() && !nested_loop_ && residual_preds_.empty()) {
             idx_t probe_col_count = probe_child_->GetTypes().size();
             std::vector<bool> probe_needed(probe_col_count, false);
             probe_needed[probe_join_col_] = true;
@@ -13335,7 +13376,23 @@ private:
     }
 
 private:
+    // Whether the condition is exactly one `=` between a column of the left
+    // side and a column of the right side.
+    bool IsSingleEquiCondition() const {
+        if (!condition_ || condition_->GetExpressionType() != BoundExpressionType::COMPARISON) return false;
+        auto &cmp = static_cast<const BoundComparison &>(*condition_);
+        if (cmp.op != "=") return false;
+        auto side = [&](const BoundExpression *e) -> int {
+            if (!e || e->GetExpressionType() != BoundExpressionType::COLUMN_REF) return -1;
+            return static_cast<const BoundColumnRef &>(*e).column_index >= left_col_count_ ? 1 : 0;
+        };
+        int ls = side(cmp.left.get()), rs = side(cmp.right.get());
+        return (ls == 0 && rs == 1) || (ls == 1 && rs == 0);
+    }
+
     // Member state for streaming probe.
+    bool nested_loop_ = false;
+    std::vector<idx_t> all_build_rows_;
     bool build_is_right_ = false;
     std::vector<std::vector<Value>> build_rows_;
     std::unordered_map<std::string, std::vector<idx_t>> hash_table_;
