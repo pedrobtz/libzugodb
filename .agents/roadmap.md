@@ -40,7 +40,7 @@ issue closed. zugodb then moves its pin.
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | [#52](https://github.com/pedrobtz/libzugodb/pull/52) | 2026-11-20 |
 | 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | [#54](https://github.com/pedrobtz/libzugodb/pull/54) | 2026-11-20 |
 | 11.1 | [Host-supplied function providers](#stage-111--host-supplied-function-providers) | 0.4.0 | ci | [#40](https://github.com/pedrobtz/libzugodb/issues/40) | [#57](https://github.com/pedrobtz/libzugodb/pull/57) | 2026-11-20 |
-| 12 | [The names become zugodb](#stage-12--the-names-become-zugodb) | 0.4.0 | ci | [#17](https://github.com/pedrobtz/libzugodb/issues/17) | | |
+| 12 | [The names become zugodb](#stage-12--the-names-become-zugodb) | 0.4.0 | ci | [#17](https://github.com/pedrobtz/libzugodb/issues/17) | [#62](https://github.com/pedrobtz/libzugodb/pull/62) | |
 <!-- markdownlint-enable MD013 -->
 
 ## Stage 0 — Repository clean-up
