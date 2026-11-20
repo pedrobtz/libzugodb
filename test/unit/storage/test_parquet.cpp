@@ -1,10 +1,20 @@
+// The Parquet reader and writer through their C++ API. SQL cannot name a
+// file since Stage 2 (#4): the scan operator is reached through a table set
+// up with the catalog's C++ API (parquet_table.hpp), and the routes from
+// SQL are checked to be refused.
+
 #include "doctest.h"
+#include "../parquet_table.hpp"
+#include "../refused_files.hpp"
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/storage/parquet.hpp"
 #include <cstdio>
+#include <filesystem>
 
 using namespace zugodb;
+using zugodb::testing::AddParquetTable;
+using zugodb::testing::CheckRefused;
 
 static const char *TEST_PARQUET = "test_data.parquet";
 
@@ -105,29 +115,35 @@ TEST_CASE("Parquet - row group statistics") {
     cleanup();
 }
 
-TEST_CASE("Parquet - COPY TO and FROM") {
+TEST_CASE("Parquet - COPY TO and FROM are refused") {
     cleanup();
+    {
+        ParquetWriter writer(TEST_PARQUET, {"id"}, {LogicalType::INTEGER()});
+        writer.WriteRowGroup({{Value::INTEGER(1)}, {Value::INTEGER(2)}});
+        writer.Finish();
+    }
 
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE t (id INTEGER, name VARCHAR, val DOUBLE)");
     conn.Query("INSERT INTO t VALUES (1, 'A', 1.1), (2, 'B', 2.2), (3, 'C', 3.3)");
 
-    conn.Query("COPY t TO 'test_data.parquet' WITH (FORMAT PARQUET)");
+    const char *out = "test_data_out.parquet";
+    std::remove(out);
+    CheckRefused(conn, std::string("COPY t TO '") + out + "' WITH (FORMAT PARQUET)");
+    CheckRefused(conn, std::string("COPY t TO '") + out + "'");
+    CHECK_FALSE(std::filesystem::exists(out));
 
-    conn.Query("CREATE TABLE t2 (id INTEGER, name VARCHAR, val DOUBLE)");
-    conn.Query("COPY t2 FROM 'test_data.parquet' WITH (FORMAT PARQUET)");
-
+    conn.Query("CREATE TABLE t2 (id INTEGER)");
+    CheckRefused(conn, "COPY t2 FROM 'test_data.parquet' WITH (FORMAT PARQUET)");
+    CheckRefused(conn, "COPY t2 FROM 'test_data.parquet'");
     auto r = conn.Query("SELECT COUNT(*) FROM t2");
-    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 3);
-
-    auto r2 = conn.Query("SELECT name FROM t2 WHERE id = 2");
-    CHECK(r2.GetValue(0, 0).GetValue<std::string>() == "B");
+    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 0);
 
     cleanup();
 }
 
-TEST_CASE("Parquet - read_parquet() table function") {
+TEST_CASE("Parquet - a table over a file, through the catalog") {
     cleanup();
 
     // Write a parquet file first.
@@ -142,12 +158,9 @@ TEST_CASE("Parquet - read_parquet() table function") {
     }
 
     Database db;
+    AddParquetTable(db, "pq", TEST_PARQUET);
     Connection conn(db);
-    // Simple test first.
-    auto r0 = conn.Query("SELECT 1");
-    CHECK(r0.RowCount() == 1);
-
-    auto r = conn.Query("SELECT * FROM read_parquet('test_data.parquet')");
+    auto r = conn.Query("SELECT * FROM pq");
     CHECK(r.RowCount() == 2);
     CHECK(r.GetValue(0, 0).GetValue<int32_t>() == 42);
     CHECK(r.GetValue(1, 1).GetValue<std::string>() == "world");
@@ -155,7 +168,7 @@ TEST_CASE("Parquet - read_parquet() table function") {
     cleanup();
 }
 
-TEST_CASE("Parquet - auto-detect from file extension") {
+TEST_CASE("Parquet - read_parquet() and a .parquet path are refused") {
     cleanup();
 
     {
@@ -165,10 +178,12 @@ TEST_CASE("Parquet - auto-detect from file extension") {
         writer.Finish();
     }
 
+    // The file exists and is readable; SQL still may not name it.
     Database db;
     Connection conn(db);
-    auto r = conn.Query("SELECT * FROM 'test_data.parquet'");
-    CHECK(r.RowCount() == 2);
+    CheckRefused(conn, "SELECT * FROM 'test_data.parquet'");
+    CheckRefused(conn, "SELECT * FROM read_parquet('test_data.parquet')");
+    CheckRefused(conn, "DESCRIBE 'test_data.parquet'");
 
     cleanup();
 }
@@ -176,13 +191,21 @@ TEST_CASE("Parquet - auto-detect from file extension") {
 TEST_CASE("Parquet - round-trip preserves data") {
     cleanup();
 
+    // Rows of a table, written with ParquetWriter and queried back.
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE src (a INTEGER, b VARCHAR, c DOUBLE)");
     conn.Query("INSERT INTO src VALUES (1, 'x', 1.5), (2, 'y', 2.5)");
-    conn.Query("COPY src TO 'test_data.parquet' WITH (FORMAT PARQUET)");
+    auto src = conn.Query("SELECT a, b, c FROM src ORDER BY a");
+    src.MaterialiseRows();
+    {
+        ParquetWriter writer(TEST_PARQUET, src.column_names, src.column_types);
+        writer.WriteRowGroup(src.rows);
+        writer.Finish();
+    }
 
-    auto r = conn.Query("SELECT a, b, c FROM read_parquet('test_data.parquet')");
+    AddParquetTable(db, "pq", TEST_PARQUET);
+    auto r = conn.Query("SELECT a, b, c FROM pq");
     CHECK(r.RowCount() == 2);
     CHECK(r.GetValue(0, 0).GetValue<int32_t>() == 1);
     CHECK(r.GetValue(0, 1).GetValue<std::string>() == "x");

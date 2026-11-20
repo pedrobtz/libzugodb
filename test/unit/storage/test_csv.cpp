@@ -1,11 +1,19 @@
+// The CSV reader and writer through their C++ API. SQL cannot read or write
+// a file since Stage 2 (#4); the cases that did so check that it is refused,
+// over files that exist.
+
 #include "doctest.h"
+#include "../refused_files.hpp"
 #include "slothdb/main/database.hpp"
+#include "slothdb/catalog/catalog.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/storage/csv_reader.hpp"
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 
 using namespace zugodb;
+using zugodb::testing::CheckRefused;
 
 static const char *TEST_CSV = "test_data.csv";
 static const char *TEST_OUT_CSV = "test_output.csv";
@@ -91,70 +99,52 @@ TEST_CASE("CSV Writer - basic write") {
     cleanup();
 }
 
-TEST_CASE("COPY TO - export table to CSV") {
+TEST_CASE("COPY TO a CSV file is refused and writes nothing") {
     cleanup();
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE t (id INTEGER, name VARCHAR)");
     conn.Query("INSERT INTO t VALUES (1, 'Alice'), (2, 'Bob')");
 
-    conn.Query("COPY t TO 'test_output.csv'");
-
-    // Read the CSV back.
-    CSVReader reader(TEST_OUT_CSV);
-    auto header = reader.ReadHeader();
-    CHECK(header.size() == 2);
-    CHECK(header[0] == "id");
-
-    auto rows = reader.ReadAll({LogicalType::INTEGER(), LogicalType::VARCHAR()});
-    CHECK(rows.size() == 2);
+    CheckRefused(conn, "COPY t TO 'test_output.csv'");
+    CHECK_FALSE(std::filesystem::exists(TEST_OUT_CSV));
 
     cleanup();
 }
 
-TEST_CASE("COPY FROM - import CSV into table") {
+TEST_CASE("COPY FROM a CSV file is refused and loads nothing") {
     write_test_csv();
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE imported (id INTEGER, name VARCHAR, score DOUBLE)");
 
-    conn.Query("COPY imported FROM 'test_data.csv'");
+    CheckRefused(conn, "COPY imported FROM 'test_data.csv'");
 
     auto r = conn.Query("SELECT COUNT(*) FROM imported");
-    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 4);
-
-    auto r2 = conn.Query("SELECT name FROM imported WHERE id = 1");
-    CHECK(r2.GetValue(0, 0).GetValue<std::string>() == "Alice");
+    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 0);
 
     cleanup();
 }
 
-TEST_CASE("COPY round-trip") {
-    cleanup();
+TEST_CASE("COPY with options is refused") {
+    write_test_csv();
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE original (x INTEGER, y VARCHAR, z DOUBLE)");
     conn.Query("INSERT INTO original VALUES (1, 'hello', 3.14), (2, 'world', 2.72)");
 
-    conn.Query("COPY original TO 'test_output.csv'");
-
-    conn.Query("CREATE TABLE copy_table (x INTEGER, y VARCHAR, z DOUBLE)");
-    conn.Query("COPY copy_table FROM 'test_output.csv'");
-
-    auto r = conn.Query("SELECT * FROM copy_table");
-    CHECK(r.RowCount() == 2);
-    CHECK(r.GetValue(0, 0).GetValue<int32_t>() == 1);
-    CHECK(r.GetValue(0, 1).GetValue<std::string>() == "hello");
+    CheckRefused(conn, "COPY original TO 'test_output.csv' WITH (DELIMITER '|', HEADER true)");
+    CHECK_FALSE(std::filesystem::exists(TEST_OUT_CSV));
+    CheckRefused(conn, "COPY original FROM 'test_data.csv' WITH (DELIMITER ',', HEADER true)");
+    auto r = conn.Query("SELECT COUNT(*) FROM original");
+    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 2);
 
     cleanup();
 }
 
-TEST_CASE("File-literal JOIN across two CSVs") {
-    // Regression: 'FROM a.csv JOIN b.csv' fails with
-    // "Binder Error: Table '__FILE__' not found" because the
-    // preprocessing only walked the left side of the JOIN tree.
-    // Fix walks the JOIN right-hand chain (deepest-first) and applies
-    // the same __FILE__ auto-detect / read_xxx expansion to each.
+TEST_CASE("File-literal JOIN across two CSVs is refused") {
+    // Both files exist; neither side of the JOIN may name one, and a
+    // refused query leaves no table behind in the catalog.
     std::ofstream u("test_users.csv");
     u << "id,name\n1,Alice\n2,Bob\n3,Carol\n";
     u.close();
@@ -164,61 +154,33 @@ TEST_CASE("File-literal JOIN across two CSVs") {
 
     Database db;
     Connection conn(db);
-
-    SUBCASE("INNER JOIN on file literals") {
-        auto r = conn.Query(
+    conn.Query("CREATE TABLE users (id INTEGER, name VARCHAR)");
+    for (int i = 0; i < 3; i++) {
+        CheckRefused(conn,
             "SELECT u.name, o.amount FROM 'test_users.csv' u "
-            "INNER JOIN 'test_orders.csv' o ON u.id = o.user_id "
-            "ORDER BY u.name, o.amount");
-        CHECK(r.RowCount() == 3);
+            "INNER JOIN 'test_orders.csv' o ON u.id = o.user_id");
+        CheckRefused(conn,
+            "SELECT u.id FROM users u "
+            "LEFT JOIN 'test_orders.csv' o ON u.id = o.user_id");
     }
-
-    SUBCASE("LEFT JOIN includes unmatched rows") {
-        auto r = conn.Query(
-            "SELECT u.id FROM 'test_users.csv' u "
-            "LEFT JOIN 'test_orders.csv' o ON u.id = o.user_id "
-            "WHERE o.user_id IS NULL");
-        CHECK(r.RowCount() == 1);
-        CHECK(r.GetValue(0, 0).GetValue<int32_t>() == 3);
-    }
-
-    SUBCASE("Repeat query does not zombie the auto-table") {
-        // Exercises both the JOIN fix AND the earlier RAII cleanup.
-        for (int i = 0; i < 3; i++) {
-            auto r = conn.Query(
-                "SELECT COUNT(*) FROM 'test_users.csv' u "
-                "INNER JOIN 'test_orders.csv' o ON u.id = o.user_id");
-            CHECK(r.RowCount() == 1);
-        }
-    }
+    CHECK(db.GetCatalog().GetSchema().GetTableNames().size() == 1);
 
     std::remove("test_users.csv");
     std::remove("test_orders.csv");
 }
 
-TEST_CASE("COPY with file-literal source (CSV)") {
-    // Regression: 'COPY (SELECT ... FROM a.csv ...) TO out.csv' failed
-    // because COPY's preprocessing only knew about read_csv() form; bare
-    // file literals stayed as __FILE__ and crashed the binder.
+TEST_CASE("COPY with a file-literal source is refused") {
     std::ofstream in("test_src.csv");
     in << "id,val\n1,a\n2,b\n3,c\n";
     in.close();
+    std::remove("test_copy_out.csv");
 
     Database db;
     Connection conn(db);
-    conn.Query(
+    CheckRefused(conn,
         "COPY (SELECT id, val FROM 'test_src.csv' WHERE id > 1) "
         "TO 'test_copy_out.csv'");
-
-    // Confirm the file got written and has the expected content.
-    std::ifstream out("test_copy_out.csv");
-    REQUIRE(out.is_open());
-    std::string line;
-    int line_count = 0;
-    while (std::getline(out, line)) line_count++;
-    out.close();
-    CHECK(line_count >= 2);  // header + 2 data rows
+    CHECK_FALSE(std::filesystem::exists("test_copy_out.csv"));
 
     std::remove("test_src.csv");
-    std::remove("test_copy_out.csv");
 }

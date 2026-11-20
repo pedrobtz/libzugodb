@@ -1,11 +1,18 @@
+// The JSON reader and writer through their C++ API. SQL cannot read or
+// write a file since Stage 2 (#4); the cases that did so check that it is
+// refused, over files that exist.
+
 #include "doctest.h"
+#include "../refused_files.hpp"
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/storage/json_reader.hpp"
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 
 using namespace zugodb;
+using zugodb::testing::CheckRefused;
 
 static void cleanup_files() {
     std::remove("test.json");
@@ -79,10 +86,10 @@ TEST_CASE("JSON Writer - write and read back") {
 }
 
 // ============================================================================
-// read_json() table function
+// read_json() table function: refused
 // ============================================================================
 
-TEST_CASE("read_json - query JSON file directly") {
+TEST_CASE("read_json - refused over a JSON file") {
     {
         std::ofstream f("test.json");
         f << R"([{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}])";
@@ -90,32 +97,31 @@ TEST_CASE("read_json - query JSON file directly") {
 
     Database db;
     Connection conn(db);
-    auto r = conn.Query("SELECT * FROM read_json('test.json')");
-    CHECK(r.RowCount() == 2);
-    CHECK(r.ColumnCount() == 2);
+    CheckRefused(conn, "SELECT * FROM read_json('test.json')");
+    CheckRefused(conn, "SELECT * FROM read_json_auto('test.json')");
 
     cleanup_files();
 }
 
-TEST_CASE("read_json - with WHERE filter") {
+TEST_CASE("read_json - refused with a WHERE filter, and read_ndjson") {
     {
-        std::ofstream f("test.json");
-        f << R"([{"x": 1}, {"x": 2}, {"x": 3}, {"x": 4}, {"x": 5}])";
+        std::ofstream f("test.ndjson");
+        f << R"({"x": 1})" << "\n" << R"({"x": 4})" << "\n" << R"({"x": 5})" << "\n";
     }
 
     Database db;
     Connection conn(db);
-    auto r = conn.Query("SELECT x FROM read_json('test.json') WHERE x > 3");
-    CHECK(r.RowCount() == 2);
+    CheckRefused(conn, "SELECT x FROM read_json('test.ndjson') WHERE x > 3");
+    CheckRefused(conn, "SELECT x FROM read_ndjson('test.ndjson') WHERE x > 3");
 
     cleanup_files();
 }
 
 // ============================================================================
-// read_csv() table function
+// read_csv() table function: refused
 // ============================================================================
 
-TEST_CASE("read_csv - query CSV file directly") {
+TEST_CASE("read_csv - refused over a CSV file") {
     {
         std::ofstream f("test_data2.csv");
         f << "a,b\n1,hello\n2,world\n";
@@ -123,18 +129,17 @@ TEST_CASE("read_csv - query CSV file directly") {
 
     Database db;
     Connection conn(db);
-    auto r = conn.Query("SELECT * FROM read_csv('test_data2.csv')");
-    CHECK(r.RowCount() == 2);
-    CHECK(r.ColumnCount() == 2);
+    CheckRefused(conn, "SELECT * FROM read_csv('test_data2.csv')");
+    CheckRefused(conn, "SELECT * FROM read_csv_auto('test_data2.csv')");
 
     cleanup_files();
 }
 
 // ============================================================================
-// Auto-detect: SELECT * FROM 'file.csv'
+// A path used as a table: refused
 // ============================================================================
 
-TEST_CASE("Auto-detect - CSV from string literal") {
+TEST_CASE("Auto-detect - a CSV path is refused") {
     {
         std::ofstream f("test_data2.csv");
         f << "x,y\n10,hello\n20,world\n";
@@ -142,13 +147,13 @@ TEST_CASE("Auto-detect - CSV from string literal") {
 
     Database db;
     Connection conn(db);
-    auto r = conn.Query("SELECT * FROM 'test_data2.csv'");
-    CHECK(r.RowCount() == 2);
+    CheckRefused(conn, "SELECT * FROM 'test_data2.csv'");
+    CheckRefused(conn, "DESCRIBE 'test_data2.csv'");
 
     cleanup_files();
 }
 
-TEST_CASE("Auto-detect - JSON from string literal") {
+TEST_CASE("Auto-detect - a JSON path is refused") {
     {
         std::ofstream f("test.json");
         f << R"([{"val": 42}])";
@@ -156,34 +161,31 @@ TEST_CASE("Auto-detect - JSON from string literal") {
 
     Database db;
     Connection conn(db);
-    auto r = conn.Query("SELECT * FROM 'test.json'");
-    CHECK(r.RowCount() == 1);
+    CheckRefused(conn, "SELECT * FROM 'test.json'");
+    CheckRefused(conn, "DESCRIBE read_json('test.json')");
 
     cleanup_files();
 }
 
 // ============================================================================
-// COPY with FORMAT JSON
+// COPY with FORMAT JSON: refused
 // ============================================================================
 
-TEST_CASE("COPY TO JSON format") {
+TEST_CASE("COPY TO JSON format is refused and writes nothing") {
+    cleanup_files();
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE t (id INTEGER, name VARCHAR)");
     conn.Query("INSERT INTO t VALUES (1, 'Alice'), (2, 'Bob')");
 
-    conn.Query("COPY t TO 'test_out.json' WITH (FORMAT JSON)");
-
-    // Read it back.
-    JSONReader reader("test_out.json");
-    reader.DetectSchema();
-    auto rows = reader.ReadAll();
-    CHECK(rows.size() == 2);
+    CheckRefused(conn, "COPY t TO 'test_out.json' WITH (FORMAT JSON)");
+    CheckRefused(conn, "COPY t TO 'test_out.json'");
+    CHECK_FALSE(std::filesystem::exists("test_out.json"));
 
     cleanup_files();
 }
 
-TEST_CASE("COPY FROM JSON format") {
+TEST_CASE("COPY FROM JSON format is refused and loads nothing") {
     {
         std::ofstream f("test.json");
         f << R"([{"id": 10, "name": "X"}, {"id": 20, "name": "Y"}])";
@@ -192,10 +194,11 @@ TEST_CASE("COPY FROM JSON format") {
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE t (id INTEGER, name VARCHAR)");
-    conn.Query("COPY t FROM 'test.json' WITH (FORMAT JSON)");
+    CheckRefused(conn, "COPY t FROM 'test.json' WITH (FORMAT JSON)");
+    CheckRefused(conn, "COPY t FROM 'test.json'");
 
     auto r = conn.Query("SELECT COUNT(*) FROM t");
-    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 2);
+    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 0);
 
     cleanup_files();
 }
