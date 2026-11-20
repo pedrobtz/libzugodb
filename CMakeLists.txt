@@ -8,11 +8,27 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(SLOTHDB_BUILD_TESTS "Build tests" ON)
 option(SLOTHDB_BUILD_SHELL "Build CLI shell" OFF)
 option(SLOTHDB_SANITIZERS "Enable ASan/UBSan" OFF)
+option(SLOTHDB_FUZZ "Build the libFuzzer harnesses in fuzz/ (clang only)" OFF)
+
+if(SLOTHDB_FUZZ)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "SLOTHDB_FUZZ needs clang (libFuzzer); the compiler is ${CMAKE_CXX_COMPILER_ID}")
+    endif()
+    # Everything is instrumented for the fuzzer and built with ASan and
+    # UBSan, which stop at the first report.
+    add_compile_options(-fsanitize=fuzzer-no-link,address,undefined
+                        -fno-sanitize-recover=all -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=address,undefined)
+endif()
 
 include(cmake/CompilerOptions.cmake)
 include(cmake/Platform.cmake)
 
 add_subdirectory(src)
+
+if(SLOTHDB_FUZZ)
+    add_subdirectory(fuzz)
+endif()
 
 if(SLOTHDB_BUILD_TESTS)
     enable_testing()

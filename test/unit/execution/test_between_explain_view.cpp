@@ -1,6 +1,7 @@
 #include "doctest.h"
 #include "../refused_files.hpp"
 #include "slothdb/catalog/catalog.hpp"
+#include "slothdb/common/exception.hpp"
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 #include <cstdio>
@@ -170,19 +171,50 @@ TEST_CASE("VARCHAR(n) - accepts strings within limit") {
     CHECK(r.RowCount() == 3);
 }
 
-TEST_CASE("VARCHAR(n) - rejects over-long strings") {
+TEST_CASE("VARCHAR(n) - the length has no effect, as in DuckDB") {
+    // DuckDB accepts a length for compatibility and does not enforce it
+    // (design L13): an over-long string is stored whole, by INSERT ...
+    // VALUES as by every other path.
     Database db;
     Connection conn(db);
-    conn.Query("CREATE TABLE t (code VARCHAR(3))");
-    CHECK_THROWS(conn.Query("INSERT INTO t VALUES ('too_long')"));
+    conn.Query("CREATE TABLE t (code VARCHAR(3), c CHAR(1), x TEXT(2), s STRING(1))");
+    conn.Query("INSERT INTO t VALUES ('too_long', 'abc', 'xyz', 'stuv')");
+    auto r = conn.Query("SELECT * FROM t");
+    REQUIRE(r.RowCount() == 1);
+    CHECK(r.GetValue(0, 0).GetValue<std::string>() == "too_long");
+    CHECK(r.GetValue(0, 1).GetValue<std::string>() == "abc");
+    CHECK(r.GetValue(0, 2).GetValue<std::string>() == "xyz");
+    CHECK(r.GetValue(0, 3).GetValue<std::string>() == "stuv");
 }
 
-TEST_CASE("VARCHAR(n) - preserved through DESCRIBE") {
+TEST_CASE("VARCHAR(n) - DESCRIBE shows VARCHAR, as in DuckDB") {
     Database db;
     Connection conn(db);
-    conn.Query("CREATE TABLE t (code VARCHAR(5))");
+    conn.Query("CREATE TABLE t (code VARCHAR(5), c CHAR(2))");
     auto r = conn.Query("DESCRIBE t");
-    CHECK(r.GetValue(0, 1).GetValue<std::string>() == "VARCHAR(5)");
+    CHECK(r.GetValue(0, 1).GetValue<std::string>() == "VARCHAR");
+    CHECK(r.GetValue(1, 1).GetValue<std::string>() == "VARCHAR");
+}
+
+TEST_CASE("VARCHAR(n) - a length that is not a number is an engine error") {
+    Database db;
+    Connection conn(db);
+    auto engine_error = [&](const std::string &sql) {
+        try {
+            conn.Query(sql);
+        } catch (const SlothDBException &) {
+            return true;
+        } catch (...) {
+            return false;
+        }
+        return false;
+    };
+    CHECK(engine_error("CREATE TABLE t (s VARCHAR(abc))"));
+    CHECK(engine_error("SELECT CAST('x' AS VARCHAR(abc))"));
+    // A length past 64 bits was a std::out_of_range from std::stoull.
+    CHECK_NOTHROW(conn.Query("CREATE TABLE u (s VARCHAR(99999999999999999999999))"));
+    CHECK(conn.Query("SELECT CAST('abc' AS VARCHAR(99999999999999999999999))")
+              .GetValue(0, 0).GetValue<std::string>() == "abc");
 }
 
 TEST_CASE("VARCHAR without length stays unbounded") {

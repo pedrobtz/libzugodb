@@ -75,3 +75,8 @@ topn_dbg.log
 
 # tools/make_db_fixtures.sh builds its shell here
 build-fixtures/
+
+# The fuzz harnesses (cmake -DSLOTHDB_FUZZ=ON) and what fuzz/run.sh keeps
+build-fuzz/
+fuzz-work/
+fuzz-artifacts/

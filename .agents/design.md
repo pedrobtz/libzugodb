@@ -263,6 +263,57 @@ minor version.
   `test/fixtures/golden_v1001.db` is written by `tools/make_db_fixtures.sh`
   through the shell; a layout change without a version bump fails its
   test.
+- **L12 (2026-11-20, Stage 4, Claude's implementation call).** After the
+  checksum, `Checkpoint::Load` accepts only what `Save` could have
+  written, and reads it through one bounded reader: each fixed-width
+  read, string length and count is checked against the bytes left before
+  it is used or allocated, a count against bytes left over the least its
+  element can take (a table 21 bytes, a column 5, a row one null flag per
+  column). The header must hold Save's constants (block size 262144, block
+  count 0, catalog and data offset both 4096, zeros from 48 to 4096), the
+  tables must end at the end of the file, a table has at least one column
+  and a name no other table has. Column types are those a table made by
+  SQL can have (SQLNULL, BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT,
+  HUGEINT, FLOAT, DOUBLE, VARCHAR, BLOB, DATE, TIME, TIMESTAMP, INTERVAL,
+  UUID); null flags are 0 or 1, BOOLEAN 0 or 1, SMALLINT (stored in 4
+  bytes) in its range. Save writes non-NULL HUGEINT, INTERVAL and UUID
+  values as text, which the loader never read back right (an INTERVAL
+  could not be stored at all, a HUGEINT or UUID came back as garbage), so
+  those are refused and only their NULLs load; a file that held such a
+  value already held a wrong one. Amended the same day (recommended by an
+  advisor sub-agent): SQL refuses the three types outright, in every
+  database, in-memory included, in `Binder::ResolveTypeName`, the one place
+  that made them ("HUGEINT is not supported"), so `CREATE TABLE`, `ALTER
+  TABLE ... ADD COLUMN`, `CAST`, `TRY_CAST` and `::` fail and Save can no
+  longer write a value the loader refuses; the loader's refusal stays as
+  the backstop for files written before. A doctest makes each type name
+  SQL accepts round-trip its least, greatest, zero and NULL through a
+  close and reopen, so a type accepted with no file encoding fails the
+  suite. Empty names, duplicate column names and
+  any bytes in a name or string load, since SQL can make them. Each row
+  group is allocated for the rows it gets, so the memory a load takes
+  follows the file's size. Tables reach the catalog only after the whole
+  file is read. The harness `fuzz/checkpoint_load.cpp` fixes catalog_size
+  and the checksum of each input; its oracle is that a file that opens
+  gives each table's row count by catalog, `count(*)`, `SELECT *` and a
+  storage scan alike, and reopens after its save with the same rows. Reach
+  is the edges of `src/storage/checkpoint.cpp` covered by the kept corpus,
+  as `-print_coverage=1` reports them (`fuzz/run.sh`), against a floor in
+  the workflow.
+- **L13 (2026-11-20, Stage 4, recommended by an advisor sub-agent).** A
+  string type's length, `VARCHAR(n)`, `CHAR(n)`, `TEXT(n)` or
+  `STRING(n)`, is accepted and has no effect: the column is `VARCHAR`,
+  `DESCRIBE` shows `VARCHAR`, and a longer string is stored whole. This is
+  DuckDB's behaviour (its documentation: the length is for compatibility
+  only), so it is a DuckDB-compatible behaviour for `docs/dialect.md`, not
+  a listed difference. SlothDB enforced n, in bytes, on `INSERT ...
+  VALUES` only (`INSERT ... SELECT` and `UPDATE` went around it), and the
+  database file kept no length, so a reopened column was unbounded; L12's
+  round-trip doctest found that loss. `VarcharTypeInfo` and
+  `LogicalType::VARCHAR_N` go with the check, and with them a
+  `std::stoull` that threw `std::out_of_range` on a length past 64 bits.
+  DECIMAL and NUMERIC are not touched here: they bind to DOUBLE, filed for
+  0.3.0.
 
 ## 9. Open questions
 

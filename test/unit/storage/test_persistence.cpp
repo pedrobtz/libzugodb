@@ -2,7 +2,11 @@
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/storage/checkpoint.hpp"
+#include <algorithm>
+#include <cctype>
+#include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -442,4 +446,551 @@ TEST_CASE("Persistence - a file of several checksum pieces is summed whole") {
     }
     std::remove(TEST_DB_PATH);
     std::remove(DAMAGED_DB_PATH);
+}
+
+// ============================================================================
+// Checkpoint::Load bounds every value it reads (Stage 4)
+// ============================================================================
+//
+// Each file below is built by hand: the header Save writes, zeros up to
+// 4096, then the bytes of the tables, with catalog_size and the checksum
+// set so the file passes BlockManager::OpenFile and the checksum and
+// reaches the parser. Each bound is shown at its limit and one past it.
+
+namespace {
+
+const char *HAND_DB_PATH = "test_hand_built.db";
+
+// The tables' bytes, in Save's encoding (little-endian).
+struct Bytes {
+    std::vector<uint8_t> b;
+    Bytes &U8(uint8_t v) { b.push_back(v); return *this; }
+    Bytes &U32(uint32_t v) { return Raw(&v, 4); }
+    Bytes &U64(uint64_t v) { return Raw(&v, 8); }
+    Bytes &I32(int32_t v) { return Raw(&v, 4); }
+    Bytes &I64(int64_t v) { return Raw(&v, 8); }
+    Bytes &Str(const std::string &s) {
+        U32(static_cast<uint32_t>(s.size()));
+        return Raw(s.data(), s.size());
+    }
+    Bytes &Zeros(size_t n) { b.insert(b.end(), n, 0); return *this; }
+    Bytes &Raw(const void *p, size_t n) {
+        auto *c = static_cast<const uint8_t *>(p);
+        b.insert(b.end(), c, c + n);
+        return *this;
+    }
+    // A table of one column ("c") and no rows: 23 bytes and the name's;
+    // with both names empty it is 21, the smallest a table can be.
+    Bytes &EmptyTable(const std::string &name, uint8_t type = uint8_t(LogicalTypeId::INTEGER)) {
+        return Str(name).U32(1).Str("c").U8(type).U64(0);
+    }
+};
+
+void PutU32(std::vector<uint8_t> &image, size_t at, uint32_t v) { std::memcpy(&image[at], &v, 4); }
+void PutU64(std::vector<uint8_t> &image, size_t at, uint64_t v) { std::memcpy(&image[at], &v, 8); }
+uint64_t GetU64(const std::vector<uint8_t> &image, size_t at) {
+    uint64_t v;
+    std::memcpy(&v, &image[at], 8);
+    return v;
+}
+
+// Sets catalog_size from catalog_offset and the file's size, then the
+// checksum, as the fuzz harness does.
+void Seal(std::vector<uint8_t> &image) {
+    PutU64(image, 24, image.size() - GetU64(image, 16));
+    PutU32(image, 12, Checkpoint::ComputeChecksum(image.data(), image.size()));
+}
+
+std::vector<uint8_t> Image(const Bytes &tables) {
+    FileHeader header;
+    header.catalog_offset = FILE_DATA_OFFSET;
+    header.data_offset = FILE_DATA_OFFSET;
+    std::vector<uint8_t> image(FILE_DATA_OFFSET, 0);
+    std::memcpy(image.data(), &header, sizeof(header));
+    image.insert(image.end(), tables.b.begin(), tables.b.end());
+    Seal(image);
+    return image;
+}
+
+// Opens the image: "" when it opens, else the message it is refused with.
+std::string Open(const std::vector<uint8_t> &image) {
+    WriteBytes(HAND_DB_PATH, image, image.size());
+    DatabaseConfig config;
+    config.path = HAND_DB_PATH;
+    config.read_only = true;
+    try {
+        Database db(config);
+    } catch (const std::exception &e) {
+        return e.what();
+    }
+    return "";
+}
+
+std::string Open(const Bytes &tables) { return Open(Image(tables)); }
+
+bool Has(const std::string &message, const std::string &part) {
+    return message.find(part) != std::string::npos;
+}
+
+} // namespace
+
+TEST_CASE("Load - the header fields Save writes as constants") {
+    auto good = Image(Bytes().U32(1).EmptyTable("t"));
+    CHECK(Open(good) == "");
+
+    auto bad = good;
+    PutU32(bad, 8, BLOCK_SIZE + 1);
+    Seal(bad);
+    CHECK(Has(Open(bad), "the header's block size is 262145, not 262144"));
+
+    bad = good;
+    PutU64(bad, 32, 1);
+    Seal(bad);
+    CHECK(Has(Open(bad), "the header's block count is 1, not 0"));
+
+    // data_offset one past 4096, and one short of it.
+    for (uint64_t offset : {uint64_t(4095), uint64_t(4097)}) {
+        CAPTURE(offset);
+        bad = good;
+        PutU64(bad, 40, offset);
+        Seal(bad);
+        CHECK(Has(Open(bad), "the header records the tables at offsets 4096 and " +
+                                 std::to_string(offset) + ", not 4096"));
+        bad = good;
+        PutU64(bad, 16, offset);
+        Seal(bad);
+        CHECK(Has(Open(bad), "the header records the tables at offsets " +
+                                 std::to_string(offset) + " and 4096, not 4096"));
+    }
+
+    // The bytes between the header and the tables, at each end.
+    for (size_t at : {size_t(48), size_t(4095)}) {
+        CAPTURE(at);
+        bad = good;
+        bad[at] = 1;
+        Seal(bad);
+        CHECK(Has(Open(bad), "byte at offset " + std::to_string(at) +
+                                 ", between the header and the tables, is not zero"));
+    }
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - the table count is bounded by the bytes left") {
+    // Two tables of 23 bytes each: the bound is 46 / 21 = 2.
+    CHECK(Open(Bytes().U32(2).EmptyTable("a").EmptyTable("b")) == "");
+    CHECK(Has(Open(Bytes().U32(3).EmptyTable("a").EmptyTable("b")),
+              "table count 3 at offset 4096 is more than the 46 bytes left can hold"));
+    // With 16 bytes more the bound is still 2; with 17 it is 63 / 21 = 3,
+    // and the third table is read (and refused for what it holds).
+    CHECK(Has(Open(Bytes().U32(3).EmptyTable("a").EmptyTable("b").Zeros(16)),
+              "table count 3 at offset 4096 is more than the 62 bytes left can hold"));
+    CHECK(Has(Open(Bytes().U32(3).EmptyTable("a").EmptyTable("b").Zeros(17)),
+              "a table with no columns at offset 4150"));
+    // No tables, and nothing after the count.
+    CHECK(Open(Bytes().U32(0)) == "");
+    CHECK(Has(Open(Bytes().U32(1)), "table count 1 at offset 4096 is more than the 0 bytes left"));
+    // The count itself cut short.
+    CHECK(Has(Open(Bytes().U8(0).U8(0).U8(0)),
+              "the table count at offset 4096 takes 4 bytes, but only 3 are left"));
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - a string's length is bounded by the bytes left") {
+    // A table name of exactly the bytes left passes its own check, and the
+    // file then ends where the column count should be.
+    CHECK(Has(Open(Bytes().U32(1).U32(17).Zeros(17)),
+              "a column count at offset 4121 takes 4 bytes, but only 0 are left"));
+    CHECK(Has(Open(Bytes().U32(1).U32(18).Zeros(17)),
+              "a table name at offset 4100 is 18 bytes long, but only 17 are left"));
+    // A VARCHAR value: of exactly the rest of the file, and one byte more.
+    auto value = [](uint32_t len, size_t have) {
+        return Bytes().U32(1).Str("t").U32(1).Str("s").U8(uint8_t(LogicalTypeId::VARCHAR))
+            .U64(1).U8(0).U32(len).Zeros(have);
+    };
+    CHECK(Open(value(5, 5)) == "");
+    CHECK(Has(Open(value(6, 5)), "a VARCHAR or BLOB value at offset 4124 is 6 bytes long, but only 5 are left"));
+    // A column name: of exactly the bytes left, then the file ends where its
+    // type should be; and one byte more.
+    CHECK(Has(Open(Bytes().U32(1).Str("t").U32(1).U32(13).Zeros(13)),
+              "a column type at offset 4126 takes 1 bytes, but only 0 are left"));
+    CHECK(Has(Open(Bytes().U32(1).Str("t").U32(1).U32(14).Zeros(13)),
+              "a column name at offset 4109 is 14 bytes long, but only 13 are left"));
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - the column count is bounded by the bytes left") {
+    // After the count, two columns of 6 bytes and the row count's 8: the
+    // bound is 20 / 5 = 4. At 4 the loader reads a third column from the
+    // row count's zeros, an empty name and type 0.
+    auto table = [](uint32_t count) {
+        return Bytes().U32(1).Str("t").U32(count).Str("a").U8(5).Str("b").U8(5).U64(0);
+    };
+    CHECK(Open(table(2)) == "");
+    CHECK(Has(Open(table(4)), "unknown column type 0 at offset 4125"));
+    CHECK(Has(Open(table(5)), "column count 5 at offset 4105 is more than the 20 bytes left can hold"));
+    CHECK(Has(Open(table(0)), "a table with no columns at offset 4105"));
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - a column type outside the ones Save writes is refused") {
+    // The tags of LogicalTypeId that a table made by SQL can have.
+    std::vector<uint8_t> known = {1, 2, 3, 4, 5, 6, 7, 12, 13, 15, 16, 17, 18, 19, 21, 22};
+    for (unsigned tag = 0; tag < 256; tag++) {
+        CAPTURE(tag);
+        auto message = Open(Bytes().U32(1).EmptyTable("t", uint8_t(tag)));
+        bool is_known = std::find(known.begin(), known.end(), tag) != known.end();
+        if (is_known) {
+            CHECK(message == "");
+        } else {
+            CHECK(Has(message, "unknown column type " + std::to_string(tag) + " at offset 4114"));
+        }
+    }
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - the row count is bounded by the bytes left") {
+    // Two columns: each row takes at least two null flags. With 6 flags
+    // left, 3 rows fit.
+    auto table = [](uint64_t rows) {
+        return Bytes().U32(1).Str("t").U32(2).Str("a").U8(5).Str("b").U8(15).U64(rows)
+            .U8(1).U8(1).U8(1).U8(1).U8(1).U8(1);
+    };
+    CHECK(Open(table(3)) == "");
+    CHECK(Has(Open(table(4)), "row count 4 at offset 4121 is more than the 6 bytes left can hold"));
+    CHECK(Has(Open(table(UINT64_MAX)), "row count 18446744073709551615 at offset 4121"));
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - each value is checked against its type") {
+    auto one = [](LogicalTypeId type, const Bytes &value) {
+        auto b = Bytes().U32(1).Str("t").U32(1).Str("v").U8(uint8_t(type)).U64(1);
+        b.b.insert(b.b.end(), value.b.begin(), value.b.end());
+        return b;
+    };
+    // The null flag: 0 and 1, then 2.
+    CHECK(Open(one(LogicalTypeId::INTEGER, Bytes().U8(1))) == "");
+    CHECK(Open(one(LogicalTypeId::INTEGER, Bytes().U8(0).I32(7))) == "");
+    CHECK(Has(Open(one(LogicalTypeId::INTEGER, Bytes().U8(2).I32(7))),
+              "null flag 2 at offset 4123 is neither 0 nor 1"));
+    // BOOLEAN: 1, then 2.
+    CHECK(Open(one(LogicalTypeId::BOOLEAN, Bytes().U8(0).U8(1))) == "");
+    CHECK(Has(Open(one(LogicalTypeId::BOOLEAN, Bytes().U8(0).U8(2))),
+              "BOOLEAN value 2 at offset 4124 is neither 0 nor 1"));
+    // SMALLINT, which Save writes in 4 bytes: each end of its range, then
+    // one past.
+    CHECK(Open(one(LogicalTypeId::SMALLINT, Bytes().U8(0).I32(32767))) == "");
+    CHECK(Open(one(LogicalTypeId::SMALLINT, Bytes().U8(0).I32(-32768))) == "");
+    CHECK(Has(Open(one(LogicalTypeId::SMALLINT, Bytes().U8(0).I32(32768))),
+              "SMALLINT value 32768 at offset 4124 is out of range"));
+    CHECK(Has(Open(one(LogicalTypeId::SMALLINT, Bytes().U8(0).I32(-32769))),
+              "SMALLINT value -32769 at offset 4124 is out of range"));
+    // A fixed-width value cut short.
+    CHECK(Has(Open(one(LogicalTypeId::BIGINT, Bytes().U8(0).Zeros(7))),
+              "a BIGINT, TIMESTAMP or TIME value at offset 4124 takes 8 bytes, but only 7 are left"));
+    CHECK(Has(Open(one(LogicalTypeId::DOUBLE, Bytes().U8(0).Zeros(7))),
+              "a DOUBLE value at offset 4124 takes 8 bytes, but only 7 are left"));
+    // Types whose values Save writes as text the engine cannot read back:
+    // NULL loads, anything else is refused.
+    for (auto type : {LogicalTypeId::SQLNULL, LogicalTypeId::HUGEINT, LogicalTypeId::INTERVAL,
+                      LogicalTypeId::UUID}) {
+        CAPTURE(int(type));
+        CHECK(Open(one(type, Bytes().U8(1))) == "");
+        CHECK(Has(Open(one(type, Bytes().U8(0).Str("1"))), "value at offset 4124, which this engine cannot read back"));
+    }
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - bytes after the last table, and a table name twice, are refused") {
+    CHECK(Open(Bytes().U32(1).EmptyTable("t")) == "");
+    CHECK(Has(Open(Bytes().U32(1).EmptyTable("t").U8(0)), "1 bytes after the last table at offset 4123"));
+    CHECK(Open(Bytes().U32(2).EmptyTable("t").EmptyTable("u")) == "");
+    CHECK(Has(Open(Bytes().U32(2).EmptyTable("t").EmptyTable("t")),
+              "a second table of the same name at offset 4123"));
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - a refused file adds nothing to the catalog") {
+    // The first table is good, the second is refused.
+    auto image = Image(Bytes().U32(2).EmptyTable("good").Str("bad").U32(0).Zeros(20));
+    WriteBytes(HAND_DB_PATH, image, image.size());
+    {
+        Catalog catalog;
+        CHECK_THROWS_WITH(Checkpoint::Load(catalog, HAND_DB_PATH),
+                          doctest::Contains("a table with no columns"));
+        CHECK(catalog.GetSchema().GetTableNames().empty());
+    }
+    // A table the catalog already has is refused, and the catalog keeps
+    // what it had.
+    image = Image(Bytes().U32(2).EmptyTable("new").EmptyTable("old"));
+    WriteBytes(HAND_DB_PATH, image, image.size());
+    {
+        Catalog catalog;
+        catalog.CreateTable("old", {ColumnDefinition("x", LogicalType::VARCHAR())});
+        CHECK_THROWS_WITH(Checkpoint::Load(catalog, HAND_DB_PATH),
+                          doctest::Contains("a second table of the same name"));
+        CHECK(catalog.GetSchema().GetTableNames() == std::vector<std::string>{"old"});
+        CHECK(catalog.GetTable("old")->GetColumns()[0].type.id() == LogicalTypeId::VARCHAR);
+    }
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - row groups are sized to the rows the file holds") {
+    // ROW_GROUP_SIZE + 1 NULL BOOLEANs: a full group and a group of one,
+    // each allocated for its own rows only.
+    auto b = Bytes().U32(1).Str("t").U32(1).Str("b").U8(uint8_t(LogicalTypeId::BOOLEAN))
+                 .U64(ROW_GROUP_SIZE + 1);
+    b.b.insert(b.b.end(), ROW_GROUP_SIZE + 1, 1);
+    auto image = Image(b);
+    WriteBytes(HAND_DB_PATH, image, image.size());
+    {
+        Database db(HAND_DB_PATH);
+        auto &storage = db.GetCatalog().GetTable("t")->GetStorage();
+        REQUIRE(storage.RowGroupCount() == 2);
+        CHECK(storage.GetRowGroup(0).Capacity() == ROW_GROUP_SIZE);
+        CHECK(storage.GetRowGroup(1).Capacity() == 1);
+        CHECK(storage.GetRowGroup(1).Count() == 1);
+        // Rows inserted after the load go to a new group.
+        Connection conn(db);
+        conn.Query("INSERT INTO t VALUES (true), (false)");
+        CHECK(conn.Query("SELECT count(*), count(b) FROM t").GetValue(0, 0).GetValue<int64_t>() ==
+              int64_t(ROW_GROUP_SIZE) + 3);
+        CHECK(conn.Query("SELECT count(b) FROM t").GetValue(0, 0).GetValue<int64_t>() == 2);
+    }
+    {
+        // Saved on close and read back.
+        Database db(HAND_DB_PATH);
+        Connection conn(db);
+        CHECK(conn.Query("SELECT count(*) FROM t").GetValue(0, 0).GetValue<int64_t>() ==
+              int64_t(ROW_GROUP_SIZE) + 3);
+    }
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - found by the fuzzer: a TIME of INT64_MIN microseconds") {
+    // test/fixtures/fuzz/checkpoint_load_time_int64_min.db: one table, one
+    // TIME column, one row of INT64_MIN. Rendering it overflowed in
+    // FormatTime (a UBSan report). The same file is built here by hand.
+    auto fixture = ReadBytes(FIXTURES + "fuzz/checkpoint_load_time_int64_min.db");
+    auto built = Image(Bytes().U32(1).Str("t").U32(1).Str("x").U8(uint8_t(LogicalTypeId::TIME))
+                           .U64(1).U8(0).I64(INT64_MIN));
+    CHECK(fixture == built);
+    WriteBytes(HAND_DB_PATH, fixture, fixture.size());
+    {
+        DatabaseConfig config;
+        config.path = HAND_DB_PATH;
+        config.read_only = true;
+        Database db(config);
+        Connection conn(db);
+        auto r = conn.Query("SELECT x FROM t");
+        REQUIRE(r.RowCount() == 1);
+        CHECK(r.GetValue(0, 0).ToString() == "19:59:05.224192");
+    }
+    std::remove(HAND_DB_PATH);
+}
+
+TEST_CASE("Load - the extreme DATE and TIMESTAMP values a file can hold render") {
+    // Expected text from the same civil-from-days algorithm in Python's
+    // unbounded integers. DaysToYMD overflowed past INT32_MAX - 719468
+    // days, and a TIMESTAMP's day count was cut to 32 bits.
+    auto b = Bytes().U32(1).Str("t").U32(2).Str("d").U8(uint8_t(LogicalTypeId::DATE))
+                 .Str("ts").U8(uint8_t(LogicalTypeId::TIMESTAMP)).U64(2)
+                 .U8(0).I32(INT32_MAX).U8(0).I64(INT64_MAX)
+                 .U8(0).I32(INT32_MIN).U8(0).I64(INT64_MIN);
+    auto image = Image(b);
+    WriteBytes(HAND_DB_PATH, image, image.size());
+    {
+        DatabaseConfig config;
+        config.path = HAND_DB_PATH;
+        config.read_only = true;
+        Database db(config);
+        Connection conn(db);
+        auto r = conn.Query("SELECT d, ts FROM t");
+        REQUIRE(r.RowCount() == 2);
+        CHECK(r.GetValue(0, 0).ToString() == "5881580-07-11");
+        CHECK(r.GetValue(0, 1).ToString() == "294247-01-10 04:00:54.775807");
+        CHECK(r.GetValue(1, 0).ToString() == "-5877641-06-23");
+        CHECK(r.GetValue(1, 1).ToString() == "-290308-12-21 19:59:05.224192");
+    }
+    std::remove(HAND_DB_PATH);
+}
+
+// ============================================================================
+// HUGEINT, INTERVAL and UUID are refused by SQL (Stage 4, design L12)
+// ============================================================================
+
+namespace {
+
+// Runs `sql` on `conn`; returns the error message, "" when it succeeds.
+std::string QueryError(Connection &conn, const std::string &sql) {
+    try {
+        conn.Query(sql);
+    } catch (const std::exception &e) {
+        return e.what();
+    }
+    return "";
+}
+
+void CheckTypesRefused(Database &db, Connection &conn) {
+    auto tables = db.GetCatalog().GetSchema().GetTableNames();
+    std::sort(tables.begin(), tables.end());
+    for (std::string type : {"HUGEINT", "INTERVAL", "UUID", "hugeint", "uuid"}) {
+        CAPTURE(type);
+        std::string upper = type;
+        for (auto &c : upper) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        auto refused = upper + " is not supported";
+        CHECK(Has(QueryError(conn, "CREATE TABLE r (x " + type + ")"), refused));
+        CHECK(Has(QueryError(conn, "CREATE TABLE r2 (a INTEGER, x " + type + ", b VARCHAR)"), refused));
+        CHECK(Has(QueryError(conn, "ALTER TABLE keep ADD COLUMN x " + type), refused));
+        CHECK(Has(QueryError(conn, "SELECT CAST(5 AS " + type + ")"), refused));
+        CHECK(Has(QueryError(conn, "SELECT TRY_CAST('5' AS " + type + ")"), refused));
+        CHECK(Has(QueryError(conn, "SELECT a::" + type + " FROM keep"), refused));
+        CHECK(Has(QueryError(conn, "CREATE TABLE r3 AS SELECT CAST(NULL AS " + type + ") AS x"), refused));
+    }
+    // No table was made and none was changed.
+    auto after = db.GetCatalog().GetSchema().GetTableNames();
+    std::sort(after.begin(), after.end());
+    CHECK(after == tables);
+    CHECK(conn.Query("SELECT * FROM keep").ColumnCount() == 2);
+}
+
+} // namespace
+
+TEST_CASE("Types - HUGEINT, INTERVAL and UUID are refused, in memory and in a file") {
+    {
+        Database db;
+        Connection conn(db);
+        conn.Query("CREATE TABLE keep (a INTEGER, s VARCHAR)");
+        conn.Query("INSERT INTO keep VALUES (1, 'one'), (2, NULL)");
+        CheckTypesRefused(db, conn);
+    }
+    std::remove(TEST_DB_PATH);
+    {
+        Database db(TEST_DB_PATH);
+        Connection conn(db);
+        conn.Query("CREATE TABLE keep (a INTEGER, s VARCHAR)");
+        conn.Query("INSERT INTO keep VALUES (1, 'one'), (2, NULL)");
+        conn.Query("CREATE TABLE other (d DOUBLE)");
+        conn.Query("INSERT INTO other VALUES (1.5)");
+        CheckTypesRefused(db, conn);
+    }
+    {
+        // Closed, saved and reopened: the tables are all there, as they were.
+        Database db(TEST_DB_PATH);
+        Connection conn(db);
+        auto names = db.GetCatalog().GetSchema().GetTableNames();
+        std::sort(names.begin(), names.end());
+        CHECK(names == std::vector<std::string>{"keep", "other"});
+        auto r = conn.Query("SELECT a, s FROM keep ORDER BY a");
+        REQUIRE(r.RowCount() == 2);
+        CHECK(r.ColumnCount() == 2);
+        CHECK(r.GetValue(0, 1).GetValue<std::string>() == "one");
+        CHECK(r.GetValue(1, 1).IsNull());
+        CHECK(conn.Query("SELECT d FROM other").GetValue(0, 0).GetValue<double>() == 1.5);
+    }
+    std::remove(TEST_DB_PATH);
+}
+
+TEST_CASE("Types - every type SQL accepts round-trips its extremes through the file") {
+    // Each type name below that CREATE TABLE accepts must have values here
+    // (its least, its greatest, its zero, and NULL) and give them back after
+    // the database is closed, saved and opened again; a type accepted with
+    // no file encoding fails this test. The names are DuckDB's, and the
+    // engine's aliases.
+    auto values = [](LogicalTypeId id, std::vector<Value> &out) {
+        const std::string big(300, '\xff');
+        switch (id) {
+        case LogicalTypeId::BOOLEAN:
+            out = {Value::BOOLEAN(false), Value::BOOLEAN(true), Value::BOOLEAN(false)};
+            return true;
+        case LogicalTypeId::TINYINT:
+            out = {Value::TINYINT(INT8_MIN), Value::TINYINT(INT8_MAX), Value::TINYINT(0)};
+            return true;
+        case LogicalTypeId::SMALLINT:
+            out = {Value::SMALLINT(INT16_MIN), Value::SMALLINT(INT16_MAX), Value::SMALLINT(0)};
+            return true;
+        case LogicalTypeId::INTEGER:
+            out = {Value::INTEGER(INT32_MIN), Value::INTEGER(INT32_MAX), Value::INTEGER(0)};
+            return true;
+        case LogicalTypeId::BIGINT:
+            out = {Value::BIGINT(INT64_MIN), Value::BIGINT(INT64_MAX), Value::BIGINT(0)};
+            return true;
+        case LogicalTypeId::FLOAT:
+            out = {Value::FLOAT(-3.4028235e38f), Value::FLOAT(3.4028235e38f), Value::FLOAT(0.0f)};
+            return true;
+        case LogicalTypeId::DOUBLE:
+            out = {Value::DOUBLE(-1.7976931348623157e308), Value::DOUBLE(1.7976931348623157e308),
+                   Value::DOUBLE(0.0)};
+            return true;
+        case LogicalTypeId::VARCHAR:
+            out = {Value::VARCHAR(""), Value::VARCHAR(big), Value::VARCHAR("0")};
+            return true;
+        case LogicalTypeId::BLOB:
+            out = {Value::BLOB(""), Value::BLOB(big), Value::BLOB(std::string(1, '\0'))};
+            return true;
+        case LogicalTypeId::DATE:
+            out = {Value::DATE(INT32_MIN), Value::DATE(INT32_MAX), Value::DATE(0)};
+            return true;
+        case LogicalTypeId::TIME:
+            out = {Value::TIME(INT64_MIN), Value::TIME(INT64_MAX), Value::TIME(0)};
+            return true;
+        case LogicalTypeId::TIMESTAMP:
+            out = {Value::TIMESTAMP(INT64_MIN), Value::TIMESTAMP(INT64_MAX), Value::TIMESTAMP(0)};
+            return true;
+        default:
+            return false;
+        }
+    };
+    auto text = [](const QueryResult &r) {
+        std::string out;
+        for (auto &t : r.column_types) out += t.ToString() + ";";
+        for (idx_t i = 0; i < r.RowCount(); i++) {
+            for (idx_t c = 0; c < r.ColumnCount(); c++) {
+                auto v = r.GetValue(i, c);
+                out += v.IsNull() ? std::string("NULL|") : std::to_string(v.ToString().size()) + ":" + v.ToString() + "|";
+            }
+            out += "\n";
+        }
+        return out;
+    };
+
+    const char *names[] = {
+        "BOOLEAN", "BOOL", "TINYINT", "INT1", "SMALLINT", "INT2", "INTEGER", "INT", "INT4",
+        "BIGINT", "INT8", "HUGEINT", "UHUGEINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT",
+        "FLOAT", "REAL", "FLOAT4", "DOUBLE", "FLOAT8", "DECIMAL", "DECIMAL(18,3)", "NUMERIC",
+        "VARCHAR", "VARCHAR(5)", "TEXT", "STRING", "CHAR", "BLOB", "BYTEA", "BIT", "DATE",
+        "TIME", "TIMETZ", "TIMESTAMP", "TIMESTAMPTZ", "TIMESTAMP_S", "TIMESTAMP_MS",
+        "TIMESTAMP_NS", "DATETIME", "INTERVAL", "UUID", "JSON", "ENUM", "LIST", "MAP",
+        "STRUCT", "UNION", "INTEGER[]", "VARINT", "NULL"};
+    idx_t accepted = 0;
+    for (std::string name : names) {
+        CAPTURE(name);
+        std::remove(TEST_DB_PATH);
+        std::string before;
+        {
+            Database db(TEST_DB_PATH);
+            Connection conn(db);
+            if (!QueryError(conn, "CREATE TABLE t (v " + name + ")").empty()) continue;
+            accepted++;
+            auto *entry = db.GetCatalog().GetTable("t");
+            REQUIRE(entry != nullptr);
+            auto types = entry->GetTypes();
+            std::vector<Value> vals;
+            INFO("type ", types[0].ToString(), " is accepted by SQL but has no round-trip values");
+            REQUIRE(values(types[0].id(), vals));
+            vals.push_back(Value());
+            DataChunk chunk;
+            chunk.Initialize(types);
+            for (idx_t i = 0; i < vals.size(); i++) chunk.SetValue(0, i, vals[i]);
+            entry->GetStorage().Append(chunk);
+            before = text(conn.Query("SELECT * FROM t"));
+            CHECK(conn.Query("SELECT count(*) FROM t").GetValue(0, 0).GetValue<int64_t>() == 4);
+        }
+        {
+            Database db(TEST_DB_PATH);
+            Connection conn(db);
+            CHECK(text(conn.Query("SELECT * FROM t")) == before);
+        }
+    }
+    CHECK(accepted >= 20);
+    std::remove(TEST_DB_PATH);
 }

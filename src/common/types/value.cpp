@@ -80,13 +80,14 @@ static std::string ShortestFloatString(T value) {
 
 // Convert days-since-1970-01-01 to (Y, M, D) using Howard Hinnant's
 // civil-from-days. Used to render DATE values as ISO-8601 strings instead
-// of opaque integers.
-static void DaysToYMD(int32_t days, int &y, unsigned &m, unsigned &d) {
-    int z = days + 719468;
-    int era = (z >= 0 ? z : z - 146096) / 146097;
+// of opaque integers. In 64 bits, so any day a DATE or TIMESTAMP can hold
+// converts without overflow.
+static void DaysToYMD(int64_t days, int64_t &y, unsigned &m, unsigned &d) {
+    int64_t z = days + 719468;
+    int64_t era = (z >= 0 ? z : z - 146096) / 146097;
     unsigned doe = static_cast<unsigned>(z - era * 146097);
     unsigned yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    int yr = static_cast<int>(yoe) + era * 400;
+    int64_t yr = static_cast<int64_t>(yoe) + era * 400;
     unsigned doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     unsigned mp = (5 * doy + 2) / 153;
     d = doy - (153 * mp + 2) / 5 + 1;
@@ -104,36 +105,39 @@ static std::string FormatTimestamp(int64_t micros) {
     int64_t days = secs / 86400;
     int64_t tod = secs - days * 86400;
     if (tod < 0) { days -= 1; tod += 86400; }
-    int y; unsigned m, d;
-    DaysToYMD(static_cast<int32_t>(days), y, m, d);
+    int64_t y; unsigned m, d;
+    DaysToYMD(days, y, m, d);
     int hh = static_cast<int>(tod / 3600);
     int mm = static_cast<int>((tod / 60) % 60);
     int ss = static_cast<int>(tod % 60);
     char buf[64];
     if (us == 0) {
-        std::snprintf(buf, sizeof(buf), "%04d-%02u-%02u %02d:%02d:%02d",
-                      y, m, d, hh, mm, ss);
+        std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u %02d:%02d:%02d",
+                      static_cast<long long>(y), m, d, hh, mm, ss);
     } else {
-        std::snprintf(buf, sizeof(buf), "%04d-%02u-%02u %02d:%02d:%02d.%06d",
-                      y, m, d, hh, mm, ss, static_cast<int>(us));
+        std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u %02d:%02d:%02d.%06d",
+                      static_cast<long long>(y), m, d, hh, mm, ss, static_cast<int>(us));
     }
     return std::string(buf);
 }
 
 static std::string FormatDate(int32_t days) {
-    int y; unsigned m, d;
+    int64_t y; unsigned m, d;
     DaysToYMD(days, y, m, d);
-    char buf[16];
-    std::snprintf(buf, sizeof(buf), "%04d-%02u-%02u", y, m, d);
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u", static_cast<long long>(y), m, d);
     return std::string(buf);
 }
 
 static std::string FormatTime(int64_t micros) {
+    // Floor division by a second, then the second of the day, without
+    // the overflow of micros - us at INT64_MIN.
+    int64_t secs = micros / 1000000;
     int64_t us = micros % 1000000;
-    if (us < 0) us += 1000000;
-    int64_t secs = (micros - us) / 1000000;
-    if (secs < 0) secs = ((secs % 86400) + 86400) % 86400;
-    int hh = static_cast<int>((secs / 3600) % 24);
+    if (us < 0) { us += 1000000; secs -= 1; }
+    secs %= 86400;
+    if (secs < 0) secs += 86400;
+    int hh = static_cast<int>(secs / 3600);
     int mm = static_cast<int>((secs / 60) % 60);
     int ss = static_cast<int>(secs % 60);
     char buf[32];

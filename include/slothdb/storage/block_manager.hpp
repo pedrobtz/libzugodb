@@ -35,6 +35,8 @@ static_assert(sizeof(FileHeader) <= 64, "FileHeader must fit in 64 bytes");
 static_assert(sizeof(FileHeader) == 48, "format 1001's header is 48 bytes");
 static_assert(offsetof(FileHeader, checksum) == 12, "the checksum sits at offset 12");
 static constexpr idx_t FILE_CHECKSUM_OFFSET = 12;
+// Where the tables start: catalog_offset and data_offset both hold it.
+static constexpr idx_t FILE_DATA_OFFSET = 4096;
 
 // Manages block-level I/O to a .slothdb file.
 class BlockManager {

@@ -10,7 +10,7 @@ void BlockManager::CreateFile(const std::string &path) {
 
     // Write initial header.
     FileHeader header;
-    header.data_offset = 4096; // Reserve 4KB for header area.
+    header.data_offset = FILE_DATA_OFFSET; // Reserve 4KB for header area.
     WriteHeader(header);
 }
 
