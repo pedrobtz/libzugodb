@@ -1887,6 +1887,64 @@ BoundExprPtr Binder::BindCast(const CastExpression &expr, BindContext &context) 
     return std::make_unique<BoundCast>(std::move(child), target, expr.is_try);
 }
 
+// The window operator (PhysicalWindow) computes these functions, each
+// over a column, with the frames SQL gives them by default; any other
+// shape it computed wrongly (a NULL, the whole partition for a running
+// frame, the first ORDER BY key alone for peers), so it is refused here
+// (Stage 8, #12; design L21).
+static void CheckWindowShape(const std::string &name, const WindowExpression &expr,
+                             const std::vector<BoundExprPtr> &args,
+                             const std::vector<BoundWindowOrder> &order) {
+    auto refuse = [&](const std::string &what) {
+        throw NotImplementedException("Window function " + name + ": " + what + " is not supported");
+    };
+    bool ranking = name == "ROW_NUMBER" || name == "RANK" || name == "DENSE_RANK" || name == "NTILE";
+    bool offset = name == "LAG" || name == "LEAD";
+    bool value = name == "FIRST_VALUE" || name == "LAST_VALUE";
+    bool aggregate = name == "SUM" || name == "COUNT" || name == "AVG" || name == "MIN" || name == "MAX";
+    if (!ranking && !offset && !value && !aggregate) refuse("this function");
+    if (expr.is_distinct) refuse("DISTINCT");
+    if (expr.filter) refuse("FILTER");
+    auto is_column = [](const BoundExpression &e) {
+        return e.GetExpressionType() == BoundExpressionType::COLUMN_REF;
+    };
+    auto is_int_constant = [](const BoundExpression &e) {
+        if (e.GetExpressionType() != BoundExpressionType::CONSTANT) return false;
+        auto &v = static_cast<const BoundConstant &>(e).value;
+        auto t = v.type().id();
+        return !v.IsNull() && (t == LogicalTypeId::INTEGER || t == LogicalTypeId::BIGINT);
+    };
+    if (name == "ROW_NUMBER" || name == "RANK" || name == "DENSE_RANK") {
+        if (!args.empty()) refuse("an argument");
+    } else if (name == "NTILE") {
+        if (args.size() != 1 || !is_int_constant(*args[0])) refuse("an argument other than an integer");
+    } else if (offset) {
+        if (args.empty() || args.size() > 2 || !is_column(*args[0]) ||
+            (args.size() == 2 && !is_int_constant(*args[1]))) {
+            refuse("arguments other than a column and an integer offset");
+        }
+    } else if (name == "COUNT" && args.empty()) {
+        // COUNT(*)
+    } else if (args.size() != 1 || !is_column(*args[0])) {
+        refuse("an argument other than one column");
+    }
+    if ((name == "SUM" || name == "AVG") && !args.empty()) {
+        auto t = args[0]->GetReturnType().id();
+        if (t != LogicalTypeId::TINYINT && t != LogicalTypeId::SMALLINT && t != LogicalTypeId::INTEGER &&
+            t != LogicalTypeId::BIGINT && t != LogicalTypeId::FLOAT && t != LogicalTypeId::DOUBLE) {
+            refuse("an argument of type " + args[0]->GetReturnType().ToString());
+        }
+    }
+    for (auto &o : order) {
+        if (!is_column(*o.expression)) refuse("an ORDER BY key other than a column");
+    }
+    // Peers by one key only, and LAST_VALUE's frame end at the current
+    // row's last peer is not computed.
+    bool peers = name == "RANK" || name == "DENSE_RANK" || aggregate;
+    if (peers && order.size() > 1) refuse("ORDER BY with more than one key");
+    if (name == "LAST_VALUE" && !order.empty()) refuse("ORDER BY");
+}
+
 BoundExprPtr Binder::BindWindow(const WindowExpression &expr, BindContext &context) {
     auto name = StringUtil::Upper(expr.function_name);
 
@@ -1924,11 +1982,7 @@ BoundExprPtr Binder::BindWindow(const WindowExpression &expr, BindContext &conte
         bo.ascending = o.ascending;
         window->order_by.push_back(std::move(bo));
     }
-    // SQL:2003 FILTER on window aggregates — same per-row semantics as
-    // BindFunction's filter (NULL filter result acts as false).
-    if (expr.filter) {
-        window->filter = BindExpression(*expr.filter, context);
-    }
+    CheckWindowShape(name, expr, window->arguments, window->order_by);
 
     return window;
 }

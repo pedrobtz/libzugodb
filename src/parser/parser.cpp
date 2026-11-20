@@ -1550,6 +1550,7 @@ ParsedExprPtr Parser::ParseFunctionCall(const std::string &name) {
         auto window = std::make_unique<WindowExpression>(
             StringUtil::Upper(name), std::move(args));
         window->filter = std::move(filter_expr);
+        window->is_distinct = distinct;
 
         Expect(TokenType::LPAREN, "after OVER");
 

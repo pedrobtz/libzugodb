@@ -238,6 +238,7 @@ public:
     std::vector<WindowOrderItem> order_by;
     // Per SQL:2003, FILTER (WHERE ...) is allowed on window aggregates too.
     ParsedExprPtr filter;
+    bool is_distinct = false;
 };
 
 } // namespace zugodb

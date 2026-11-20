@@ -95,7 +95,9 @@ const std::vector<Case> &Cases() {
         {"SELECT k, v, sum(v) OVER (PARTITION BY k ORDER BY v) FROM t", false, true},
         {"SELECT k, v, rank() OVER (PARTITION BY s ORDER BY d) FROM t", false, true},
         {"SELECT k, v, dense_rank() OVER (PARTITION BY k ORDER BY i DESC) FROM t", false, true},
-        {"SELECT v, rank() OVER (PARTITION BY k ORDER BY s, d) FROM t", false, true},
+        // (rank() over two keys is refused since Stage 8: its peers were the
+        // first key's.)
+        {"SELECT v, row_number() OVER (PARTITION BY k ORDER BY s, d) FROM t", false, true},
         {"SELECT v, lag(v) OVER (PARTITION BY s ORDER BY v), lead(v) OVER (PARTITION BY s ORDER BY v) FROM t",
          false, true},
         {"SELECT k, count(*) OVER (PARTITION BY k), max(d) OVER (PARTITION BY k) FROM t", false, false},

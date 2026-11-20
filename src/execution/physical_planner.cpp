@@ -14479,8 +14479,66 @@ PhysicalOpPtr PhysicalPlanner::PlanDeleteOp(const LogicalDeleteOp &op) {
     return std::make_unique<PhysicalDelete>(op.table, std::move(mutable_op.where_clause));
 }
 
+// Shapes of a window query PhysicalWindow computed wrongly, refused before
+// it runs (Stage 8, #12; design L21). A window function nested in an
+// expression is the executor's error already.
+static void CheckWindowQuery(const std::vector<BoundExprPtr> &select_list, const BoundExprPtr &qualify) {
+    std::vector<const BoundWindowExpression *> wins;
+    for (auto &e : select_list)
+        if (e->GetExpressionType() == BoundExpressionType::WINDOW)
+            wins.push_back(static_cast<const BoundWindowExpression *>(e.get()));
+    if (qualify) {
+        // Only `window <op> constant` (either side): any other QUALIFY was
+        // not applied at all.
+        bool simple = false;
+        if (qualify->GetExpressionType() == BoundExpressionType::COMPARISON) {
+            auto &cmp = static_cast<const BoundComparison &>(*qualify);
+            auto t = [](const BoundExprPtr &e) { return e ? e->GetExpressionType() : BoundExpressionType::CONSTANT; };
+            if (t(cmp.left) == BoundExpressionType::WINDOW && t(cmp.right) == BoundExpressionType::CONSTANT) {
+                simple = true;
+                wins.push_back(static_cast<const BoundWindowExpression *>(cmp.left.get()));
+            } else if (t(cmp.right) == BoundExpressionType::WINDOW && t(cmp.left) == BoundExpressionType::CONSTANT) {
+                simple = true;
+                wins.push_back(static_cast<const BoundWindowExpression *>(cmp.right.get()));
+            }
+        }
+        if (!simple) {
+            throw NotImplementedException("QUALIFY other than a window function compared with a constant "
+                                          "is not supported");
+        }
+    }
+    // Windows over different partitions or orders take a path that gives
+    // an aggregate its whole partition, not its running frame.
+    auto key = [](const BoundWindowExpression &w) {
+        std::string k;
+        for (auto &p : w.partition_by) {
+            if (p->GetExpressionType() != BoundExpressionType::COLUMN_REF) return std::string("?");
+            k += std::to_string(static_cast<const BoundColumnRef &>(*p).column_index) + ",";
+        }
+        k += "|";
+        for (auto &o : w.order_by) {
+            k += std::to_string(static_cast<const BoundColumnRef &>(*o.expression).column_index) +
+                 (o.ascending ? "a," : "d,");
+        }
+        return k;
+    };
+    bool same = true;
+    for (auto *w : wins)
+        if (key(*w) != key(*wins.front()) || key(*w) == "?") same = false;
+    if (same) return;
+    for (auto *w : wins) {
+        const auto &n = w->function_name;
+        bool aggregate = n == "SUM" || n == "COUNT" || n == "AVG" || n == "MIN" || n == "MAX";
+        if (aggregate && !w->order_by.empty()) {
+            throw NotImplementedException("Window function " + n + " with ORDER BY beside windows over "
+                                          "another partition or order is not supported");
+        }
+    }
+}
+
 PhysicalOpPtr PhysicalPlanner::PlanWindow(const LogicalWindow &op) {
     auto &mutable_op = const_cast<LogicalWindow &>(op);
+    CheckWindowQuery(mutable_op.select_list, mutable_op.qualify);
     auto result = std::make_unique<PhysicalWindow>(
         std::move(mutable_op.select_list), std::move(mutable_op.qualify), op.GetTypes());
     result->children.push_back(Plan(*op.children[0]));
