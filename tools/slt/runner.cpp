@@ -90,18 +90,23 @@ void SortResult(SortMode mode, std::vector<std::string> &values, size_t ncols) {
         for (size_t c = 0; c < ncols; c++) values[r * ncols + c] = std::move(rows[r][c]);
 }
 
+// As DuckDB's StringUtil::Split, which its runner uses: an empty piece is
+// dropped (DuckDB prints an empty value as "(empty)", so none is a value),
+// and a line of none is itself. A recorded row with two tabs in a row
+// (aggregate/qualify/test_qualify.test) is DuckDB's row of three.
 std::vector<std::string> SplitTabs(const std::string &s) {
     std::vector<std::string> out;
     std::string cur;
     for (char ch : s) {
         if (ch == '\t') {
-            out.push_back(cur);
+            if (!cur.empty()) out.push_back(cur);
             cur.clear();
         } else {
             cur += ch;
         }
     }
-    out.push_back(cur);
+    if (!cur.empty()) out.push_back(cur);
+    if (out.empty()) out.push_back(s);
     return out;
 }
 
