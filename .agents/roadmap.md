@@ -39,6 +39,7 @@ issue closed. zugodb then moves its pin.
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | | |
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | | |
 | 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | | |
+| 11.1 | [Host-supplied function providers](#stage-111--host-supplied-function-providers) | 0.4.0 | ci | [#40](https://github.com/pedrobtz/libzugodb/issues/40) | | |
 | 12 | [The names become zugodb](#stage-12--the-names-become-zugodb) | 0.4.0 | ci | [#17](https://github.com/pedrobtz/libzugodb/issues/17) | | |
 <!-- markdownlint-enable MD013 -->
 
@@ -659,6 +660,44 @@ and the engine carries no zstd of its own.
 
 **Design.** [§2](design.md#2-scope), LQ2 in
 [§9](design.md#9-open-questions) and [zugodb §7.5][zdesign].
+
+## Stage 11.1 — Host-supplied function providers
+
+**Issue.** [#40](https://github.com/pedrobtz/libzugodb/issues/40),
+sub-issue of [v0.4.0](https://github.com/pedrobtz/libzugodb/issues/15).
+Added 2026-11-20 (L25).
+
+**CI.** `ci`.
+
+**Goal.** The engine calls functions it does not implement through
+versioned tables its host supplies, and refuses them when no table is
+given.
+
+**Work.**
+
+- `zugodb_providers`: one table pointer per service (regex, UTF-8; UUID
+  and random later), each with an ABI version and `struct_size`, set once
+  per `Database`.
+- The regex functions refused by L24 go through the regex table, under
+  zuregex's RE2 dialect (zuregex#211). A constant pattern is compiled once
+  per query, with match data per worker thread, and a hit limit is an
+  error.
+- UTF-8 validation and counts go through the UTF-8 table where present,
+  with the built-in code as the fallback.
+- Every non-OK status a provider returns is a query error.
+
+**Tests.**
+
+- A fake provider in `test/`: a null table, a wrong ABI version, a short
+  `struct_size`, a status turned into an error, and calls at thread caps
+  1, 2 and 4 under TSan.
+- The conformance counts are unchanged, with no provider.
+
+**Exit criteria.**
+
+- Every `**Tests.**` line holds on all CI jobs.
+
+**Design.** L25 in [§8](design.md#8-decisions).
 
 ## Stage 12 — The names become zugodb
 
