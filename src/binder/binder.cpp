@@ -485,6 +485,11 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                     ord = val.GetValue<int64_t>();
                     is_int_ordinal = true;
                 }
+                if (!is_int_ordinal) {
+                    // DuckDB's error: a constant sorts nothing (#35).
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "ORDER BY non-integer literal has no effect");
+                }
                 if (is_int_ordinal) {
                     // Reference the post-expansion select_list so
                     // `SELECT * FROM t ORDER BY 2` works (previously
@@ -652,6 +657,9 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
         }
         int64_t v = -1;
         if (extract_int(val, v)) {
+            if (v < 0) {
+                throw BinderException(ErrorCode::OUT_OF_RANGE, "LIMIT cannot be negative");
+            }
             result->limit_count = v;
         } else if (!val.IsNull()) {
             throw BinderException(ErrorCode::TYPE_MISMATCH,
@@ -674,6 +682,9 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
         }
         int64_t v = 0;
         if (extract_int(val, v)) {
+            if (v < 0) {
+                throw BinderException(ErrorCode::OUT_OF_RANGE, "OFFSET cannot be negative");
+            }
             result->offset_count = v;
         } else if (!val.IsNull()) {
             throw BinderException(ErrorCode::TYPE_MISMATCH,

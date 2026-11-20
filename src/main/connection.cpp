@@ -255,23 +255,36 @@ static void ApplyUnionOrderLimit(
         for (auto &item : order_by) {
             Key k{ -1, item.ascending, item.nulls_first };
             auto &e = *item.expression;
+            // A key that is not an output position or name was skipped,
+            // leaving the rows in the chain's order (#35): refused.
             if (e.GetExpressionType() == ExpressionType::CONSTANT) {
                 auto &c = static_cast<const ConstantExpression &>(e);
-                if (c.literal_type == TokenType::INTEGER_LITERAL) {
-                    try {
-                        int v = std::stoi(c.value);
-                        if (v >= 1 && v <= static_cast<int>(col_names.size()))
-                            k.col_idx = v - 1;
-                    } catch (...) {}
+                if (c.literal_type != TokenType::INTEGER_LITERAL) {
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "ORDER BY non-integer literal has no effect");
                 }
-            } else if (e.GetExpressionType() == ExpressionType::COLUMN_REF) {
+                long long v = 0;
+                try { v = std::stoll(c.value); } catch (...) { v = 0; }
+                if (v < 1 || v > static_cast<long long>(col_names.size())) {
+                    throw BinderException(ErrorCode::OUT_OF_RANGE,
+                        "ORDER term out of range - should be between 1 and " +
+                        std::to_string(col_names.size()));
+                }
+                k.col_idx = static_cast<int>(v - 1);
+            } else if (e.GetExpressionType() == ExpressionType::COLUMN_REF &&
+                       static_cast<const ColumnRefExpression &>(e).table_name.empty()) {
                 auto &cr = static_cast<const ColumnRefExpression &>(e);
                 for (size_t i = 0; i < col_names.size(); i++) {
-                    if (col_names[i] == cr.column_name) {
+                    if (StringUtil::Upper(col_names[i]) == StringUtil::Upper(cr.column_name)) {
                         k.col_idx = static_cast<int>(i);
                         break;
                     }
                 }
+            }
+            if (k.col_idx < 0) {
+                throw NotImplementedException(
+                    "ORDER BY over a set operation takes an output column's name or "
+                    "position only");
             }
             keys.push_back(k);
         }
@@ -296,11 +309,18 @@ static void ApplyUnionOrderLimit(
 
     int64_t offset_val = 0;
     int64_t limit_val = -1;
+    // An integer literal, or none; any other LIMIT or OFFSET of a set
+    // operation was ignored (#35) and is refused.
     auto extract_int_literal = [](const ParsedExprPtr &p) -> int64_t {
-        if (!p || p->GetExpressionType() != ExpressionType::CONSTANT) return -1;
-        auto &c = static_cast<const ConstantExpression &>(*p);
-        if (c.literal_type != TokenType::INTEGER_LITERAL) return -1;
-        try { return std::stoll(c.value); } catch (...) { return -1; }
+        if (!p) return -1;
+        if (p->GetExpressionType() == ExpressionType::CONSTANT) {
+            auto &c = static_cast<const ConstantExpression &>(*p);
+            if (c.literal_type == TokenType::INTEGER_LITERAL) {
+                try { return std::stoll(c.value); } catch (...) {}
+            }
+        }
+        throw NotImplementedException(
+            "LIMIT and OFFSET of a set operation take a non-negative integer literal only");
     };
     int64_t lit_offset = extract_int_literal(offset_expr);
     int64_t lit_limit = extract_int_literal(limit_expr);
