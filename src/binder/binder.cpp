@@ -21,6 +21,37 @@ static bool HasUngroupedColumn(const BoundExpression &expr,
 // BindContext
 // ============================================================================
 
+// DuckDB casts to a BLOB only from text (reading its \\xHH escapes) and
+// from a BLOB to text only; any other cast with a BLOB is an error there,
+// under TRY_CAST too (#31).
+static void CheckBlobCast(const LogicalType &from, const LogicalType &to) {
+    auto f = from.id(), t = to.id();
+    if (f == t || f == LogicalTypeId::SQLNULL) return;
+    if (t == LogicalTypeId::BLOB && f != LogicalTypeId::VARCHAR) {
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            "Unimplemented type for cast (" + from.ToString() + " -> BLOB)");
+    }
+    if (f == LogicalTypeId::BLOB && t != LogicalTypeId::VARCHAR) {
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            "Unimplemented type for cast (BLOB -> " + to.ToString() + ")");
+    }
+}
+
+// Beside a BLOB, a string literal is read as a BLOB, as DuckDB casts a
+// literal to the other operand's type; any other type is refused, since
+// DuckDB has no implicit cast from it to a BLOB (#31).
+static void CoerceBesideBlob(BoundExprPtr &e, const char *what) {
+    auto id = e->GetReturnType().id();
+    if (id == LogicalTypeId::BLOB || id == LogicalTypeId::SQLNULL) return;
+    if (id == LogicalTypeId::VARCHAR && e->GetExpressionType() == BoundExpressionType::CONSTANT) {
+        e = std::make_unique<BoundCast>(std::move(e), LogicalType::BLOB());
+        return;
+    }
+    throw BinderException(ErrorCode::TYPE_MISMATCH,
+        std::string(what) + " of a BLOB and a " + e->GetReturnType().ToString() +
+        " is not supported");
+}
+
 void BindContext::AddTable(const std::string &alias, TableCatalogEntry *entry) {
     tables[alias] = entry;
     // Compute offset: sum of all columns from previously added tables.
@@ -712,6 +743,7 @@ BoundStmtPtr Binder::BindInsert(const InsertStatement &stmt) {
         auto src_id = bound->GetReturnType().id();
         auto dst_id = col_types[target].id();
         if (src_id != dst_id && src_id != LogicalTypeId::SQLNULL) {
+            CheckBlobCast(bound->GetReturnType(), col_types[target]);
             bound = std::make_unique<BoundCast>(std::move(bound), col_types[target]);
         }
         return bound;
@@ -850,6 +882,7 @@ BoundStmtPtr Binder::BindUpdate(const UpdateStatement &stmt) {
             auto src_id = ba.value->GetReturnType().id();
             auto dst_id = col_types[idx].id();
             if (src_id != dst_id && src_id != LogicalTypeId::SQLNULL) {
+                CheckBlobCast(ba.value->GetReturnType(), col_types[idx]);
                 ba.value = std::make_unique<BoundCast>(
                     std::move(ba.value), col_types[idx]);
             }
@@ -1077,6 +1110,11 @@ BoundExprPtr Binder::BindConstant(const ConstantExpression &expr) {
 BoundExprPtr Binder::BindComparison(const ComparisonExpression &expr, BindContext &context) {
     auto left = BindExpression(*expr.left, context);
     auto right = BindExpression(*expr.right, context);
+    if (left->GetReturnType().id() == LogicalTypeId::BLOB ||
+        right->GetReturnType().id() == LogicalTypeId::BLOB) {
+        CoerceBesideBlob(left, "A comparison");
+        CoerceBesideBlob(right, "A comparison");
+    }
 
     // Promote a literal constant to the column's type when one side is a
     // column reference and the other is a CONSTANT of a compatible numeric
@@ -1205,6 +1243,13 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
     auto right = BindExpression(*expr.right, context);
     // || is string concatenation.
     if (expr.op == "||") {
+        if (left->GetReturnType().id() == LogicalTypeId::BLOB ||
+            right->GetReturnType().id() == LogicalTypeId::BLOB) {
+            CoerceBesideBlob(left, "||");
+            CoerceBesideBlob(right, "||");
+            return std::make_unique<BoundArithmetic>(expr.op, std::move(left), std::move(right),
+                                                      LogicalType::BLOB());
+        }
         return std::make_unique<BoundArithmetic>(expr.op, std::move(left), std::move(right),
                                                   LogicalType::VARCHAR());
     }
@@ -1331,6 +1376,19 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
     std::vector<BoundExprPtr> args;
     for (auto &arg : expr.arguments) {
         args.push_back(BindExpression(*arg, context));
+    }
+    // A BLOB argument: the functions that read a BLOB's bytes as DuckDB
+    // does. The others read it as text, gave a VARCHAR of its bytes or
+    // unified it with no type (#31).
+    for (auto &a : args) {
+        if (a->GetReturnType().id() != LogicalTypeId::BLOB) continue;
+        static const char *const kBlobFunctions[] = {
+            "COUNT", "MIN", "MAX", "OCTET_LENGTH", "MD5", "SHA1", "SHA256"};
+        bool ok = false;
+        for (auto *f : kBlobFunctions) ok = ok || name == f;
+        if (!ok) {
+            throw NotImplementedException("Function " + name + " of a BLOB is not supported");
+        }
     }
     // STRING_AGG's separator: a constant string (NULL and a column are
     // not computed as DuckDB does).
@@ -1909,6 +1967,7 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
 BoundExprPtr Binder::BindCast(const CastExpression &expr, BindContext &context) {
     auto child = BindExpression(*expr.child, context);
     auto target = ResolveTypeName(expr.target_type);
+    CheckBlobCast(child->GetReturnType(), target);
     return std::make_unique<BoundCast>(std::move(child), target, expr.is_try);
 }
 

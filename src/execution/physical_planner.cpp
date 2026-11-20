@@ -9239,7 +9239,7 @@ private:
                             // every row compared equal and the last row "won",
                             // silently giving MIN('zebra','apple','mango') =
                             // 'zebra'. Use Value::operator< for VARCHAR.
-                            bool is_varchar = vec.GetType().id() == LogicalTypeId::VARCHAR;
+                            bool is_varchar = vec.GetType().id() == LogicalTypeId::VARCHAR || vec.GetType().id() == LogicalTypeId::BLOB;
                             for (idx_t i = 0; i < chunk_size; i++) {
                                 if (all_valid || validity->RowIsValid(i)) {
                                     if (is_varchar) {
@@ -12465,7 +12465,7 @@ private:
                             // equal and the last row "wins", giving silently
                             // wrong results like MIN('zebra','apple','mango')
                             // = 'zebra'). Use Value::operator< for VARCHAR.
-                            bool is_varchar = vec.GetType().id() == LogicalTypeId::VARCHAR;
+                            bool is_varchar = vec.GetType().id() == LogicalTypeId::VARCHAR || vec.GetType().id() == LogicalTypeId::BLOB;
                             double val = is_varchar ? 0.0 : ReadDouble(vec, i);
                             if (info.name == "SUM" || info.name == "AVG") {
                                 state.count++;

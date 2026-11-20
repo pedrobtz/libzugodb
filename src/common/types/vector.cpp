@@ -161,6 +161,8 @@ Value Vector::GetValue(idx_t index) const {
         return Value::TIMESTAMP(GetData<int64_t>()[index]);
     case LogicalTypeId::TIME:
         return Value::TIME(GetData<int64_t>()[index]);
+    case LogicalTypeId::BLOB:
+        return Value::BLOB(GetData<string_t>()[index].GetString());
     default:
         break;
     }

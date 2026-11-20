@@ -172,3 +172,59 @@ TEST_CASE("Stage 8: TINYINT and SMALLINT operands of floating-point arithmetic")
     conn.Query("INSERT INTO t VALUES (1, 2, 0.5)");
     CHECK(Run(conn, "SELECT a + d, b * d, a / d, b - 1.5 FROM t") == Rows{{"1.5", "1", "2", "0.5"}});
 }
+
+// ---------------------------------------------------------------------------
+// BLOB (#31; types/blob/test_blob*.test, function/string/md5.test,
+// sha1.test, sha256.test, null_byte.test). Text to BLOB kept the escape
+// text, so a BLOB held '\xAA' as four bytes, printed it as text and
+// hashed and measured it as such; any cast to BLOB was accepted.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: text to BLOB reads \\xHH as one byte") {
+    Database db;
+    Connection conn(db);
+    // test_blob_cast.test
+    CHECK(Run(conn, "SELECT '\\x20\\x00\\xFF'::BLOB, '\\x20\\x00\\xFF'::BLOB::VARCHAR, "
+                    "'\\x20\\x00\\xFF'::VARCHAR::BLOB::VARCHAR::BLOB") ==
+          Rows{{" \\x00\\xFF", " \\x00\\xFF", " \\x00\\xFF"}});
+    CHECK(conn.Query("SELECT '\\xAA'::BLOB").GetValue(0, 0).type().id() == LogicalTypeId::BLOB);
+    // md5.test, sha1.test, sha256.test: of the two bytes.
+    CHECK(Run(conn, "SELECT md5('\\xff\\xff'::BLOB), sha1('\\xff\\xff'::BLOB)") ==
+          Rows{{"ab2a0d28de6b77ffdd6c72afead099ab", "a19f987b885f5a96069f4bc7f12b9e84ceba7dfa"}});
+    CHECK(Run(conn, "SELECT sha256('\\xff\\xff'::BLOB)") ==
+          Rows{{"ca2fd00fa001190744c15c317643ab092e7048ce086a243e2be9437c898de1bb"}});
+    // null_byte.test
+    CHECK(Run(conn, "SELECT chr(0)::blob") == Rows{{"\\x00"}});
+    // test_blob.test, test_blob_function.test: a column, its length and ||.
+    conn.Query("CREATE TABLE blobs (b BYTEA)");
+    conn.Query("INSERT INTO blobs VALUES('\\xaa\\xff\\xaa'), ('\\xaa1199')");
+    CHECK(Run(conn, "SELECT b, OCTET_LENGTH(b), b || '\\x5A\\x5A'::BYTEA FROM blobs") ==
+          Rows{{"\\xAA\\xFF\\xAA", "3", "\\xAA\\xFF\\xAAZZ"}, {"\\xAA1199", "5", "\\xAA1199ZZ"}});
+    CHECK(Run(conn, "SELECT count(*) FROM blobs WHERE b = '\\xAA1199'") == Rows{{"1"}});
+    // test_blob_operator.test: MIN and MAX compare the bytes, unsigned.
+    conn.Query("INSERT INTO blobs VALUES ('\\x00whatisgoingon'), ('\\xFF\\xFE\\xFB')");
+    CHECK(Run(conn, "SELECT MIN(b), MAX(b) FROM blobs") ==
+          Rows{{"\\x00whatisgoingon", "\\xFF\\xFE\\xFB"}});
+}
+
+TEST_CASE("Stage 8: text that is not a BLOB's is an error, NULL under TRY_CAST") {
+    Database db;
+    Connection conn(db);
+    // test_blob_try_cast.test
+    CHECK(Run(conn, "SELECT TRY_CAST('\\\\' AS BLOB), TRY_CAST('\\\\x3' AS BLOB), "
+                    "TRY_CAST('\\\\xx2' AS BLOB), TRY_CAST('ü' AS BLOB)") ==
+          Rows{{"NULL", "NULL", "NULL", "NULL"}});
+    CHECK_THROWS(conn.Query("SELECT '\\\\'::BLOB"));
+    // test_blob.test
+    conn.Query("CREATE TABLE blobs (b BYTEA)");
+    CHECK_THROWS(conn.Query("INSERT INTO blobs VALUES('\\xGA\\xFF\\xAA')"));
+    CHECK_THROWS(conn.Query("INSERT INTO blobs VALUES('blablabla\\x')"));
+    CHECK_THROWS(conn.Query("SELECT 'ü'::blob"));
+    // test_blob_cast.test: DuckDB casts to a BLOB from text only.
+    CHECK_THROWS(conn.Query("SELECT 1::BYTEA"));
+    CHECK_THROWS(conn.Query("SELECT TRY_CAST(1 AS BLOB)"));
+    CHECK_THROWS(conn.Query("INSERT INTO blobs VALUES (1)"));
+    // The functions that would read a BLOB as text are refused.
+    CHECK_THROWS(conn.Query("SELECT upper('a'::BLOB)"));
+    CHECK_THROWS(conn.Query("SELECT 'a'::BLOB || 'b'::VARCHAR"));
+}

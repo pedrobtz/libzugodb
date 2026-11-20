@@ -7,6 +7,7 @@
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/string_util.hpp"
 #include "slothdb/common/types/string_type.hpp"
+#include "slothdb/common/types/blob.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -486,8 +487,15 @@ Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
             break;
         }
     }
-    // Handle function on constants (e.g., CAST in INSERT).
+    // Handle function on constants (e.g., CAST in INSERT). A cast to or
+    // from a BLOB takes the general path below, ExecuteCast (#31).
+    bool general_cast = false;
     if (expr.GetExpressionType() == BoundExpressionType::CAST) {
+        auto &c = static_cast<const BoundCast &>(expr);
+        general_cast = c.GetReturnType().id() == LogicalTypeId::BLOB ||
+                       c.child->GetReturnType().id() == LogicalTypeId::BLOB;
+    }
+    if (expr.GetExpressionType() == BoundExpressionType::CAST && !general_cast) {
         auto &cast = static_cast<const BoundCast &>(expr);
         auto child_val = ExecuteScalar(*cast.child);
         if (child_val.IsNull()) return child_val;
@@ -1538,10 +1546,15 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
 
     // Handle || for string concatenation.
     if (expr.op == "||") {
+        bool blob = result.GetType().id() == LogicalTypeId::BLOB;
         for (idx_t i = 0; i < count; i++) {
             auto lv = left.GetValue(i), rv = right.GetValue(i);
             if (lv.IsNull() || rv.IsNull()) {
                 result.GetValidity().SetInvalid(i);
+            } else if (blob) {
+                // Bytes after bytes; the binder made both sides BLOBs.
+                result.SetValue(i, Value::BLOB(lv.GetValue<std::string>() +
+                                               rv.GetValue<std::string>()));
             } else {
                 result.SetValue(i, Value::VARCHAR(lv.ToString() + rv.ToString()));
             }
@@ -5096,6 +5109,17 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
                 case LogicalTypeId::BIGINT:   result.SetValue(i, Value::BIGINT(b ? 1 : 0)); break;
                 case LogicalTypeId::FLOAT:    result.SetValue(i, Value::FLOAT(b ? 1.0f : 0.0f)); break;
                 default:                      result.SetValue(i, Value::DOUBLE(b ? 1.0 : 0.0)); break;
+                }
+                continue;
+            }
+            // Text to BLOB reads DuckDB's escapes; a BLOB to a BLOB is
+            // itself. The binder refuses a cast to BLOB from any other
+            // type, and from a BLOB to any type but VARCHAR (#31).
+            if (to_type == LogicalTypeId::BLOB) {
+                if (from_type == LogicalTypeId::BLOB) {
+                    result.SetValue(i, val);
+                } else {
+                    result.SetValue(i, Value::BLOB(blob::FromText(val.GetValue<std::string>())));
                 }
                 continue;
             }

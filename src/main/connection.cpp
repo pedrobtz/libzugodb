@@ -1,6 +1,7 @@
 #include "slothdb/main/connection.hpp"
 #include "slothdb/main/query_materialize.hpp"
 #include "slothdb/common/exception.hpp"
+#include "slothdb/common/types/blob.hpp"
 #include "slothdb/parser/parser.hpp"
 #include "slothdb/binder/binder.hpp"
 #include "slothdb/planner/planner.hpp"
@@ -1272,6 +1273,18 @@ QueryResult Connection::Query(const std::string &sql) {
                         }
                         }
                     };
+                    // A BLOB from text only, to text only (#31).
+                    if (dst_id == LogicalTypeId::BLOB) {
+                        if (src_id != LogicalTypeId::VARCHAR) {
+                            throw ConversionException("Unimplemented type for cast (" +
+                                src.type().ToString() + " -> BLOB)");
+                        }
+                        return Value::BLOB(blob::FromText(src.GetValue<std::string>()));
+                    }
+                    if (src_id == LogicalTypeId::BLOB && dst_id != LogicalTypeId::VARCHAR) {
+                        throw ConversionException("Unimplemented type for cast (BLOB -> " +
+                            target.ToString() + ")");
+                    }
                     // Target VARCHAR: stringify.
                     if (dst_id == LogicalTypeId::VARCHAR) {
                         return Value::VARCHAR(src.ToString());

@@ -1,4 +1,5 @@
 #include "slothdb/common/types/value.hpp"
+#include "slothdb/common/types/blob.hpp"
 #include "slothdb/common/exception.hpp"
 #include <cmath>
 #include <cstdio>
@@ -625,8 +626,11 @@ std::string Value::ToString() const {
     case LogicalTypeId::HUGEINT:
         return hugeint_.ToString();
     case LogicalTypeId::VARCHAR:
-    case LogicalTypeId::BLOB:
         return str_value_;
+    case LogicalTypeId::BLOB:
+        // DuckDB's text of a BLOB, \xHH for the bytes that are not
+        // printable ASCII (#31).
+        return blob::ToText(str_value_);
     default:
         return "(" + type_.ToString() + ")";
     }
