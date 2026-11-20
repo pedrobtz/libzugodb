@@ -920,9 +920,11 @@ minor version.
     paths' thresholds) against DuckDB v2.0.0's Python package and writes
     `test/fixtures/nan/duckdb_cases.tsv`. `test/unit/execution/test_nan.cpp`
     replays it at thread caps 1 and 2 and over the tables saved and
-    loaded: a NaN matches any NaN, any other double bit for bit (`-0.0`
-    is not `0.0`) except where the case marks the zero's sign as DuckDB's
-    choice among equal values, and an error must match an error. The four
+    loaded: a NaN matches any NaN, any other double with its sign
+    (`-0.0` is not `0.0`, except where the case marks the zero's sign as
+    DuckDB's choice among equal values) and within 4 units in the last
+    place (glibc's, Apple's and MinGW's `sin`, `exp`, `cbrt` differ by
+    one), and an error must match an error. The four
     cases the engine refuses are listed with their reasons in
     `test/fixtures/nan/refused.tsv`, and one that starts passing fails
     the test. The SQL fuzzer's tables hold NaN, `-NaN`, the infinities

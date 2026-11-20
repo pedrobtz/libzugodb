@@ -18,7 +18,8 @@ is a statement the engine must run without error. Otherwise the mode is
 values DuckDB does not fix). A NaN matches any NaN, whatever its sign: the
 sign of a computed NaN is the hardware's (it differs between x86-64 and
 arm64), and only the VARCHAR casts below show it, of NaNs whose sign is
-fixed. `expected` is `error`, or the rows separated by `|`, each value by
+fixed. Any other double matches within 4 units in the last place: the C
+libraries' transcendental functions differ by one. `expected` is `error`, or the rows separated by `|`, each value by
 `,`: N (NULL), b0/b1, i<integer>, f<float.hex()> or fnan, s<text with
 %, |, , and control bytes as %XX>.
 

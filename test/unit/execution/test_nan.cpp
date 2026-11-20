@@ -97,7 +97,8 @@ std::string Unescape(const std::string &s) {
 }
 
 // One value of the engine's against one of DuckDB's, by the encoding of
-// tools/make_nan_cases.py. `loose`: -0.0 matches 0.0.
+// tools/make_nan_cases.py. `loose`: -0.0 matches 0.0. A finite double
+// matches within 4 units in the last place (the C library's).
 bool Matches(const Value &v, const std::string &want, bool loose) {
     if (want == "N") return v.IsNull();
     if (v.IsNull()) return false;
@@ -128,8 +129,18 @@ bool Matches(const Value &v, const std::string &want, bool loose) {
         if (body == "nan") return IsNaN(got);
         if (IsNaN(got)) return false;
         double x = std::strtod(body.c_str(), nullptr);
-        if (got != x) return false;
-        return loose || SignBit(got) == SignBit(x);
+        if (!loose && SignBit(got) != SignBit(x)) return false;
+        if (got == x) return true;
+        // A finite value within 4 units in the last place: the C library's
+        // sin, exp, cbrt, ... differ by one between glibc, Apple's libm and
+        // MinGW's, as DuckDB's own results do; the oracle was made on one.
+        if (std::isinf(got) || std::isinf(x)) return false;
+        double lo = x, hi = x;
+        for (int k = 0; k < 4; k++) {
+            lo = std::nextafter(lo, -std::numeric_limits<double>::infinity());
+            hi = std::nextafter(hi, std::numeric_limits<double>::infinity());
+        }
+        return got >= lo && got <= hi;
     }
     case 's':
         return (id == LogicalTypeId::VARCHAR || id == LogicalTypeId::BLOB) &&
