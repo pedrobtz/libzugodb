@@ -53,3 +53,24 @@ TEST_CASE("Stage 8: a negative LIMIT or OFFSET is an error") {
     CHECK_THROWS(conn.Query("SELECT * FROM generate_series(0,10,1) LIMIT -3"));
     CHECK(Run(conn, "SELECT * FROM generate_series(0,10,1) LIMIT 2 OFFSET 1") == Rows{{"1"}, {"2"}});
 }
+
+// ---------------------------------------------------------------------------
+// aggregate/qualify/test_qualify.test (#38): a DATE, TIME or TIMESTAMP
+// Value compared as neither less nor equal, so a sort through Values (a
+// window's ORDER BY, ORDER BY, a UNION's dedup) left them as they came.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: DATE and TIMESTAMP values sort and deduplicate") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE p(plant VARCHAR, d DATE, t TIMESTAMP)");
+    conn.Query("INSERT INTO p VALUES ('B', '2019-01-02', '2019-01-02 10:00:00'), "
+               "('B', '2019-01-04', '2019-01-04 10:00:00'), ('B', '2019-01-03', '2019-01-03 10:00:00')");
+    CHECK(Run(conn, "SELECT d FROM p ORDER BY d DESC") ==
+          Rows{{"2019-01-04"}, {"2019-01-03"}, {"2019-01-02"}});
+    CHECK(Run(conn, "SELECT d FROM p UNION SELECT d FROM p ORDER BY 1") ==
+          Rows{{"2019-01-02"}, {"2019-01-03"}, {"2019-01-04"}});
+    CHECK(Run(conn, "SELECT t FROM p ORDER BY t DESC LIMIT 1") == Rows{{"2019-01-04 10:00:00"}});
+    CHECK(Run(conn, "SELECT d FROM p QUALIFY rank() OVER (PARTITION BY plant ORDER BY d DESC) = 2") ==
+          Rows{{"2019-01-03"}});
+}

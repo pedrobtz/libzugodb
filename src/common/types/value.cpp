@@ -655,6 +655,14 @@ bool Value::operator==(const Value &other) const {
     case LogicalTypeId::HUGEINT: return hugeint_ == other.hugeint_;
     case LogicalTypeId::VARCHAR:
     case LogicalTypeId::BLOB: return str_value_ == other.str_value_;
+    // A DATE holds its days and a TIME or TIMESTAMP its microseconds as
+    // an INTEGER and a BIGINT do. They compared as neither equal nor
+    // less, so a sort, a UNION and DISTINCT through Values left them as
+    // they came (#38).
+    case LogicalTypeId::DATE: return integer_ == other.integer_;
+    case LogicalTypeId::TIME:
+    case LogicalTypeId::TIMESTAMP:
+    case LogicalTypeId::TIMESTAMP_TZ: return bigint_ == other.bigint_;
     default: return false;
     }
 }
@@ -677,6 +685,10 @@ bool Value::operator<(const Value &other) const {
     case LogicalTypeId::HUGEINT: return hugeint_ < other.hugeint_;
     case LogicalTypeId::VARCHAR:
     case LogicalTypeId::BLOB: return str_value_ < other.str_value_;
+    case LogicalTypeId::DATE: return integer_ < other.integer_;
+    case LogicalTypeId::TIME:
+    case LogicalTypeId::TIMESTAMP:
+    case LogicalTypeId::TIMESTAMP_TZ: return bigint_ < other.bigint_;
     default: return false;
     }
 }

@@ -203,7 +203,10 @@ struct SetOpRowHash {
             if (v.IsNull()) {
                 vh = 0xDEAD9E37;
             } else {
-                vh = std::hash<std::string>{}(v.ToString());
+                // -0.0 and 0.0 are equal, so they hash alike (#38).
+                bool zero = (v.type().id() == LogicalTypeId::DOUBLE && v.GetValue<double>() == 0.0) ||
+                            (v.type().id() == LogicalTypeId::FLOAT && v.GetValue<float>() == 0.0f);
+                vh = std::hash<std::string>{}(zero ? std::string("0") : v.ToString());
                 vh ^= static_cast<size_t>(v.type().id()) * 0x9e3779b9u;
             }
             h ^= vh + 0x9e3779b9 + (h << 6) + (h >> 2);
