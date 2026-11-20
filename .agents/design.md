@@ -535,6 +535,19 @@ minor version.
   maintainer: the package family has one regex engine, zuregex's RE2,
   and no second implementation to maintain.
 
+- **L25 (2026-11-20, the maintainer's decision, on an advisor's
+  recommendation).** The engine stays an R-free library and gets what it
+  does not implement from its host. A provider interface (Stage 11.1, #40)
+  takes one versioned C table per service: regex, UTF-8, and later UUID and
+  random numbers. The engine refuses a function whose table is absent or
+  of the wrong version, so the counts here, which run with no provider, do
+  not change. zugodb fills the tables from zuregex, zuutf, zuid and zurand
+  at load, and tests what depends on them. Provider functions run on
+  worker threads: they call no R API and return a status. Dates and
+  compression are not providers; the engine's codecs go with its readers
+  in Stage 11. The plan across the package family is
+  [pedrobtz/packages `zugodb.md`](https://github.com/pedrobtz/packages/blob/main/zugodb.md).
+
 ## 9. Open questions
 
 - **LQ1 (settled 2026-11-20, Stage 6).** Which DuckDB tag is pinned, and
