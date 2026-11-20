@@ -135,24 +135,24 @@ test/sql/function/numeric/test_floor_ceil.test	114	unreliable	SELECT cast(FLOOR(
 test/sql/function/numeric/test_floor_ceil.test	124	unreliable	SELECT cast(FLOOR(n::float) as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_floor_ceil.test	134	unreliable	SELECT cast(FLOOR(n::double) as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_invalid_math.test	9	unreliable	SELECT log(0);
+test/sql/function/numeric/test_invalid_math.test	13	unreliable	SELECT log(-1);
 test/sql/function/numeric/test_invalid_math.test	17	unreliable	SELECT ln(0);
+test/sql/function/numeric/test_invalid_math.test	21	unreliable	SELECT ln(-1);
 test/sql/function/numeric/test_invalid_math.test	25	unreliable	SELECT log10(0);
+test/sql/function/numeric/test_invalid_math.test	29	unreliable	SELECT log10(-1);
+test/sql/function/numeric/test_invalid_math.test	34	unreliable	SELECT sqrt(-1);
 test/sql/function/numeric/test_is_nan.test	21	unreliable	SELECT f, isnan(f), isinf(f), isfinite(f) FROM floats ORDER BY f
 test/sql/function/numeric/test_is_nan.test	53	unreliable	SELECT f, isnan(f) FROM no_nan_nullable ORDER BY f
 test/sql/function/numeric/test_pg_math.test	105	unreliable	select log(0, 64)
 test/sql/function/numeric/test_pg_math.test	110	unreliable	select log(2, 0)
+test/sql/function/numeric/test_pg_math.test	115	unreliable	select log(-1, 64)
+test/sql/function/numeric/test_pg_math.test	120	unreliable	select log(2, -1)
 test/sql/function/numeric/test_pg_math.test	125	unreliable	select log(1, 64)
+test/sql/function/numeric/test_pg_math.test	166	unreliable	select log('-Inf'::DOUBLE, 64)
+test/sql/function/numeric/test_pg_math.test	171	unreliable	select log(64, '-Inf'::DOUBLE)
+test/sql/function/numeric/test_pg_math.test	176	unreliable	select log(2, -1)
 test/sql/function/numeric/test_pow.test	49	unreliable	SELECT power(0.0::float8, -2.0::float8);
 test/sql/function/numeric/test_pow.test	54	unreliable	SELECT 0.0::float8 ^ -1.0::float8;
-test/sql/function/numeric/test_round_integers.test	69	unreliable	SELECT round(127::TINYINT, -1);
-test/sql/function/numeric/test_round_integers.test	73	unreliable	SELECT round((-128)::TINYINT, -1);
-test/sql/function/numeric/test_round_integers.test	77	unreliable	SELECT round(32767::SMALLINT, -1);
-test/sql/function/numeric/test_round_integers.test	81	unreliable	SELECT round((-32768)::SMALLINT, -1);
-test/sql/function/numeric/test_round_integers.test	85	unreliable	SELECT round(2147483647::INTEGER, -1);
-test/sql/function/numeric/test_round_integers.test	89	unreliable	SELECT round((-2147483647 - 1)::INTEGER, -1);
-test/sql/function/numeric/test_round_integers.test	93	unreliable	SELECT round(9223372036854775807::BIGINT, -1);
-test/sql/function/numeric/test_round_integers.test	97	unreliable	SELECT round((-9223372036854775807 - 1)::BIGINT, -1);
-test/sql/function/numeric/test_round_integers.test	101	unreliable	SELECT round(9223372036854775807::BIGINT, -19);
 test/sql/function/numeric/test_trigo.test	14	unreliable	SELECT cast(SIN(n::tinyint)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	24	unreliable	SELECT cast(SIN(n::smallint)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	34	unreliable	SELECT cast(SIN(n::integer)*1000 as bigint) FROM numbers ORDER BY n
@@ -177,19 +177,6 @@ test/sql/function/numeric/test_trigo.test	214	unreliable	SELECT cast(ATAN(n::int
 test/sql/function/numeric/test_trigo.test	224	unreliable	SELECT cast(ATAN(n::bigint)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	234	unreliable	SELECT cast(ATAN(n::float)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	244	unreliable	SELECT cast(ATAN(n::double)*1000 as bigint) FROM numbers ORDER BY n
-test/sql/function/numeric/test_trigo.test	254	unreliable	SELECT cast(ASIN(n::tinyint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	261	unreliable	SELECT cast(ASIN(n::smallint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	268	unreliable	SELECT cast(ASIN(n::integer)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	275	unreliable	SELECT cast(ASIN(n::bigint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	282	unreliable	SELECT cast(ASIN(n::float)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	289	unreliable	SELECT cast(ASIN(n::double)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	296	unreliable	SELECT cast(ACOS(n::tinyint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	303	unreliable	SELECT cast(ACOS(n::smallint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	310	unreliable	SELECT cast(ACOS(n::integer)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	317	unreliable	SELECT cast(ACOS(n::bigint)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	324	unreliable	SELECT cast(ACOS(n::float)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	331	unreliable	SELECT cast(ACOS(n::double)*1000 as bigint) FROM numbers  WHERE n between -1 and 1 ORDER BY n
-test/sql/function/numeric/test_trigo.test	338	unreliable	SELECT cast(ASIN(n)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	390	unreliable	SELECT cast(ATAN2(n::tinyint, 42)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	400	unreliable	SELECT cast(ATAN2(n::smallint, 42)*1000 as bigint) FROM numbers ORDER BY n
 test/sql/function/numeric/test_trigo.test	410	unreliable	SELECT cast(ATAN2(n::integer, 42)*1000 as bigint) FROM numbers ORDER BY n
@@ -206,11 +193,6 @@ test/sql/function/numeric/test_trigo.test	465	unreliable	select tan('inf'::DOUBL
 test/sql/function/numeric/test_trigo.test	470	unreliable	select tan('-inf'::DOUBLE);
 test/sql/function/numeric/test_trigo.test	488	unreliable	select atanh(1.1);
 test/sql/function/numeric/test_trigo.test	488	unreliable	select atanh(-1.1);
-test/sql/function/numeric/test_trigo.test	495	unreliable	select atanh(1), atanh(-1);
-test/sql/function/numeric/test_trigo.test	503	unreliable	select asin(2), acos(2), atanh(2), atanh(1), atanh(-1);
-test/sql/function/numeric/test_trigo.test	524	unreliable	select acosh(-1), acosh(0), acosh(1), acosh(2);
-test/sql/function/numeric/test_trigo.test	542	unreliable	select cosh(-1), cosh(0), cosh(1), cosh(1000);
-test/sql/function/numeric/test_trigo.test	548	unreliable	select sinh(-1), sinh(0), sinh(1), sinh(1000);
 test/sql/function/numeric/test_unary.test	50	unreliable	SELECT -t from minima;
 test/sql/function/numeric/test_unary.test	54	unreliable	SELECT -s from minima;
 test/sql/function/numeric/test_unary.test	58	unreliable	SELECT -i from minima;
@@ -246,8 +228,6 @@ test/sql/join/left_outer/left_join_issue_1172.test	99	unreliable	select * from t
 test/sql/join/left_outer/left_join_issue_1172.test	119	unreliable	select * from t1 left join t2 on t1.id = t2.id order by 1, 2;
 test/sql/join/non_inner_join_subquery_binding.test	236	unreliable	SELECT i FROM update_target ORDER BY i;
 test/sql/join/non_inner_join_subquery_binding.test	259	unreliable	SELECT count(*) FROM delete_target;
-test/sql/join/test_between_null_bound_join.test	31	unreliable	SELECT ((EXISTS (SELECT 1)) BETWEEN NULL::BOOLEAN AND false) AS b, ((EXISTS (SELECT 1)) BETWEEN NULL::BOOLEAN AND false) IS NULL;
-test/sql/join/test_between_null_bound_join.test	36	unreliable	SELECT ((EXISTS (SELECT 1)) NOT BETWEEN NULL::BOOLEAN AND false);
 test/sql/join/test_complex_join_expr.test	32	unreliable	SELECT * FROM test RIGHT JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1
 test/sql/join/test_complex_join_expr.test	38	unreliable	SELECT * FROM test FULL OUTER JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1
 test/sql/order/test_nulls_first.test	15	unreliable	SELECT * FROM integers ORDER BY i
@@ -274,76 +254,35 @@ test/sql/types/blob/test_blob_operator.test	34	unreliable	SELECT b, SUM(g) FROM 
 test/sql/types/date/test_bc_dates.test	18	unreliable	SELECT * FROM dates
 test/sql/types/date/test_bc_dates.test	25	unreliable	SELECT year(i) FROM dates
 test/sql/types/date/test_bc_dates.test	31	unreliable	SELECT cast(i AS VARCHAR) FROM dates
-test/sql/types/float/ieee_floating_points.test	14	unreliable	SELECT val, val / 0::FLOAT FROM tbl
-test/sql/types/float/ieee_floating_points.test	24	unreliable	SELECT val, val % 0::FLOAT FROM tbl
 test/sql/types/float/ieee_floating_points.test	37	unreliable	SELECT val, val / 0::FLOAT FROM tbl
 test/sql/types/float/ieee_floating_points.test	42	unreliable	SELECT val, val % 0::FLOAT FROM tbl
 test/sql/types/float/ieee_floating_points.test	52	unreliable	SELECT val, val / 0::FLOAT FROM tbl
 test/sql/types/float/ieee_floating_points.test	62	unreliable	SELECT val, val % 0::FLOAT FROM tbl
+test/sql/types/float/ieee_floating_points.test	78	unreliable	SELECT sqrt(-1::FLOAT);
+test/sql/types/float/ieee_floating_points.test	82	unreliable	SELECT ln(-1::FLOAT);
 test/sql/types/float/ieee_floating_points.test	86	unreliable	SELECT asin(2::FLOAT);
 test/sql/types/float/ieee_floating_points.test	90	unreliable	SELECT acos(2::FLOAT);
 test/sql/types/float/ieee_floating_points.test	94	unreliable	SELECT atanh(2::FLOAT);
 test/sql/types/float/ieee_floating_points.test	98	unreliable	SELECT sin('inf'::FLOAT);
 test/sql/types/float/ieee_floating_points.test	102	unreliable	SELECT cos('inf'::FLOAT);
 test/sql/types/float/ieee_floating_points.test	106	unreliable	SELECT tan('inf'::FLOAT);
-test/sql/types/float/ieee_floating_points.test	139	unreliable	SELECT asin(2::FLOAT), acos(2::FLOAT), atanh(2::FLOAT), atanh(1::FLOAT), atanh(-1::FLOAT);
 test/sql/types/float/ieee_floating_points.test	14	unreliable	SELECT val, val / 0::DOUBLE FROM tbl
 test/sql/types/float/ieee_floating_points.test	24	unreliable	SELECT val, val % 0::DOUBLE FROM tbl
 test/sql/types/float/ieee_floating_points.test	37	unreliable	SELECT val, val / 0::DOUBLE FROM tbl
 test/sql/types/float/ieee_floating_points.test	42	unreliable	SELECT val, val % 0::DOUBLE FROM tbl
 test/sql/types/float/ieee_floating_points.test	52	unreliable	SELECT val, val / 0::DOUBLE FROM tbl
 test/sql/types/float/ieee_floating_points.test	62	unreliable	SELECT val, val % 0::DOUBLE FROM tbl
+test/sql/types/float/ieee_floating_points.test	78	unreliable	SELECT sqrt(-1::DOUBLE);
+test/sql/types/float/ieee_floating_points.test	82	unreliable	SELECT ln(-1::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	86	unreliable	SELECT asin(2::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	90	unreliable	SELECT acos(2::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	94	unreliable	SELECT atanh(2::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	98	unreliable	SELECT sin('inf'::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	102	unreliable	SELECT cos('inf'::DOUBLE);
 test/sql/types/float/ieee_floating_points.test	106	unreliable	SELECT tan('inf'::DOUBLE);
-test/sql/types/float/ieee_floating_points.test	139	unreliable	SELECT asin(2::DOUBLE), acos(2::DOUBLE), atanh(2::DOUBLE), atanh(1::DOUBLE), atanh(-1::DOUBLE);
-test/sql/types/float/nan_aggregate.test	14	unreliable	SELECT f, SUM(i) FROM floats GROUP BY f ORDER BY f;
-test/sql/types/float/nan_aggregate.test	21	unreliable	select sum(f) from floats where 0 < f and f != 'nan'::DOUBLE;
-test/sql/types/float/nan_aggregate.test	26	unreliable	select sum(f) from floats where 0 > f;
-test/sql/types/float/nan_aggregate.test	31	unreliable	select sum(f) from floats
-test/sql/types/float/nan_aggregates.test	28	unreliable	SELECT MIN(f), MAX(f) FROM floats
-test/sql/types/float/nan_functions.test	93	unreliable	select sin('inf'::FLOAT)
-test/sql/types/float/nan_functions.test	98	unreliable	select sin('-inf'::FLOAT)
-test/sql/types/float/nan_functions.test	93	unreliable	select cos('inf'::FLOAT)
-test/sql/types/float/nan_functions.test	98	unreliable	select cos('-inf'::FLOAT)
-test/sql/types/float/nan_functions.test	93	unreliable	select tan('inf'::FLOAT)
-test/sql/types/float/nan_functions.test	98	unreliable	select tan('-inf'::FLOAT)
-test/sql/types/float/nan_functions.test	113	unreliable	select asin('inf'::FLOAT)
-test/sql/types/float/nan_functions.test	118	unreliable	select asin('-inf'::FLOAT)
-test/sql/types/float/nan_functions.test	113	unreliable	select acos('inf'::FLOAT)
-test/sql/types/float/nan_functions.test	118	unreliable	select acos('-inf'::FLOAT)
-test/sql/types/float/nan_functions.test	113	unreliable	select atanh('inf'::FLOAT)
-test/sql/types/float/nan_functions.test	118	unreliable	select atanh('-inf'::FLOAT)
-test/sql/types/float/nan_functions.test	93	unreliable	select sin('inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	98	unreliable	select sin('-inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	93	unreliable	select cos('inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	98	unreliable	select cos('-inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	93	unreliable	select tan('inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	98	unreliable	select tan('-inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	113	unreliable	select asin('inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	118	unreliable	select asin('-inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	113	unreliable	select acos('inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	118	unreliable	select acos('-inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	113	unreliable	select atanh('inf'::DOUBLE)
-test/sql/types/float/nan_functions.test	118	unreliable	select atanh('-inf'::DOUBLE)
-test/sql/types/float/nan_join.test	24	unreliable	SELECT * FROM floats JOIN (SELECT 'inf'::FLOAT) tbl(f) ON (floats.f >= tbl.f) ORDER BY 1
-test/sql/types/float/nan_join.test	30	unreliable	SELECT * FROM floats JOIN (SELECT 'inf'::FLOAT) tbl(f) ON (floats.f <= tbl.f) ORDER BY 1
-test/sql/types/float/nan_join.test	36	unreliable	SELECT * FROM floats JOIN (SELECT '-inf'::FLOAT, 'inf'::FLOAT) tbl(f,g ) ON (floats.f >= tbl.f AND floats.f <= tbl.g) ORDER BY 1
-test/sql/types/float/nan_join.test	24	unreliable	SELECT * FROM floats JOIN (SELECT 'inf'::DOUBLE) tbl(f) ON (floats.f >= tbl.f) ORDER BY 1
-test/sql/types/float/nan_join.test	30	unreliable	SELECT * FROM floats JOIN (SELECT 'inf'::DOUBLE) tbl(f) ON (floats.f <= tbl.f) ORDER BY 1
-test/sql/types/float/nan_join.test	36	unreliable	SELECT * FROM floats JOIN (SELECT '-inf'::DOUBLE, 'inf'::DOUBLE) tbl(f,g ) ON (floats.f >= tbl.f AND floats.f <= tbl.g) ORDER BY 1
 test/sql/types/float/nan_ordering.test	18	unreliable	SELECT f FROM floats ORDER BY f
 test/sql/types/float/nan_ordering.test	28	unreliable	SELECT f FROM floats ORDER BY f DESC
-test/sql/types/float/nan_ordering.test	39	unreliable	SELECT f FROM floats ORDER BY f DESC NULLS LAST LIMIT 2
-test/sql/types/float/nan_ordering.test	45	unreliable	SELECT f FROM floats ORDER BY f NULLS LAST LIMIT 2
-test/sql/types/float/nan_ordering.test	61	unreliable	SELECT f FROM floats ORDER BY f DESC NULLS LAST LIMIT 4
 test/sql/types/float/nan_ordering.test	69	unreliable	SELECT f FROM floats ORDER BY f NULLS LAST LIMIT 4
-test/sql/types/float/nan_ordering.test	78	unreliable	SELECT COUNT(*) FROM floats WHERE f > 0
-test/sql/types/float/nan_ordering.test	83	unreliable	SELECT COUNT(*) FROM floats WHERE f < 0
-test/sql/types/float/nan_window.test	14	unreliable	SELECT f, SUM(i) OVER (PARTITION BY f) FROM floats ORDER BY f
 test/sql/types/null/test_boolean_null.test	48	unreliable	SELECT\n    x,\n    x IS NULL,\n    x IS NOT NULL,\n    x IS DISTINCT FROM NULL,\n    x IS NOT DISTINCT FROM NULL,\n    NULL IS DISTINCT FROM x,\n    NULL IS NOT DISTINCT FROM x,\n    x IS DISTINCT FROM 1,\n    x IS NOT DISTINCT FROM 1\nFROM (VALUES (NULL), (1), (2)) t(x)\nORDER BY x
 test/sql/types/null/test_boolean_null.test	66	unreliable	SELECT\n    x,\n    (x + 1) IS DISTINCT FROM NULL,\n    (x + 1) IS NOT DISTINCT FROM NULL,\n    NULL IS DISTINCT FROM (x + 1),\n    NULL IS NOT DISTINCT FROM (x + 1)\nFROM (VALUES (NULL), (1), (2)) t(x)\nORDER BY x
 test/sql/types/null/test_boolean_null.test	92	unreliable	SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
