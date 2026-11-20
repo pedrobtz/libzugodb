@@ -240,6 +240,29 @@ minor version.
   reach it through a table set up with the catalog's C++ API
   (`test/unit/parquet_table.hpp`, what `read_parquet()` did), which goes
   with the reader in Stage 11.
+- **L11 (2026-11-20, Stage 3, recommended by an advisor sub-agent, as the
+  maintainer asked for open decisions).** The database file is format
+  version 1001 ([zugodb §8 and Q7][zdesign]). Its 48-byte header keeps
+  upstream's layout (magic `BDLS` on disk, version, block size, then
+  catalog offset and size, `total_blocks` and data offset, 8 bytes each),
+  except that upstream's reserved field at offset 12 holds a CRC-32 of the
+  whole file with those 4 bytes read as zero; bytes 48 to 4095 are zero
+  and the tables start at 4096. The CRC is zlib's (reflected 0xEDB88320),
+  in `include/slothdb/common/crc32.hpp`, not miniz's `mz_crc32`, which
+  leaves with the readers. `Checkpoint::ComputeChecksum` computes it over a
+  whole file image; Save stores it after reading back the `.tmp` file, and
+  Load and the fuzz harness use the same function. Opening checks, in
+  order: the file holds a header, the magic, the version (any other than
+  1001 is refused naming both, so the header stays readable before the
+  checksum and an upstream file is told by its version), the size equals
+  catalog offset plus catalog size (compared by subtraction, which also
+  refuses appended bytes), then the checksum, then the tables. Format
+  1001 is little-endian: the code copies integers in host order and
+  refuses on a big-endian host at run time, not with `#error`, so the
+  rest of the engine still builds there. The golden file
+  `test/fixtures/golden_v1001.db` is written by `tools/make_db_fixtures.sh`
+  through the shell; a layout change without a version bump fails its
+  test.
 
 ## 9. Open questions
 
