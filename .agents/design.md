@@ -280,7 +280,16 @@ minor version.
   values as text, which the loader never read back right (an INTERVAL
   could not be stored at all, a HUGEINT or UUID came back as garbage), so
   those are refused and only their NULLs load; a file that held such a
-  value already held a wrong one. Empty names, duplicate column names and
+  value already held a wrong one. Amended the same day (recommended by an
+  advisor sub-agent): SQL refuses the three types outright, in every
+  database, in-memory included, in `Binder::ResolveTypeName`, the one place
+  that made them ("HUGEINT is not supported"), so `CREATE TABLE`, `ALTER
+  TABLE ... ADD COLUMN`, `CAST`, `TRY_CAST` and `::` fail and Save can no
+  longer write a value the loader refuses; the loader's refusal stays as
+  the backstop for files written before. A doctest makes each type name
+  SQL accepts round-trip its least, greatest, zero and NULL through a
+  close and reopen, so a type accepted with no file encoding fails the
+  suite. Empty names, duplicate column names and
   any bytes in a name or string load, since SQL can make them. Each row
   group is allocated for the rows it gets, so the memory a load takes
   follows the file's size. Tables reach the catalog only after the whole

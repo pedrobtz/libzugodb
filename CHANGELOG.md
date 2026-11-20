@@ -62,7 +62,15 @@
   caps go, replaced by these bounds. Found by fuzzing the loader: a
   `TIME` of `INT64_MIN` overflowed when rendered, and a `DATE` or
   `TIMESTAMP` far from 1970 overflowed or showed the wrong year; they
-  render correctly now. `fuzz/` holds the libFuzzer harness
+  render correctly now.
+- SQL refuses the types `HUGEINT`, `INTERVAL` and `UUID`, in every
+  database, in-memory included: `CREATE TABLE`, `ALTER TABLE ... ADD
+  COLUMN`, `CAST`, `TRY_CAST` and `::` fail with "<type> is not
+  supported". None held a correct value: a `HUGEINT` or `UUID` came back
+  as a different garbage number on each run (so `WHERE h = 5` matched
+  nothing), and an `INTERVAL` could not hold any non-NULL value; and the
+  database file has no encoding for them, so a file holding one could not
+  be opened again. A file written before keeps loading their NULLs. `fuzz/` holds the libFuzzer harness
   (`-DSLOTHDB_FUZZ=ON`, clang), its seed corpus and scripts, and CI runs
   it on every pull request and weekly; zugodb does not vendor it.
 

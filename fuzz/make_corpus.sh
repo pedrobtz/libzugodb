@@ -34,11 +34,28 @@ INSERT INTO t VALUES (false, 127, 32767, 2147483647, 9223372036854775807, -3.0, 
 INSERT INTO t VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 EOF
 
-seed null_only_types <<'EOF'
-CREATE TABLE n (h HUGEINT, i INTERVAL, u UUID, x INTEGER);
-INSERT INTO n VALUES (NULL, NULL, NULL, 1);
+seed null_column <<'EOF'
 CREATE TABLE z AS SELECT NULL AS a, 2 AS b;
 EOF
+
+# Columns of HUGEINT, INTERVAL and UUID, which SQL refuses since Stage 4 but
+# a file written before may hold: only their NULLs load (design L12). SQL
+# cannot make this seed, so it is written byte by byte as Save would: one
+# table n (h HUGEINT, i INTERVAL, u UUID, x INTEGER) holding the row
+# (NULL, NULL, NULL, 1).
+python3 - "$out/null_only_types.db" <<'PY'
+import struct, sys, zlib
+def s(b): return struct.pack('<I', len(b)) + b
+cols = [(b'h', 7), (b'i', 21), (b'u', 22), (b'x', 5)]
+data = struct.pack('<I', 1) + s(b'n') + struct.pack('<I', len(cols))
+data += b''.join(s(n) + bytes([t]) for n, t in cols)
+data += struct.pack('<Q', 1) + bytes([1, 1, 1, 0]) + struct.pack('<i', 1)
+img = bytearray(4096) + data
+img[0:48] = struct.pack('<IIIIQQQQ', 0x534C4442, 1001, 262144, 0, 4096, len(data), 0, 4096)
+img[12:16] = struct.pack('<I', zlib.crc32(bytes(img)))
+open(sys.argv[1], 'wb').write(img)
+PY
+echo "$out/null_only_types.db: $(wc -c < "$out/null_only_types.db" | tr -d ' ') bytes"
 
 seed several_tables <<'EOF'
 CREATE TABLE a (x INTEGER);
