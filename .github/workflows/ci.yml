@@ -60,6 +60,54 @@ jobs:
           ZUGODB_THREAD_ROUNDS: '3'
         run: build/test/slothdb_tests
 
+  # The conformance subset (design §5, L14 to L17): DuckDB's test/sql at
+  # the tag in test/conformance/duckdb-tag, run by tools/slt at thread caps
+  # 1 and 2, one child process per file. Built with ASan and UBSan so that
+  # a memory error is a crash every time, not by chance. The counts, the
+  # failures and the thread differences must equal the committed ones in
+  # test/conformance/, in either direction: a change is committed
+  # deliberately (test/conformance/run.sh <zugodb_slt> --update).
+  conformance:
+    name: conformance (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux, os: ubuntu-24.04, flags: '-DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18' }
+          - { name: macos, os: macos-latest, flags: '' }
+    steps:
+      - uses: actions/checkout@v4
+      # As for linux-tsan: clang 18's sanitizers and the runner's mmap entropy
+      - name: Lower ASLR entropy for ASan
+        if: runner.os == 'Linux'
+        run: sudo sysctl vm.mmap_rnd_bits=28
+      - name: Cache the corpus
+        uses: actions/cache@v4
+        with:
+          path: test/conformance/corpus
+          key: duckdb-corpus-${{ hashFiles('test/conformance/duckdb-tag') }}
+      - name: Fetch the corpus
+        run: test/conformance/fetch.sh
+      - name: Configure
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DSLOTHDB_SANITIZERS=ON -DSLOTHDB_BUILD_TESTS=OFF ${{ matrix.flags }}
+      - name: Build
+        run: cmake --build build -j4 --target zugodb_slt
+      - name: Run and compare with the committed counts
+        env:
+          CONFORMANCE_OUT: conformance-out
+        run: test/conformance/run.sh build/tools/slt/zugodb_slt
+      - name: Upload this run's outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-${{ matrix.name }}
+          path: conformance-out/
+          if-no-files-found: ignore
+
   mingw:
     name: windows-mingw (UCRT64, as R's Rtools)
     runs-on: windows-latest
