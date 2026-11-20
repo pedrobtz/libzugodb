@@ -73,12 +73,18 @@ Where the weight is, which the directory names do not show:
 - `src/main/connection.cpp` (3,100 lines) does far more than dispatch:
   DDL, DML, `COPY`, table functions and several rewrites of the parsed
   statement happen here before or instead of the pipeline.
-- Table function names (`read_csv`, `read_parquet`, ...) are hard-coded in
-  the parser, the tokenizer and `connection.cpp`; there is no registry.
+- SQL reads and writes no file (design §2). The parser refuses every route
+  before anything is opened: the file table functions (`read_csv`,
+  `read_parquet`, `read_json`, ...), a path used as a table, `DESCRIBE` of
+  either, `COPY` and `CREATE LIVE VIEW` (`RefuseFileAccess` in
+  `src/parser/parser.cpp`). `connection.cpp` still holds its handlers for
+  them, no longer reached; Stage 11 removes them with the readers.
 - `src/storage/` is both the table storage (in memory, with a checkpointed
   database file) and the file readers. `parquet.cpp` and the CSV and JSON
-  readers are live. The SQLite, Excel, Avro and Arrow IPC readers are still
-  compiled but refused at the call site.
+  readers are still compiled and tested through their C++ API; doctests
+  reach the Parquet scan operator through a table set up with the catalog
+  (`test/unit/parquet_table.hpp`). The SQLite, Excel, Avro and Arrow IPC
+  readers are refused in their constructors too.
 
 ## Invariants
 

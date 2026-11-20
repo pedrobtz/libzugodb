@@ -23,6 +23,17 @@
   first exception and rethrow it on the query's thread after the join;
   the other workers stop early. `parallel.hpp` also holds a test seam,
   `ArmWorkerFault`, that costs one relaxed atomic load per worker.
+- SQL reads and writes no file: files reach the engine as Arrow C streams,
+  through zugodb. The parser refuses, before anything is opened,
+  `read_csv`, `read_csv_auto`, `read_parquet`, `read_json`,
+  `read_json_auto`, `read_ndjson` and the other file table functions of
+  DuckDB, a file path used as a table (any extension, globs), `DESCRIBE`
+  of either, `COPY` to or from a file in every format, and `CREATE LIVE
+  VIEW`, with one message: "Reading or writing files from SQL is not
+  supported". A batch that holds such a statement runs none of its
+  statements. This also closes a wrong answer: a `GROUP BY` over a Parquet
+  file written by `COPY ... TO` returned no rows. The readers stay, tested
+  through their C++ API, until 0.4.0 removes them.
 
 ## libzugodb 0.1.1
 

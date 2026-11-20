@@ -178,6 +178,19 @@ of [v0.2.0](https://github.com/pedrobtz/libzugodb/issues/2).
 - No doctest opens a data file through SQL: a grep, shown in the pull
   request.
 
+**Deviations (2026-11-20).**
+
+- `CREATE LIVE VIEW` is refused too: it watched a file and read it again
+  when it changed. Its seven doctests become two refusal checks.
+- `test/unit/execution/test_httpfs.cpp` goes: three of its four cases ran
+  only with a network and an environment variable, the fourth checked that
+  a local path was not fetched, and remote paths now meet the refusal
+  first; `test_refused.cpp` checks them.
+- The CSV and JSON scan paths in `physical_planner.cpp`, reached only by a
+  file named in SQL, are no longer tested; the readers are, through their
+  C++ API. The Parquet scan operator stays tested through a table set up
+  with the catalog (design L10), since Stage 1's worker cases need it.
+
 **Design.** [design §2](design.md#2-scope) and
 [zugodb §7.5][zdesign] (Q17).
 
