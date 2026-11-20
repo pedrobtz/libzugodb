@@ -60,7 +60,7 @@ TEST_CASE("Group keys: a NULL key is its own group, not 0's or ''s (#47)") {
     Check(conn, "SELECT s, sum(v) FROM z GROUP BY s",
           {"NULL|'1'", "''|'5'", "'NULL'|'4'", "'a|'|'5'", "'a'|'6'"});
     Check(conn, "SELECT s, min(v), avg(v) FROM z WHERE v > 0 GROUP BY s",
-          {"NULL|'1'|'1'", "''|'2'|'2.5'", "'NULL'|'4'|'4'", "'a|'|'5'|'5'", "'a'|'6'|'6'"});
+          {"NULL|'1'|'1.0'", "''|'2'|'2.5'", "'NULL'|'4'|'4.0'", "'a|'|'5'|'5.0'", "'a'|'6'|'6.0'"});
     Check(conn, "SELECT k + 0 AS g, count(*) FROM z GROUP BY g",
           {"NULL|'1'", "'0'|'2'", "'5'|'1'", "'6'|'1'", "'7'|'1'"});
     Check(conn, "SELECT k, count(*) FROM z GROUP BY k HAVING count(*) > 1", {"'0'|'2'"});

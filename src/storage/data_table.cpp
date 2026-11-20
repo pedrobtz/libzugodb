@@ -1,5 +1,4 @@
 #include "slothdb/storage/data_table.hpp"
-#include "slothdb/common/types/nan_guard.hpp"
 #include <algorithm>
 
 namespace zugodb {
@@ -9,8 +8,6 @@ DataTable::DataTable(const std::vector<LogicalType> &types)
 }
 
 void DataTable::Append(DataChunk &chunk) {
-    // No table holds a NaN (#33, design L23): the C++ API appends here too.
-    RefuseNaN(chunk);
     std::lock_guard<std::mutex> guard(lock_);
 
     idx_t offset = 0;

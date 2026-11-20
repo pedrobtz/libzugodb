@@ -169,10 +169,10 @@ TEST_CASE("Stage 8: TINYINT and SMALLINT operands of floating-point arithmetic")
     Database db;
     Connection conn(db);
     CHECK(Run(conn, "SELECT 1::TINYINT + 1::REAL, 1::TINYINT + 1::DOUBLE, 2::TINYINT * 2.5, "
-                    "1::SMALLINT + 1.5") == Rows{{"2", "2", "5", "2.5"}});
+                    "1::SMALLINT + 1.5") == Rows{{"2.0", "2.0", "5.0", "2.5"}});
     conn.Query("CREATE TABLE t(a TINYINT, b SMALLINT, d DOUBLE)");
     conn.Query("INSERT INTO t VALUES (1, 2, 0.5)");
-    CHECK(Run(conn, "SELECT a + d, b * d, a / d, b - 1.5 FROM t") == Rows{{"1.5", "1", "2", "0.5"}});
+    CHECK(Run(conn, "SELECT a + d, b * d, a / d, b - 1.5 FROM t") == Rows{{"1.5", "1.0", "2.0", "0.5"}});
 }
 
 // ---------------------------------------------------------------------------
@@ -263,56 +263,60 @@ TEST_CASE("Stage 8: division and POWER give DuckDB's infinities") {
     CHECK(Run(conn, "SELECT 7 / 2, 7 / 0, 7.5::DOUBLE / 0, -7.5::FLOAT / 0") ==
           Rows{{"3.5", "inf", "inf", "-inf"}});
     CHECK(Run(conn, "SELECT power(0.0::float8, -2.0::float8), 0.0::float8 ^ -1.0::float8, 2 ^ 3") ==
-          Rows{{"inf", "inf", "8"}});
-    // order_by_negative_zero.test
+          Rows{{"inf", "inf", "8.0"}});
+    // order_by_negative_zero.test: -0.0 is DuckDB's DECIMAL zero, which
+    // has no sign, so 1.0 / -0.0 is inf; it was -inf (#42).
     CHECK(Run(conn, "SELECT 1.0 / v FROM (VALUES (-0.0), (1.0)) t(v) ORDER BY v") ==
-          Rows{{"-inf"}, {"1"}});
+          Rows{{"inf"}, {"1.0"}});
+    CHECK(Run(conn, "SELECT 1.0 / '-0.0'::DOUBLE, CAST(-0.0 AS VARCHAR), CAST(-(0.0::DOUBLE) AS VARCHAR)") ==
+          Rows{{"-inf", "0.0", "-0.0"}});
     // nan_aggregates.test: SUM of a FLOAT infinity.
     CHECK(Run(conn, "SELECT SUM('inf'::FLOAT), SUM('-inf'::FLOAT)") == Rows{{"inf", "-inf"}});
     // test_round.test: a precision past a double's range.
     CHECK(Run(conn, "SELECT round(42.1235::DOUBLE, 1000), round(42::DOUBLE, -1000), "
                     "round(1.0::DOUBLE, (-2147483648)::INT), round(42::DOUBLE, -1)") ==
-          Rows{{"42.1235", "0", "0", "40"}});
+          Rows{{"42.1235", "0.0", "0.0", "40.0"}});
 }
 
-TEST_CASE("Stage 8: a NaN is refused wherever it would be made") {
+TEST_CASE("A NaN is made, held and compared as DuckDB's (#42; refused in 0.3.0)") {
     Database db;
     Connection conn(db);
-    const char *queries[] = {
-        // nan_cast.test, nan_functions.test, nan_minmax_order.test
-        "SELECT 'nan'::FLOAT::tinyint",
-        "SELECT TRY_CAST('nan' AS DOUBLE)",
-        "SELECT sign('nan'::FLOAT)",
-        "SELECT MIN(f), MAX(f) FROM (VALUES ('nan'::FLOAT), (1::FLOAT), (2::FLOAT)) t(f)",
-        "SELECT SUM('nan'::FLOAT)",
-        // test_stddev.test: DuckDB's answer is a NaN.
-        "select stddev(a) from (values (1.0/0.0), (2.0)) tbl(a)",
-        "select var_pop(a) from (values (1.0/0.0), (2.0)) tbl(a)",
-        "SELECT SUM(x) FROM (VALUES ('inf'::DOUBLE), ('-inf'::DOUBLE)) t(x)",
-        "SELECT 'inf'::DOUBLE - 'inf'::DOUBLE",
-        "SELECT 0.0 / 0.0",
-        "SELECT sqrt(-1)",
-    };
-    for (auto *q : queries) {
+    // nan_cast.test, nan_functions.test, nan_minmax_order.test,
+    // test_stddev.test: each of these was refused (design L23).
+    CHECK_THROWS(conn.Query("SELECT 'nan'::FLOAT::tinyint"));  // DuckDB's error too
+    CHECK(Run(conn, "SELECT TRY_CAST('nan' AS DOUBLE), sign('nan'::FLOAT), SUM('nan'::FLOAT)") ==
+          Rows{{"nan", "0", "nan"}});
+    CHECK(Run(conn, "SELECT MIN(f), MAX(f) FROM (VALUES ('nan'::FLOAT), (1::FLOAT), (2::FLOAT)) t(f)") ==
+          Rows{{"1.0", "nan"}});
+    // A computed NaN's sign is the hardware's: -nan on x86-64, nan on arm64,
+    // as DuckDB's.
+    auto nan_text = [](const std::string &s) { return s == "nan" || s == "-nan"; };
+    auto sv = Run(conn, "select stddev(a), var_pop(a) from (values (1.0/0.0), (2.0)) tbl(a)");
+    CHECK(nan_text(sv[0][0]));
+    CHECK(nan_text(sv[0][1]));
+    auto r = Run(conn, "SELECT SUM(x) FROM (VALUES ('inf'::DOUBLE), ('-inf'::DOUBLE)) t(x)");
+    CHECK(nan_text(r[0][0]));
+    for (auto *q : {"SELECT 'inf'::DOUBLE - 'inf'::DOUBLE", "SELECT 0.0 / 0.0", "SELECT sqrt(-1)"}) {
         CAPTURE(q);
-        CHECK_THROWS(conn.Query(q));
+        CHECK(nan_text(Run(conn, q)[0][0]));
     }
-    // No table holds one, through SQL or the C++ API.
+    // Held by a table through SQL and the C++ API, and above +inf.
     conn.Query("CREATE TABLE t(d DOUBLE)");
-    CHECK_THROWS(conn.Query("INSERT INTO t VALUES ('nan')"));
+    conn.Query("INSERT INTO t VALUES ('nan')");
     DataChunk chunk;
     chunk.Initialize({LogicalType::DOUBLE()});
     chunk.SetValue(0, 0, Value::DOUBLE(std::nan("")));
     chunk.SetCardinality(1);
-    CHECK_THROWS(conn.Append("t", chunk));
-    CHECK(Run(conn, "SELECT count(*) FROM t") == Rows{{"0"}});
+    conn.Append("t", chunk);
     conn.Query("INSERT INTO t VALUES ('inf'), (1)");
-    CHECK(Run(conn, "SELECT d FROM t ORDER BY d DESC") == Rows{{"inf"}, {"1"}});
+    CHECK(Run(conn, "SELECT d FROM t ORDER BY d DESC") == Rows{{"nan"}, {"nan"}, {"inf"}, {"1.0"}});
+    CHECK(Run(conn, "SELECT d, count(*) FROM t GROUP BY d ORDER BY d") ==
+          Rows{{"1.0", "1"}, {"inf", "1"}, {"nan", "2"}});
 }
 
 // Logarithms and EXP outside their finite range give DuckDB v2.0.0's IEEE
 // values (types/float/ieee_floating_points.test); they gave NULL, found
-// with #43. A NaN is refused (L23).
+// with #43. A negative argument gives a NaN (#42; refused by L23).
 TEST_CASE("Logarithms of 0 are -inf and EXP past a double is inf, as DuckDB's") {
     Database db;
     Connection conn(db);
@@ -325,7 +329,8 @@ TEST_CASE("Logarithms of 0 are -inf and EXP past a double is inf, as DuckDB's") 
     CHECK(std::isinf(r.GetValue(0, 5).GetValue<double>()));
     CHECK(r.GetValue(0, 5).GetValue<double>() > 0);
     CHECK(std::isinf(r.GetValue(0, 6).GetValue<double>()));
-    CHECK_THROWS(conn.Query("SELECT ln(-1)"));
-    CHECK_THROWS(conn.Query("SELECT log(-2, 8)"));
-    CHECK_THROWS(conn.Query("SELECT sqrt(-1::FLOAT)"));
+    for (auto *q : {"SELECT ln(-1)", "SELECT log(-2, 8)", "SELECT sqrt(-1::FLOAT)"}) {
+        CAPTURE(q);
+        CHECK(std::isnan(conn.Query(q).GetValue(0, 0).GetValue<double>()));
+    }
 }

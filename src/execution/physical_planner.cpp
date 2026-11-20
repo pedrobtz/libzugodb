@@ -11,6 +11,7 @@
 #include "slothdb/execution/literal_emit_filter.hpp"
 #include "slothdb/execution/count_group_agg.hpp"
 #include "slothdb/execution/group_key.hpp"
+#include "slothdb/common/types/float_order.hpp"
 #include <algorithm>
 #include <cmath>
 #include <chrono>
@@ -929,7 +930,8 @@ private:
             if (a.is_null && b.is_null) return false;
             if (a.is_null) return !ascending; // ASC: a is top, not < b
             if (b.is_null) return ascending;
-            return ascending ? a.key < b.key : a.key > b.key;
+            // DuckDB's order: NaN above +inf (#42).
+            return ascending ? SqlLess(a.key, b.key) : SqlGreater(a.key, b.key);
         };
 
         // Sequential path.
@@ -968,7 +970,7 @@ private:
                     }
                     pq.push(std::move(e));
                 } else {
-                    bool wins = ascending ? (key < pq.top().key) : (key > pq.top().key);
+                    bool wins = ascending ? SqlLess(key, pq.top().key) : SqlGreater(key, pq.top().key);
                     if (!wins) continue;
                     HeapEntry e; e.key = key;
                     e.row.reserve(chunk.ColumnCount());
@@ -1663,7 +1665,7 @@ public:
                                 else if (otid == LogicalTypeId::INTEGER)
                                     same = input_.GetInt32(rank_prev_, order_col) == input_.GetInt32(row, order_col);
                                 else if (otid == LogicalTypeId::DOUBLE)
-                                    same = input_.GetDouble(rank_prev_, order_col) == input_.GetDouble(row, order_col);
+                                    same = SqlEq(input_.GetDouble(rank_prev_, order_col), input_.GetDouble(row, order_col));
                                 else
                                     same = input_.Get(rank_prev_, order_col) == input_.Get(row, order_col);
                             }
@@ -2107,19 +2109,19 @@ private:
                 bool asc = sort_asc_;
                 auto *keys = sort_i32_.data();
                 do_sort([keys, asc](idx_t a, idx_t b) {
-                    return asc ? (keys[a] < keys[b]) : (keys[a] > keys[b]);
+                    return asc ? SqlLess(keys[a], keys[b]) : SqlGreater(keys[a], keys[b]);
                 });
             } else if (sort_tid_ == LogicalTypeId::BIGINT) {
                 bool asc = sort_asc_;
                 auto *keys = sort_i64_.data();
                 do_sort([keys, asc](idx_t a, idx_t b) {
-                    return asc ? (keys[a] < keys[b]) : (keys[a] > keys[b]);
+                    return asc ? SqlLess(keys[a], keys[b]) : SqlGreater(keys[a], keys[b]);
                 });
             } else if (sort_tid_ == LogicalTypeId::DOUBLE) {
                 bool asc = sort_asc_;
                 auto *keys = sort_d_.data();
                 do_sort([keys, asc](idx_t a, idx_t b) {
-                    return asc ? (keys[a] < keys[b]) : (keys[a] > keys[b]);
+                    return asc ? SqlLess(keys[a], keys[b]) : SqlGreater(keys[a], keys[b]);
                 });
             } else if (sort_tid_ == LogicalTypeId::VARCHAR) {
                 bool asc = sort_asc_;
@@ -2276,8 +2278,10 @@ private:
             for (idx_t k = 0; k < ps; k++) { idx_t idx = indices[k]; if (!input_.IsNull(idx, info.arg_col)) {
                 double d = input_.GetDouble(idx, info.arg_col);
                 count++; sum += d;
+                // NaN is the largest, and the last of equal values wins,
+                // as DuckDB's MIN and MAX (#42).
                 if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
+                else { if (MinReplaces(min_d, d)) min_d = d; if (MaxReplaces(max_d, d)) max_d = d; }
             } }
         } else {
             Value min_v, max_v;
@@ -2293,8 +2297,9 @@ private:
                     else if (tid == LogicalTypeId::DOUBLE) d = v.GetValue<double>();
                     else if (tid == LogicalTypeId::FLOAT) d = v.GetValue<float>();
                     sum += d;
-                    if (!has_mm || v < min_v) min_v = v;
-                    if (!has_mm || v > max_v) max_v = v;
+                    // The last of equal values wins, as DuckDB's (#42).
+                    if (!has_mm || !(min_v < v)) min_v = v;
+                    if (!has_mm || !(v < max_v)) max_v = v;
                     has_mm = true;
                 }
             }
@@ -2412,7 +2417,7 @@ private:
         case LogicalTypeId::BIGINT:
             return input_.GetInt64(a, info.rank_order_col) == input_.GetInt64(b, info.rank_order_col);
         case LogicalTypeId::DOUBLE:
-            return input_.GetDouble(a, info.rank_order_col) == input_.GetDouble(b, info.rank_order_col);
+            return SqlEq(input_.GetDouble(a, info.rank_order_col), input_.GetDouble(b, info.rank_order_col));
         case LogicalTypeId::VARCHAR: {
             auto &sa = input_.GetStr(a, info.rank_order_col);
             auto &sb = input_.GetStr(b, info.rank_order_col);
@@ -2633,19 +2638,19 @@ private:
                 int32_t bk = input_.GetInt32(best, col);
                 for (idx_t j = 1; j < idxs.size(); j++) {
                     int32_t v = input_.GetInt32(idxs[j], col);
-                    if ((asc && v < bk) || (!asc && v > bk)) { bk = v; best = idxs[j]; }
+                    if ((asc && SqlLess(v, bk)) || (!asc && SqlGreater(v, bk))) { bk = v; best = idxs[j]; }
                 }
             } else if (tid == LogicalTypeId::BIGINT) {
                 int64_t bk = input_.GetInt64(best, col);
                 for (idx_t j = 1; j < idxs.size(); j++) {
                     int64_t v = input_.GetInt64(idxs[j], col);
-                    if ((asc && v < bk) || (!asc && v > bk)) { bk = v; best = idxs[j]; }
+                    if ((asc && SqlLess(v, bk)) || (!asc && SqlGreater(v, bk))) { bk = v; best = idxs[j]; }
                 }
             } else if (tid == LogicalTypeId::DOUBLE) {
                 double bk = input_.GetDouble(best, col);
                 for (idx_t j = 1; j < idxs.size(); j++) {
                     double v = input_.GetDouble(idxs[j], col);
-                    if ((asc && v < bk) || (!asc && v > bk)) { bk = v; best = idxs[j]; }
+                    if ((asc && SqlLess(v, bk)) || (!asc && SqlGreater(v, bk))) { bk = v; best = idxs[j]; }
                 }
             } else if (tid == LogicalTypeId::VARCHAR) {
                 auto bs = input_.GetStr(best, col);
@@ -2918,7 +2923,7 @@ private:
                             if (na || nb) return !na && nb;
                             auto va = input.GetInt32(a, col);
                             auto vb = input.GetInt32(b, col);
-                            return asc ? (va < vb) : (va > vb);
+                            return asc ? SqlLess(va, vb) : SqlGreater(va, vb);
                         });
                     }
                     return;
@@ -2933,7 +2938,7 @@ private:
                             if (na || nb) return !na && nb;
                             auto va = input.GetInt64(a, col);
                             auto vb = input.GetInt64(b, col);
-                            return asc ? (va < vb) : (va > vb);
+                            return asc ? SqlLess(va, vb) : SqlGreater(va, vb);
                         });
                     }
                     return;
@@ -2948,7 +2953,7 @@ private:
                             if (na || nb) return !na && nb;
                             auto va = input.GetDouble(a, col);
                             auto vb = input.GetDouble(b, col);
-                            return asc ? (va < vb) : (va > vb);
+                            return asc ? SqlLess(va, vb) : SqlGreater(va, vb);
                         });
                     }
                     return;
@@ -3005,7 +3010,7 @@ private:
             case LogicalTypeId::BIGINT:
                 return input.GetInt64(a, rank_order_col) == input.GetInt64(b, rank_order_col);
             case LogicalTypeId::DOUBLE:
-                return input.GetDouble(a, rank_order_col) == input.GetDouble(b, rank_order_col);
+                return SqlEq(input.GetDouble(a, rank_order_col), input.GetDouble(b, rank_order_col));
             case LogicalTypeId::VARCHAR: {
                 auto &sa = input.GetStr(a, rank_order_col);
                 auto &sb = input.GetStr(b, rank_order_col);
@@ -3390,6 +3395,22 @@ private:
         }
     }
 
+    // Whether `val` replaces the MIN (MAX) state. A FLOAT or DOUBLE in
+    // DuckDB's order, NaN the largest and the last of equal values winning
+    // (min over 0.0 then -0.0 is -0.0), as DuckDB's MIN and MAX (#42); any
+    // other type, read as a double, as before.
+    static bool IsFloating(LogicalTypeId t) {
+        return t == LogicalTypeId::FLOAT || t == LogicalTypeId::DOUBLE;
+    }
+    static bool IsFloating(const Vector &v) { return IsFloating(v.GetType().id()); }
+    static bool IsFloating(const Value &v) { return IsFloating(v.type().id()); }
+    static bool MinWins(const AggState &s, double val, bool floating) {
+        return !s.has_min || (floating ? MinReplaces(s.sum_min, val) : val < s.sum_min);
+    }
+    static bool MaxWins(const AggState &s, double val, bool floating) {
+        return !s.has_max || (floating ? MaxReplaces(s.sum_max, val) : val > s.sum_max);
+    }
+
     // Fast path: build a group key string from vector data directly, one
     // tagged part per column (group_key.hpp); "NULL|" and '|'-joined text
     // made a NULL and the text 'NULL', and ('a|', 'b') and ('a', '|b'), one
@@ -3669,8 +3690,11 @@ private:
                             states_ptr = &str_cache_states.back();
                         }
                     } else {
-                        // Fallback to string key for other types.
-                        std::string k = chunk.GetValue(group_col, i).ToString();
+                        // The group key of any other type (group_key.hpp):
+                        // its text kept "nan" from "-nan" and "-0.0" from
+                        // "0.0" (#42).
+                        std::string k;
+                        AppendKeyVector(k, gvec, i);
                         auto it = str_groups.find(k);
                         if (it == str_groups.end()) {
                             str_order.push_back(k);
@@ -3697,12 +3721,12 @@ private:
                                         state.count++;
                                         state.sum += val;
                                     } else if (info.name == "MIN") {
-                                        if (!state.has_min || val < state.sum_min) {
+                                        if (MinWins(state, val, IsFloating(vec))) {
                                             state.sum_min = val; state.has_min = true;
                                             state.min_val() = chunk.GetValue(info.col_idx, i);
                                         }
                                     } else if (info.name == "MAX") {
-                                        if (!state.has_max || val > state.sum_max) {
+                                        if (MaxWins(state, val, IsFloating(vec))) {
                                             state.sum_max = val; state.has_max = true;
                                             state.max_val() = chunk.GetValue(info.col_idx, i);
                                         }
@@ -3832,12 +3856,12 @@ private:
                                     } else {
                                         double val = ReadDouble(vec, i);
                                         if (info.name == "MIN") {
-                                            if (!state.has_min || val < state.sum_min) {
+                                            if (MinWins(state, val, IsFloating(vec))) {
                                                 state.sum_min = val; state.has_min = true;
                                                 state.min_val() = chunk.GetValue(info.col_idx, i);
                                             }
                                         } else {
-                                            if (!state.has_max || val > state.sum_max) {
+                                            if (MaxWins(state, val, IsFloating(vec))) {
                                                 state.sum_max = val; state.has_max = true;
                                                 state.max_val() = chunk.GetValue(info.col_idx, i);
                                             }
@@ -3864,8 +3888,10 @@ private:
             for (idx_t a = 0; a < num_aggs && count_only; a++)
                 if (!agg_infos[a].is_count_star) count_only = false;
             // Every group column must be a type the binary key encoder
-            // supports (the integral family, float/double, date/time/
-            // timestamp, varchar/blob).
+            // supports (the integral family, date/time/timestamp,
+            // varchar/blob). Not FLOAT or DOUBLE: their raw bytes kept
+            // -0.0 from 0.0 and one NaN from another, and the key's bytes,
+            // not the first row's, were the value shown (#42).
             const auto &ct = children[0]->GetTypes();
             for (idx_t gc : group_col_indices) {
                 if (gc >= ct.size()) { count_only = false; break; }
@@ -3876,7 +3902,6 @@ private:
                 case LogicalTypeId::INTEGER:  case LogicalTypeId::UINTEGER:
                 case LogicalTypeId::BIGINT:   case LogicalTypeId::UBIGINT:
                 case LogicalTypeId::HUGEINT:
-                case LogicalTypeId::FLOAT:    case LogicalTypeId::DOUBLE:
                 case LogicalTypeId::DATE:     case LogicalTypeId::TIME:
                 case LogicalTypeId::TIMESTAMP:
                 case LogicalTypeId::TIMESTAMP_TZ:
@@ -3942,8 +3967,11 @@ private:
                         } else if (info.col_idx != INVALID_INDEX &&
                                    chunk.GetVector(info.col_idx).GetValidity().RowIsValid(i)) {
                             if (info.is_distinct) {
-                                auto v = chunk.GetValue(info.col_idx, i);
-                                if (state.extras().distinct_set.insert(v.ToString()).second)
+                                // The group key's encoding: every NaN one
+                                // value, -0.0 and 0.0 one (#42).
+                                std::string dk;
+                                AppendKeyVector(dk, chunk.GetVector(info.col_idx), i);
+                                if (state.extras().distinct_set.insert(std::move(dk)).second)
                                     state.count++;
                             } else {
                                 state.count++;
@@ -3963,7 +3991,9 @@ private:
                                 Value arg_val = res.GetValue(0);
                                 if (!arg_val.IsNull()) {
                                     if (info.is_distinct) {
-                                        if (state.extras().distinct_set.insert(arg_val.ToString()).second)
+                                        std::string dk;
+                                        AppendKeyValue(dk, arg_val);
+                                        if (state.extras().distinct_set.insert(std::move(dk)).second)
                                             state.count++;
                                     } else {
                                         state.count++;
@@ -4011,13 +4041,13 @@ private:
                                         state.count++;
                                         state.sum += val;
                                     } else if (info.name == "MIN") {
-                                        if (!state.has_min || val < state.sum_min) {
+                                        if (MinWins(state, val, IsFloating(arg_val))) {
                                             state.sum_min = val;
                                             state.has_min = true;
                                             state.min_val() = arg_val;
                                         }
                                     } else if (info.name == "MAX") {
-                                        if (!state.has_max || val > state.sum_max) {
+                                        if (MaxWins(state, val, IsFloating(arg_val))) {
                                             state.sum_max = val;
                                             state.has_max = true;
                                             state.max_val() = arg_val;
@@ -4074,7 +4104,7 @@ private:
                                         state.min_val() = cv;
                                         state.has_min = true;
                                     }
-                                } else if (!state.has_min || val < state.sum_min) {
+                                } else if (MinWins(state, val, IsFloating(vec))) {
                                     state.sum_min = val;
                                     state.has_min = true;
                                     state.min_val() = chunk.GetValue(info.col_idx, i);
@@ -4086,7 +4116,7 @@ private:
                                         state.max_val() = cv;
                                         state.has_max = true;
                                     }
-                                } else if (!state.has_max || val > state.sum_max) {
+                                } else if (MaxWins(state, val, IsFloating(vec))) {
                                     state.sum_max = val;
                                     state.has_max = true;
                                     state.max_val() = chunk.GetValue(info.col_idx, i);
@@ -4181,6 +4211,8 @@ private:
             emit_descs[a].return_type_id = agg_expr.GetReturnType().id();
             emit_descs[a].sum_with_offset = agg_infos[a].sum_with_offset;
             emit_descs[a].sum_offset = agg_infos[a].sum_offset;
+            emit_descs[a].arg_float = !agg_expr.arguments.empty() &&
+                agg_expr.arguments[0]->GetReturnType().id() == LogicalTypeId::FLOAT;
         }
 
         auto build_view = [](const AggState &state, EmitAggView &view) {
@@ -4480,7 +4512,7 @@ public:
                         auto &s = reinterpret_cast<const string_t *>(key_vec.GetData())[current_probe_row_];
                         key.assign(s.GetData(), s.GetSize());
                     } else {
-                        key = probe_chunk_.GetValue(probe_join_col_, current_probe_row_).ToString();
+                        key = JoinKey(probe_chunk_.GetValue(probe_join_col_, current_probe_row_));
                     }
                     auto it = hash_table_.find(key);
                     if (it != hash_table_.end()) match_list = &it->second;
@@ -4560,6 +4592,15 @@ public:
     const std::vector<std::vector<Value>> &FuseBuildRows() const { return build_rows_; }
     const std::unordered_map<std::string, std::vector<idx_t>> &FuseHashTable() const { return hash_table_; }
     bool FuseUseI64Hash() const { return use_i64_hash_; }
+    // The key of a value in hash_table_ (float_keys_).
+    std::string JoinKey(const Value &v) const {
+        // A NULL matches nothing: no build key is one byte long.
+        if (v.IsNull()) return std::string(1, '\0');
+        if (!float_keys_) return v.ToString();
+        std::string key;
+        AppendKeyRaw(key, CanonicalKey(v.GetValue<double>()));
+        return key;
+    }
     const std::unordered_map<int64_t, std::vector<idx_t>> &FuseHashTableI64() const { return hash_table_i64_; }
     const std::vector<int64_t> &FuseBuildKeyCacheI64() const { return build_key_cache_i64_; }
     bool FuseUseLinearCache() const { return use_linear_cache_; }
@@ -4820,6 +4861,13 @@ private:
             probe_key_type_ = probe_child_->GetTypes()[probe_join_col_].id();
         }
         use_i64_hash_ = is_int_tid(build_key_type) && is_int_tid(probe_key_type_);
+        auto is_float_tid = [](LogicalTypeId t) {
+            return t == LogicalTypeId::FLOAT || t == LogicalTypeId::DOUBLE;
+        };
+        auto is_num_tid = [&](LogicalTypeId t) { return is_int_tid(t) || is_float_tid(t); };
+        float_keys_ = (is_float_tid(build_key_type) || is_float_tid(probe_key_type_)) &&
+                      (build_key_type == LogicalTypeId::INVALID || is_num_tid(build_key_type)) &&
+                      is_num_tid(probe_key_type_);
 
         if (nested_loop_) {
             use_i64_hash_ = false;
@@ -4855,7 +4903,7 @@ private:
                 // NULL never matches in an equi-join (`ToString` of NULL is
                 // "NULL", which would match the string 'NULL').
                 if (build_rows_[i][build_join_col].IsNull()) continue;
-                auto key = build_rows_[i][build_join_col].ToString();
+                auto key = JoinKey(build_rows_[i][build_join_col]);
                 hash_table_[key].push_back(i);
             }
         }
@@ -4931,6 +4979,11 @@ private:
     std::unordered_map<int64_t, std::vector<idx_t>> hash_table_i64_;
     bool use_i64_hash_ = false;
     LogicalTypeId probe_key_type_ = LogicalTypeId::INVALID;
+    // A FLOAT or DOUBLE key on either side: keys are the value as a double
+    // in canonical bits (JoinKey), so every NaN joins every NaN and -0.0
+    // joins 0.0, as DuckDB's (#42). Their text kept "nan" from "-nan" and
+    // "-0.0" from "0.0", and 1 from 1.0.
+    bool float_keys_ = false;
     // Linear cache for low-cardinality probes - avoids map/string hash overhead.
     bool use_linear_cache_ = false;
     std::vector<std::string> build_key_cache_;
@@ -5012,11 +5065,20 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
     const std::vector<idx_t> &group_col_indices) {
     if (!hj->FuseIsInner()) return false;
     idx_t num_aggs = agg_infos.size();
+    const auto &join_types = hj->GetTypes();
     for (auto &info : agg_infos) {
         if (info.name == "COUNT" && info.is_count_star) continue;
-        if ((info.name == "COUNT" || info.name == "SUM" || info.name == "AVG" ||
+        if (info.name == "COUNT" && info.col_idx != INVALID_INDEX && !info.is_distinct) continue;
+        // SUM, AVG, MIN and MAX of an INTEGER or a BIGINT only. A FLOAT,
+        // SMALLINT or TINYINT argument on the probe side was read as 0,
+        // and a DOUBLE's MIN and MAX were IEEE's; the generic path below
+        // computes them, NaN as DuckDB orders it (#42).
+        if ((info.name == "SUM" || info.name == "AVG" ||
              info.name == "MIN" || info.name == "MAX") &&
-            info.col_idx != INVALID_INDEX && !info.is_distinct) continue;
+            info.col_idx != INVALID_INDEX && !info.is_distinct &&
+            info.col_idx < join_types.size() &&
+            (join_types[info.col_idx].id() == LogicalTypeId::INTEGER ||
+             join_types[info.col_idx].id() == LogicalTypeId::BIGINT)) continue;
         return false;
     }
 
@@ -5182,7 +5244,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
                     auto &s = reinterpret_cast<const string_t *>(key_vec.GetData())[i];
                     key_s.assign(s.GetData(), s.GetSize());
                 } else {
-                    key_s = pchunk.GetValue(probe_join_col, i).ToString();
+                    key_s = hj->JoinKey(pchunk.GetValue(probe_join_col, i));
                 }
                 auto it = hash_tab.find(key_s);
                 if (it != hash_tab.end()) match_list = &it->second;

@@ -370,18 +370,12 @@ Value ReadValue(BoundedReader &in, const LogicalType &type) {
     case LogicalTypeId::TIMESTAMP:
     case LogicalTypeId::TIME:
         return Value::BIGINT(in.Get<int64_t>("a BIGINT, TIMESTAMP or TIME value"));
-    // The engine holds no NaN (#33, design L23); a file written before
-    // 0.3.0 may, and is refused rather than read into wrong answers.
-    case LogicalTypeId::FLOAT: {
-        auto f = in.Get<float>("a FLOAT value");
-        if (std::isnan(f)) Damaged("FLOAT value" + At(at) + " is NaN, which this engine does not hold");
-        return Value::FLOAT(f);
-    }
-    case LogicalTypeId::DOUBLE: {
-        auto d = in.Get<double>("a DOUBLE value");
-        if (std::isnan(d)) Damaged("DOUBLE value" + At(at) + " is NaN, which this engine does not hold");
-        return Value::DOUBLE(d);
-    }
+    // Any bits are a value: a NaN, of either sign and any payload, is
+    // held as DuckDB holds it (#42; 0.3.0 refused it, design L23).
+    case LogicalTypeId::FLOAT:
+        return Value::FLOAT(in.Get<float>("a FLOAT value"));
+    case LogicalTypeId::DOUBLE:
+        return Value::DOUBLE(in.Get<double>("a DOUBLE value"));
     case LogicalTypeId::VARCHAR:
     case LogicalTypeId::BLOB:
         return Value::VARCHAR(in.String("a VARCHAR or BLOB value"));

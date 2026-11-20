@@ -1470,6 +1470,43 @@ static bool IntegerLiteralValue(const ParsedExpression &e, int64_t &out) {
     return false;
 }
 
+// A decimal literal, `2.5` or `-2.5` (not `25e-1`, a DOUBLE in DuckDB):
+// DuckDB types it DECIMAL, the engine DOUBLE.
+static bool IsDecimalLiteral(const ParsedExpression &e) {
+    const ParsedExpression *x = &e;
+    while (x->GetExpressionType() == ExpressionType::UNARY_MINUS) {
+        x = static_cast<const UnaryMinusExpression *>(x)->child.get();
+    }
+    if (x->GetExpressionType() != ExpressionType::CONSTANT) return false;
+    auto &c = static_cast<const ConstantExpression &>(*x);
+    return !c.is_null && c.literal_type == TokenType::FLOAT_LITERAL &&
+           c.value.find_first_of("eE") == std::string::npos;
+}
+
+// Whether DuckDB types the operand `p`, bound as `b`, FLOAT or DOUBLE,
+// rather than DECIMAL or an integer. The engine's DOUBLE operand is a
+// DuckDB DECIMAL when it is a decimal literal, or arithmetic other than
+// `/` of such operands; any other DOUBLE (a column, a cast, a function, an
+// exponent literal) is DuckDB's DOUBLE too (#42).
+static bool DuckDBFloating(const ParsedExpression &p, const BoundExpression &b) {
+    auto id = b.GetReturnType().id();
+    if (id != LogicalTypeId::FLOAT && id != LogicalTypeId::DOUBLE) return false;
+    if (IsDecimalLiteral(p)) return false;
+    if (p.GetExpressionType() == ExpressionType::UNARY_MINUS &&
+        b.GetExpressionType() == BoundExpressionType::UNARY_MINUS) {
+        return DuckDBFloating(*static_cast<const UnaryMinusExpression &>(p).child,
+                              *static_cast<const BoundUnaryMinus &>(b).child);
+    }
+    if (p.GetExpressionType() == ExpressionType::ARITHMETIC &&
+        b.GetExpressionType() == BoundExpressionType::ARITHMETIC) {
+        auto &pa = static_cast<const ArithmeticExpression &>(p);
+        auto &ba = static_cast<const BoundArithmetic &>(b);
+        if (pa.op == "/") return true;
+        return DuckDBFloating(*pa.left, *ba.left) || DuckDBFloating(*pa.right, *ba.right);
+    }
+    return true;
+}
+
 static int IntegerRank(LogicalTypeId t) {
     switch (t) {
     case LogicalTypeId::TINYINT: return 1;
@@ -1626,8 +1663,14 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
         result_type.id() != LogicalTypeId::FLOAT) {
         result_type = LogicalType::DOUBLE();
     }
-    return std::make_unique<BoundArithmetic>(expr.op, std::move(left), std::move(right),
-                                             result_type);
+    bool decimal_mod = expr.op == "%" &&
+                       (result_type.id() == LogicalTypeId::DOUBLE ||
+                        result_type.id() == LogicalTypeId::FLOAT) &&
+                       !DuckDBFloating(*expr.left, *left) && !DuckDBFloating(*expr.right, *right);
+    auto bound = std::make_unique<BoundArithmetic>(expr.op, std::move(left), std::move(right),
+                                                   result_type);
+    bound->decimal_mod = decimal_mod;
+    return bound;
 }
 
 BoundExprPtr Binder::BindUnaryMinus(const UnaryMinusExpression &expr, BindContext &context) {
@@ -1641,6 +1684,15 @@ BoundExprPtr Binder::BindUnaryMinus(const UnaryMinusExpression &expr, BindContex
         return std::make_unique<BoundConstant>(Value::BIGINT(lit));
     }
     auto child = BindExpression(*expr.child, context);
+    // `-0.0` is DuckDB's DECIMAL zero, which has no sign: 1.0 / -0.0 is
+    // inf there. As a DOUBLE it was -0.0 (#42).
+    if (IsDecimalLiteral(expr) && child->GetExpressionType() == BoundExpressionType::CONSTANT) {
+        auto &v = static_cast<const BoundConstant &>(*child).value;
+        if (!v.IsNull() && v.type().id() == LogicalTypeId::DOUBLE) {
+            double d = -v.GetValue<double>();
+            return std::make_unique<BoundConstant>(Value::DOUBLE(d == 0.0 ? 0.0 : d));
+        }
+    }
     return std::make_unique<BoundUnaryMinus>(std::move(child));
 }
 
@@ -2134,6 +2186,26 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         return_type = LogicalType::BIGINT();
     } else if (name == "ABS") {
         return_type = args.empty() ? LogicalType::INTEGER() : args[0]->GetReturnType();
+    } else if ((name == "ROUND" || name == "TRUNC") && !args.empty() &&
+               IntegerRank(args[0]->GetReturnType().id()) > 0) {
+        // DuckDB's ROUND and TRUNC of an integer keep its type (typeof
+        // round(7::TINYINT, -1) is TINYINT); they were DOUBLEs, whose text
+        // is "7.0" since #42.
+        return_type = args[0]->GetReturnType();
+    } else if (name == "MOD" && args.size() == 2 && expr.arguments.size() == 2 &&
+               IntegerRank(args[0]->GetReturnType().id()) > 0 &&
+               IntegerRank(args[1]->GetReturnType().id()) > 0) {
+        // MOD of integers is DuckDB's `%`: the operands' integer type
+        // (mod(42, 5) is an INTEGER, mod(42::TINYINT, 5) a TINYINT) and
+        // "Division by zero" for 0. It was a DOUBLE (#42).
+        int64_t lit = 0;
+        bool left_lit = IntegerLiteralValue(*expr.arguments[0], lit);
+        int64_t rlit = 0;
+        bool right_lit = IntegerLiteralValue(*expr.arguments[1], rlit);
+        if (left_lit && !right_lit) NarrowIntegerLiteral(args[0], lit, args[1]->GetReturnType());
+        else if (right_lit && !left_lit) NarrowIntegerLiteral(args[1], rlit, args[0]->GetReturnType());
+        auto type = ResolveArithmeticType(args[0]->GetReturnType(), args[1]->GetReturnType());
+        return std::make_unique<BoundArithmetic>("%", std::move(args[0]), std::move(args[1]), type);
     } else if (name == "CEIL" || name == "CEILING" || name == "FLOOR" ||
                name == "ROUND" || name == "SQRT" || name == "CBRT" ||
                name == "POWER" || name == "POW" || name == "MOD") {
@@ -2438,6 +2510,10 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
     // LENGTH counts code points through the host's UTF-8 table when it has
     // one (Stage 11.1, design L29).
     if (name == "LENGTH" && providers) bound_fn->utf8 = providers->Utf8();
+    if (name == "MOD" && bound_fn->arguments.size() == 2 && expr.arguments.size() == 2) {
+        bound_fn->decimal_mod = !DuckDBFloating(*expr.arguments[0], *bound_fn->arguments[0]) &&
+                                !DuckDBFloating(*expr.arguments[1], *bound_fn->arguments[1]);
+    }
     return bound_fn;
 }
 
@@ -2831,8 +2907,11 @@ LogicalType Binder::ResolveArithmeticType(const LogicalType &left, const Logical
     // Simple numeric promotion rules.
     if (left.id() == LogicalTypeId::DOUBLE || right.id() == LogicalTypeId::DOUBLE)
         return LogicalType::DOUBLE();
+    // FLOAT with a FLOAT, an integer or NULL is FLOAT arithmetic, as
+    // DuckDB's ('-2'::FLOAT / '1.5'::FLOAT is -1.3333334); it was DOUBLE
+    // arithmetic, whose digits DuckDB does not give (#42).
     if (left.id() == LogicalTypeId::FLOAT || right.id() == LogicalTypeId::FLOAT)
-        return LogicalType::DOUBLE();
+        return LogicalType(LogicalTypeId::FLOAT);
     if (left.id() == LogicalTypeId::BIGINT || right.id() == LogicalTypeId::BIGINT)
         return LogicalType::BIGINT();
     if (left.id() == LogicalTypeId::INTEGER || right.id() == LogicalTypeId::INTEGER)

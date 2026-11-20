@@ -8,11 +8,12 @@
 #include "slothdb/common/string_util.hpp"
 #include "slothdb/common/types/string_type.hpp"
 #include "slothdb/common/types/blob.hpp"
-#include "slothdb/common/types/nan_guard.hpp"
+#include "slothdb/common/types/float_order.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <limits>
@@ -20,6 +21,25 @@
 #include <random>
 
 namespace zugodb {
+
+// Text to a FLOAT or DOUBLE as DuckDB reads it (#42): spaces, tabs and
+// line ends around the number, `nan`, `-nan`, `nan(...)`, `inf` and
+// `infinity` in any case, no hexadecimal; past the range an infinity and
+// below it 0, where std::stod threw (so TRY_CAST('1e400' AS DOUBLE) was a
+// NULL, DuckDB's inf).
+static bool ParseFloatText(const std::string &s, double &out) {
+    static const char *const kSpace = " \t\n\r";
+    size_t first = s.find_first_not_of(kSpace);
+    if (first == std::string::npos) return false;
+    if (s.find_first_of("xX") != std::string::npos) return false;
+    const char *begin = s.c_str() + first;
+    char *end = nullptr;
+    out = std::strtod(begin, &end);
+    if (end == begin) return false;
+    size_t pos = static_cast<size_t>(end - s.c_str());
+    while (pos < s.size() && std::strchr(kSpace, s[pos]) != nullptr && s[pos] != '\0') pos++;
+    return pos == s.size();
+}
 
 // zuslothdb: RANDOM() and UUID() draw from this rather than rand(), which a
 // package must not call (CRAN's compiled-code check). One generator per
@@ -429,9 +449,6 @@ void ExpressionExecutor::Execute(const BoundExpression &expr, DataChunk &input,
     default:
         throw NotImplementedException("Expression executor for type");
     }
-    // A NaN made by any expression (text, arithmetic, a function) is an
-    // error, under TRY_CAST too (#33, design L23).
-    RefuseNaN(result, count);
 }
 
 // A cast to DATE, TIME or TIMESTAMP (design L19). Text is read by DuckDB's
@@ -496,7 +513,12 @@ Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
     if (expr.GetExpressionType() == BoundExpressionType::CAST) {
         auto &c = static_cast<const BoundCast &>(expr);
         general_cast = c.GetReturnType().id() == LogicalTypeId::BLOB ||
-                       c.child->GetReturnType().id() == LogicalTypeId::BLOB;
+                       c.child->GetReturnType().id() == LogicalTypeId::BLOB ||
+                       // A FLOAT or DOUBLE: ExecuteCast rounds it to an
+                       // integer and keeps a NaN; its text ("1.0" since
+                       // #42) is no integer's.
+                       c.child->GetReturnType().id() == LogicalTypeId::FLOAT ||
+                       c.child->GetReturnType().id() == LogicalTypeId::DOUBLE;
     }
     if (expr.GetExpressionType() == BoundExpressionType::CAST && !general_cast) {
         auto &cast = static_cast<const BoundCast &>(expr);
@@ -541,24 +563,12 @@ Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
             }
         };
         auto parse_strict_double = [&](const std::string &s) -> double {
-            try {
-                size_t pos = 0;
-                double d = std::stod(s, &pos);
-                while (pos < s.size() && (s[pos] == ' ' || s[pos] == '\t')) pos++;
-                if (pos != s.size()) {
-                    throw ConversionException(
-                        "Could not convert string '" + s + "' to floating-point");
-                }
-                return d;
-            } catch (const std::out_of_range &) {
-                throw ConversionException(
-                    "Value '" + s + "' out of range for floating-point");
-            } catch (const ConversionException &) {
-                throw;
-            } catch (const std::exception &) {
+            double d;
+            if (!ParseFloatText(s, d)) {
                 throw ConversionException(
                     "Could not convert string '" + s + "' to floating-point");
             }
+            return d;
         };
         switch (cast.GetReturnType().id()) {
         case LogicalTypeId::TINYINT: {
@@ -623,13 +633,10 @@ Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
             return Value::UBIGINT(static_cast<uint64_t>(v));
         }
         case LogicalTypeId::FLOAT: {
+            // Text past FLOAT's range is an infinity, as DuckDB's; 'inf'
+            // was out of range (#42).
             double d = parse_strict_double(str);
-            if (d > static_cast<double>(std::numeric_limits<float>::max()) ||
-                d < -static_cast<double>(std::numeric_limits<float>::max())) {
-                throw ConversionException(
-                    "Value '" + str + "' out of range for FLOAT");
-            }
-            return Value::FLOAT(static_cast<float>(d));
+            return Value::FLOAT(ToFloatSaturating(d));
         }
         case LogicalTypeId::BOOLEAN: {
             std::string lower;
@@ -645,24 +652,12 @@ Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
                 "Could not convert string '" + str + "' to BOOLEAN");
         }
         case LogicalTypeId::DOUBLE: {
-            try {
-                size_t pos = 0;
-                double d = std::stod(str, &pos);
-                while (pos < str.size() && (str[pos] == ' ' || str[pos] == '\t')) pos++;
-                if (pos != str.size()) {
-                    throw ConversionException(
-                        "Could not convert string '" + str + "' to DOUBLE");
-                }
-                return Value::DOUBLE(d);
-            } catch (const std::out_of_range &) {
-                throw ConversionException(
-                    "Value '" + str + "' out of range for DOUBLE");
-            } catch (const ConversionException &) {
-                throw;
-            } catch (const std::exception &) {
+            double d;
+            if (!ParseFloatText(str, d)) {
                 throw ConversionException(
                     "Could not convert string '" + str + "' to DOUBLE");
             }
+            return Value::DOUBLE(d);
         }
         case LogicalTypeId::VARCHAR: return Value::VARCHAR(str);
         case LogicalTypeId::DATE:
@@ -799,13 +794,15 @@ void ExpressionExecutor::CompareTyped(const std::string &op, Vector &left, Vecto
         }
     };
 
+    // DuckDB's order for FLOAT and DOUBLE: NaN equals NaN and is above
+    // +inf (#42); the built-in operators for every other type.
     switch (cop) {
-    case CmpOp::EQ: run([](T a, T b) { return a == b; }); break;
-    case CmpOp::NE: run([](T a, T b) { return a != b; }); break;
-    case CmpOp::LT: run([](T a, T b) { return a <  b; }); break;
-    case CmpOp::GT: run([](T a, T b) { return a >  b; }); break;
-    case CmpOp::LE: run([](T a, T b) { return a <= b; }); break;
-    case CmpOp::GE: run([](T a, T b) { return a >= b; }); break;
+    case CmpOp::EQ: run([](T a, T b) { return SqlEq(a, b); }); break;
+    case CmpOp::NE: run([](T a, T b) { return !SqlEq(a, b); }); break;
+    case CmpOp::LT: run([](T a, T b) { return SqlLess(a, b); }); break;
+    case CmpOp::GT: run([](T a, T b) { return SqlGreater(a, b); }); break;
+    case CmpOp::LE: run([](T a, T b) { return SqlLessEq(a, b); }); break;
+    case CmpOp::GE: run([](T a, T b) { return SqlGreaterEq(a, b); }); break;
     default:
         for (idx_t i = 0; i < count; i++) out[i] = false;
         break;
@@ -1111,12 +1108,13 @@ void ExpressionExecutor::ExecuteComparison(const BoundComparison &expr, DataChun
                     "Cannot compare values '" + lv.ToString() + "' and '" +
                     rv.ToString() + "' as numeric");
             }
-            if (expr.op == "=") out[i] = ld == rd;
-            else if (expr.op == "!=" || expr.op == "<>") out[i] = ld != rd;
-            else if (expr.op == "<") out[i] = ld < rd;
-            else if (expr.op == ">") out[i] = ld > rd;
-            else if (expr.op == "<=") out[i] = ld <= rd;
-            else if (expr.op == ">=") out[i] = ld >= rd;
+            // A NaN's text, "nan" or "-nan", reads back as a NaN (#42).
+            if (expr.op == "=") out[i] = SqlEq(ld, rd);
+            else if (expr.op == "!=" || expr.op == "<>") out[i] = !SqlEq(ld, rd);
+            else if (expr.op == "<") out[i] = SqlLess(ld, rd);
+            else if (expr.op == ">") out[i] = SqlGreater(ld, rd);
+            else if (expr.op == "<=") out[i] = SqlLessEq(ld, rd);
+            else if (expr.op == ">=") out[i] = SqlGreaterEq(ld, rd);
             else out[i] = false;
         }
     }
@@ -1256,8 +1254,7 @@ void ExpressionExecutor::ArithmeticTyped(const std::string &op, Vector &left, Ve
             else if (op == "*")  out[i] = ldata[i] * rdata[i];
             else if (op == "/") {
                 // IEEE 754, as DuckDB's ieee_floating_point_ops default:
-                // x / 0 is an infinity, 0 / 0 a NaN, which the engine
-                // refuses (#33).
+                // x / 0 is an infinity, 0 / 0 a NaN (#42).
                 out[i] = ldata[i] / rdata[i];
             }
             else out[i] = T{};
@@ -1531,7 +1528,7 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
         } else if (physical == PhysicalType::INT64) {
             int_mod(left.GetData<int64_t>(), right.GetData<int64_t>(), result.GetData<int64_t>());
         } else if (physical == PhysicalType::FLOAT) {
-            // IEEE fmod: x % 0 is a NaN, which the engine refuses (#33).
+            // IEEE fmod: x % 0 is a NaN, as DuckDB's (#42).
             // A FLOAT's buffer was read as doubles.
             auto *ld = left.GetData<float>(), *rd = right.GetData<float>();
             auto *out = result.GetData<float>();
@@ -1539,6 +1536,7 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
                 bool li = lvalid_all || lv.RowIsValid(i);
                 bool ri = rvalid_all || rv.RowIsValid(i);
                 if (!li || !ri) { ov.SetInvalid(i); out[i] = 0.0f; }
+                else if (expr.decimal_mod && rd[i] == 0.0f) throw OutOfRangeException("Division by zero");
                 else out[i] = std::fmod(ld[i], rd[i]);
             }
         } else {
@@ -1547,7 +1545,9 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
             for (idx_t i = 0; i < count; i++) {
                 bool li = lvalid_all || lv.RowIsValid(i);
                 bool ri = rvalid_all || rv.RowIsValid(i);
+                // DuckDB's DECIMAL % 0 is an error, its DOUBLE % 0 a NaN.
                 if (!li || !ri) { ov.SetInvalid(i); out[i] = 0.0; }
+                else if (expr.decimal_mod && rd[i] == 0.0) throw OutOfRangeException("Division by zero");
                 else out[i] = std::fmod(ld[i], rd[i]);
             }
         }
@@ -2181,6 +2181,71 @@ static void ExecuteProviderRegex(const BoundFunction &expr, DataChunk &input, Ve
             result.SetValue(i, Value::VARCHAR(piece));
             break;
         }
+        }
+    }
+}
+
+// DuckDB's ROUND and TRUNC of an integer, in its type (#42): a precision
+// of 0 or more keeps the value; -m rounds (half away from zero) or cuts to
+// a multiple of 10^m, 0 once 10^m is past the type, and a result past the
+// type is "Overflow in ROUND of integer".
+// The value LEAST or GREATEST returns. DuckDB's of two or more FLOATs
+// comes back through its sort key, so -0.0 is 0.0 and a NaN the positive
+// NaN (least('-0.0'::FLOAT, 1) is 0.0); a DOUBLE keeps its bits (#42).
+static Value LeastGreatestResult(const Value &v, size_t args) {
+    if (args < 2 || v.IsNull() || v.type().id() != LogicalTypeId::FLOAT) return v;
+    return Value::FLOAT(static_cast<float>(CanonicalKey(static_cast<double>(v.GetValue<float>()))));
+}
+
+static void RoundOrTruncInteger(bool round, const Vector &arg, const Vector *prec, Vector &result,
+                                idx_t count) {
+    auto tid = result.GetType().id();
+    int64_t lo, hi;
+    switch (tid) {
+    case LogicalTypeId::TINYINT: lo = INT8_MIN; hi = INT8_MAX; break;
+    case LogicalTypeId::SMALLINT: lo = INT16_MIN; hi = INT16_MAX; break;
+    case LogicalTypeId::INTEGER: lo = INT32_MIN; hi = INT32_MAX; break;
+    default: lo = INT64_MIN; hi = INT64_MAX; break;
+    }
+    for (idx_t i = 0; i < count; i++) {
+        if (!arg.GetValidity().RowIsValid(i) || (prec && !prec->GetValidity().RowIsValid(i))) {
+            result.GetValidity().SetInvalid(i);
+            continue;
+        }
+        int64_t v = arg.GetValue(i).GetValue<int64_t>();
+        int32_t p = prec ? prec->GetValue(i).GetValue<int32_t>() : 0;
+        int64_t r = v;
+        if (p < 0) {
+            int64_t m = -static_cast<int64_t>(p);
+            bool neg = v < 0;
+            uint64_t mag = neg ? 0 - static_cast<uint64_t>(v) : static_cast<uint64_t>(v);
+            uint64_t q;
+            bool over = false;
+            if (m > 19) {
+                q = 0;
+            } else {
+                uint64_t pow = 1;
+                for (int64_t k = 0; k < m; k++) pow *= 10;  // 10^19 fits in 64 bits
+                q = mag / pow * pow;
+                if (round && (mag % pow) >= pow - pow / 2) {
+                    if (q > UINT64_MAX - pow) over = true;
+                    else q += pow;
+                }
+            }
+            if (!over && (neg ? q > static_cast<uint64_t>(INT64_MAX) + 1 : q > static_cast<uint64_t>(INT64_MAX))) {
+                over = true;
+            }
+            if (!over) {
+                r = neg ? static_cast<int64_t>(0 - q) : static_cast<int64_t>(q);
+                if (r < lo || r > hi) over = true;
+            }
+            if (over) throw OutOfRangeException("Overflow in ROUND of integer");
+        }
+        switch (tid) {
+        case LogicalTypeId::TINYINT: result.SetValue(i, Value::TINYINT(static_cast<int8_t>(r))); break;
+        case LogicalTypeId::SMALLINT: result.SetValue(i, Value::SMALLINT(static_cast<int16_t>(r))); break;
+        case LogicalTypeId::INTEGER: result.SetValue(i, Value::INTEGER(static_cast<int32_t>(r))); break;
+        default: result.SetValue(i, Value::BIGINT(r)); break;
         }
     }
 }
@@ -2996,6 +3061,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     if (name == "CEIL" || name == "CEILING" || name == "FLOOR" || name == "ROUND") {
         Vector arg(Arg(expr, 0)->GetReturnType(), count);
         Execute(*Arg(expr, 0), input, arg, count);
+        if (name == "ROUND" && result.GetType().id() != LogicalTypeId::DOUBLE) {
+            Vector prec(LogicalType::INTEGER(), count);
+            if (expr.arguments.size() >= 2) Execute(*Arg(expr, 1), input, prec, count);
+            RoundOrTruncInteger(true, arg, expr.arguments.size() >= 2 ? &prec : nullptr, result, count);
+            return;
+        }
         // ROUND can take an optional second arg `precision`: positive
         // values control fractional digits, negative round to powers
         // of 10, zero is integer-round. Previously the second arg was
@@ -3029,16 +3100,18 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 if (has_precision) {
                     // DuckDB's: a precision past a double's range keeps
                     // the value, one far below it gives 0 (it was a NaN,
-                    // #33).
+                    // #33). A NaN or an infinity is itself (#42).
                     int32_t p = prec_vec.GetValue(i).GetValue<int32_t>();
-                    if (p >= 0) {
+                    if (IsNaN(val) || std::fabs(val) == std::numeric_limits<double>::infinity()) {
+                        // unchanged
+                    } else if (p >= 0) {
                         double factor = std::pow(10.0, static_cast<double>(p));
                         double r = std::round(val * factor) / factor;
-                        if (!std::isinf(r) && !std::isnan(r)) val = r;
+                        if (std::fabs(r) != std::numeric_limits<double>::infinity() && !IsNaN(r)) val = r;
                     } else {
                         double factor = std::pow(10.0, -static_cast<double>(p));
                         double r = std::round(val / factor) * factor;
-                        val = (std::isinf(r) || std::isnan(r)) ? 0.0 : r;
+                        val = (std::fabs(r) == std::numeric_limits<double>::infinity() || IsNaN(r)) ? 0.0 : r;
                     }
                 } else {
                     val = std::round(val);
@@ -3082,9 +3155,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 if (val.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
                 double d = (val.type().id() == LogicalTypeId::INTEGER)
                     ? val.GetValue<int32_t>() : val.GetValue<double>();
-                // IEEE, as DuckDB: SQRT of a negative is a NaN, which the
-                // engine refuses; a NULL was a value DuckDB never gives
-                // (#33).
+                // IEEE, as DuckDB: SQRT of a negative is a NaN (#42); a
+                // NULL was a value DuckDB never gives (#33).
                 result.GetData<double>()[i] = std::sqrt(d);
             }
         } else {
@@ -3113,17 +3185,16 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 }
                 if (name == "POWER") {
                     // IEEE, as DuckDB: POWER(0, -2) is inf, POWER(-1, 0.5)
-                    // a NaN, which the engine refuses (#33).
+                    // a NaN (#33, #42).
                     result.GetData<double>()[i] = std::pow(d1, d2);
                 } else {
                     // MOD(x, 0): DuckDB's "Division by zero" for integers,
-                    // a NaN (refused) for doubles; a NULL was neither
-                    // (#34).
+                    // a NaN for doubles; a NULL was neither (#34, #42).
                     bool ints = v1.type().id() != LogicalTypeId::DOUBLE &&
                                 v1.type().id() != LogicalTypeId::FLOAT &&
                                 v2.type().id() != LogicalTypeId::DOUBLE &&
                                 v2.type().id() != LogicalTypeId::FLOAT;
-                    if (d2 == 0.0 && ints) throw OutOfRangeException("Division by zero");
+                    if (d2 == 0.0 && (ints || expr.decimal_mod)) throw OutOfRangeException("Division by zero");
                     result.GetData<double>()[i] = std::fmod(d1, d2);
                 }
             }
@@ -3574,8 +3645,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                     continue;
                 }
                 // DuckDB's IEEE results: log(2, 0) is -inf, log(1, 8)
-                // inf; a NaN (a negative base or value) is refused by
-                // the check on every DOUBLE computed (L23). Each was NULL.
+                // inf, a negative base or value a NaN (#42). Each was NULL.
                 double base = val_to_dbl(v0);
                 double val = val_to_dbl(v1);
                 result.GetData<double>()[i] = std::log(val) / std::log(base);
@@ -3598,7 +3668,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            // ln(0) is -inf, as DuckDB's; a NaN is refused (L23). It was NULL.
+            // ln(0) is -inf and ln(-1) a NaN, as DuckDB's (#42). It was NULL.
             result.GetData<double>()[i] = std::log2(d);
         }
         return;
@@ -3611,7 +3681,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            // ln(0) is -inf, as DuckDB's; a NaN is refused (L23). It was NULL.
+            // ln(0) is -inf and ln(-1) a NaN, as DuckDB's (#42). It was NULL.
             result.GetData<double>()[i] = std::log10(d);
         }
         return;
@@ -3669,21 +3739,14 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 break;
             }
             case PhysicalType::FLOAT: {
+                // SIGN(NaN) is 0, as DuckDB's; it was NULL (#42).
                 float v = arg.GetData<float>()[i];
-                if (std::isnan(v)) {
-                    result.GetValidity().SetInvalid(i);
-                    continue;
-                }
-                sign = v > 0.0f ? 1 : (v < 0.0f ? -1 : 0);
+                sign = IsNaN(v) ? 0 : v > 0.0f ? 1 : (v < 0.0f ? -1 : 0);
                 break;
             }
             case PhysicalType::DOUBLE: {
                 double v = arg.GetData<double>()[i];
-                if (std::isnan(v)) {
-                    result.GetValidity().SetInvalid(i);
-                    continue;
-                }
-                sign = v > 0.0 ? 1 : (v < 0.0 ? -1 : 0);
+                sign = IsNaN(v) ? 0 : v > 0.0 ? 1 : (v < 0.0 ? -1 : 0);
                 break;
             }
             default:
@@ -3721,7 +3784,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 if (first || val < min_val) { min_val = val; first = false; }
             }
             if (first) result.GetValidity().SetInvalid(i);
-            else result.SetValue(i, min_val);
+            else result.SetValue(i, LeastGreatestResult(min_val, expr.arguments.size()));
         }
         return;
     }
@@ -3738,7 +3801,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 if (first || val > max_val) { max_val = val; first = false; }
             }
             if (first) result.GetValidity().SetInvalid(i);
-            else result.SetValue(i, max_val);
+            else result.SetValue(i, LeastGreatestResult(max_val, expr.arguments.size()));
         }
         return;
     }
@@ -3781,19 +3844,9 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                        (v.type().id() == LogicalTypeId::BIGINT)  ? static_cast<double>(v.GetValue<int64_t>()) :
                        (v.type().id() == LogicalTypeId::FLOAT)   ? v.GetValue<float>() :
                                                                    v.GetValue<double>();
-            // Domain guards: out-of-range inputs would produce nan/inf
-            // which leak into projection results, sort keys, and hash
-            // groups. Match the LN/LOG/SQRT pattern of returning NULL
-            // on domain error.
-            if ((name == "ASIN" || name == "ACOS") && (d < -1.0 || d > 1.0)) {
-                result.GetValidity().SetInvalid(i); continue;
-            }
-            if (name == "ACOSH" && d < 1.0) {
-                result.GetValidity().SetInvalid(i); continue;
-            }
-            if (name == "ATANH" && (d <= -1.0 || d >= 1.0)) {
-                result.GetValidity().SetInvalid(i); continue;
-            }
+            // IEEE, as DuckDB's: ACOS(2), SIN('inf') and ATANH(2) are
+            // NaN, ATANH(1) and SINH(1000) infinities. Each was NULL, a
+            // value DuckDB never gives (#42).
             double r;
             if (name == "SIN") r = std::sin(d);
             else if (name == "COS") r = std::cos(d);
@@ -3807,11 +3860,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             else if (name == "ASINH") r = std::asinh(d);
             else if (name == "ACOSH") r = std::acosh(d);
             else r = std::atanh(d);  // ATANH
-            if (std::isnan(r) || std::isinf(r)) {
-                result.GetValidity().SetInvalid(i);
-            } else {
-                result.GetData<double>()[i] = r;
-            }
+            result.GetData<double>()[i] = r;
         }
         return;
     }
@@ -3824,9 +3873,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::FLOAT) ? v.GetValue<float>() : v.GetValue<double>();
             bool r;
-            if (name == "ISNAN")    r = std::isnan(d);
-            else if (name == "ISINF") r = std::isinf(d);
-            else                      r = std::isfinite(d);
+            bool inf = std::fabs(d) == std::numeric_limits<double>::infinity();
+            if (name == "ISNAN")    r = IsNaN(d);
+            else if (name == "ISINF") r = inf;
+            else                      r = !IsNaN(d) && !inf;
             result.GetData<bool>()[i] = r;
         }
         return;
@@ -3854,7 +3904,9 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            result.GetData<double>()[i] = d * 180.0 / 3.14159265358979323846;
+            // DuckDB's x * (180 / pi), whose last digit x * 180 / pi
+            // does not always give.
+            result.GetData<double>()[i] = d * (180.0 / 3.14159265358979323846);
         }
         return;
     }
@@ -3866,7 +3918,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            result.GetData<double>()[i] = d * 3.14159265358979323846 / 180.0;
+            result.GetData<double>()[i] = d * (3.14159265358979323846 / 180.0);
         }
         return;
     }
@@ -3874,6 +3926,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     if (name == "TRUNC" || name == "TRUNCATE") {
         Vector arg(Arg(expr, 0)->GetReturnType(), count);
         Execute(*Arg(expr, 0), input, arg, count);
+        if (result.GetType().id() != LogicalTypeId::DOUBLE) {
+            Vector prec(LogicalType::INTEGER(), count);
+            if (expr.arguments.size() >= 2) Execute(*Arg(expr, 1), input, prec, count);
+            RoundOrTruncInteger(false, arg, expr.arguments.size() >= 2 ? &prec : nullptr, result, count);
+            return;
+        }
         // Optional second arg controls fractional digits, same shape
         // as ROUND. Previously the second arg was silently dropped.
         bool has_precision = expr.arguments.size() >= 2;
@@ -5097,18 +5155,7 @@ static bool ParseIntStrict(const std::string &s, int64_t &out) {
 // Parse a complete double from a string. Rejects trailing junk and
 // empty/whitespace-only input. Accepts SQL scientific notation.
 static bool ParseDoubleStrict(const std::string &s, double &out) {
-    if (s.empty()) return false;
-    size_t first = s.find_first_not_of(" \t");
-    if (first == std::string::npos) return false;
-    try {
-        size_t consumed = 0;
-        out = std::stod(s.substr(first), &consumed);
-        size_t end = first + consumed;
-        while (end < s.size() && (s[end] == ' ' || s[end] == '\t')) end++;
-        return end == s.size();
-    } catch (...) {
-        return false;
-    }
+    return ParseFloatText(s, out);
 }
 
 void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
@@ -5146,7 +5193,8 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
                 // 2^63 is a double but no BIGINT: `d > (double)INT64_MAX`
                 // let it through, an undefined conversion (Stage 9's SQL
                 // fuzzer: 9223372036854775807 read as a DOUBLE, cast back).
-                if (!std::isfinite(d) || d >= 9223372036854775808.0 ||
+                // A NaN is out of range too, as DuckDB's (#42).
+                if (IsNaN(d) || !std::isfinite(d) || d >= 9223372036854775808.0 ||
                     d < -9223372036854775808.0) {
                     throw ConversionException("Value " + val.ToString() +
                         " is out of range for the destination type");
@@ -5203,8 +5251,9 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
                 result.SetValue(i, Value::DATE(static_cast<int32_t>(days)));
                 continue;
             }
-            // Numeric -> BOOLEAN (Postgres/DuckDB rule): nonzero is true,
-            // zero is false, NaN/Inf rejected (TRY_CAST -> NULL).
+            // Numeric -> BOOLEAN (DuckDB's rule): nonzero is true, zero
+            // (either sign) is false, and NaN and the infinities are true
+            // (#42; they were errors).
             // Previously the cast string-roundtripped: "5" was rejected
             // as not in the {true,false,t,f,1,0,yes,no} word list.
             if (to_type == LogicalTypeId::BOOLEAN &&
@@ -5219,11 +5268,7 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
                  from_is_double)) {
                 if (from_is_double) {
                     double d = val.GetValue<double>();
-                    if (!std::isfinite(d)) {
-                        throw ConversionException(
-                            "Cannot cast " + val.ToString() + " to BOOLEAN");
-                    }
-                    result.SetValue(i, Value::BOOLEAN(d != 0.0));
+                    result.SetValue(i, Value::BOOLEAN(IsNaN(d) || d != 0.0));
                 } else if (from_type == LogicalTypeId::UTINYINT ||
                            from_type == LogicalTypeId::USMALLINT ||
                            from_type == LogicalTypeId::UINTEGER ||
@@ -5290,6 +5335,17 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
             case LogicalTypeId::UBIGINT: {
                 int64_t v;
                 if (!ParseIntStrict(str, v)) {
+                    // DuckDB reads text with a fraction or an exponent as a
+                    // number and rounds it ('1.5'::INTEGER is 2); the engine
+                    // does not, so it refuses, under TRY_CAST too, rather
+                    // than give a NULL (#42).
+                    double d;
+                    if (from_type == LogicalTypeId::VARCHAR &&
+                        str.find_first_of(".eE") != std::string::npos && ParseFloatText(str, d) && !IsNaN(d) &&
+                        std::fabs(d) != std::numeric_limits<double>::infinity()) {
+                        throw NotImplementedException("Text '" + str + "' cast to " +
+                            expr.GetReturnType().ToString() + " is not supported: it is not an integer");
+                    }
                     throw ConversionException("Could not convert string '" +
                         str + "' to " + expr.GetReturnType().ToString());
                 }
@@ -5342,7 +5398,12 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
                     throw ConversionException("Could not convert string '" +
                         str + "' to FLOAT");
                 }
-                result.SetValue(i, Value::FLOAT((float)d)); break;
+                // A finite DOUBLE past FLOAT's range is DuckDB's error, not
+                // an infinity; text past it is an infinity there too.
+                if (from_type == LogicalTypeId::DOUBLE && FloatOverflows(d)) {
+                    throw ConversionException("Value " + str + " is out of range for FLOAT");
+                }
+                result.SetValue(i, Value::FLOAT(ToFloatSaturating(d))); break;
             }
             case LogicalTypeId::VARCHAR:
                 result.SetValue(i, Value::VARCHAR(str)); break;

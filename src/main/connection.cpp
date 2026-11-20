@@ -2,7 +2,8 @@
 #include "slothdb/main/query_materialize.hpp"
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/types/blob.hpp"
-#include "slothdb/common/types/nan_guard.hpp"
+#include "slothdb/common/types/float_order.hpp"
+#include "slothdb/execution/group_key.hpp"
 #include "slothdb/parser/parser.hpp"
 #include "slothdb/binder/binder.hpp"
 #include "slothdb/planner/planner.hpp"
@@ -10,6 +11,7 @@
 #include "slothdb/execution/expression_executor.hpp"
 #include "slothdb/optimizer/optimizer.hpp"
 #include "slothdb/common/string_util.hpp"
+#include <cmath>
 #include <sstream>
 #include <unordered_set>
 #include <chrono>
@@ -141,8 +143,17 @@ static Value CoerceValueForSetOp(const Value &v, const LogicalType &target) {
             case LogicalTypeId::USMALLINT:return v.GetValue<uint16_t>();
             case LogicalTypeId::UINTEGER: return v.GetValue<uint32_t>();
             case LogicalTypeId::UBIGINT:  return static_cast<int64_t>(v.GetValue<uint64_t>());
-            case LogicalTypeId::FLOAT:    return static_cast<int64_t>(v.GetValue<float>());
-            case LogicalTypeId::DOUBLE:   return static_cast<int64_t>(v.GetValue<double>());
+            case LogicalTypeId::FLOAT:
+            case LogicalTypeId::DOUBLE: {
+                // A NaN or a value past BIGINT is no integer: casting it
+                // was undefined (#42).
+                double d = src_id == LogicalTypeId::FLOAT ? v.GetValue<float>() : v.GetValue<double>();
+                if (IsNaN(d) || !(d >= -9223372036854775808.0 && d < 9223372036854775808.0)) {
+                    throw ConversionException("Value " + v.ToString() +
+                                              " is out of range for the destination type");
+                }
+                return static_cast<int64_t>(d);
+            }
             default: return 0;
         }
     };
@@ -191,11 +202,14 @@ struct SetOpRowHash {
             if (v.IsNull()) {
                 vh = 0xDEAD9E37;
             } else {
-                // -0.0 and 0.0 are equal, so they hash alike (#38).
-                bool zero = (v.type().id() == LogicalTypeId::DOUBLE && v.GetValue<double>() == 0.0) ||
-                            (v.type().id() == LogicalTypeId::FLOAT && v.GetValue<float>() == 0.0f);
-                vh = std::hash<std::string>{}(zero ? std::string("0") : v.ToString());
-                vh ^= static_cast<size_t>(v.type().id()) * 0x9e3779b9u;
+                // Equal values hash alike: -0.0 and 0.0 (#38), and every
+                // NaN, whose text is "nan" or "-nan" (#42).
+                std::string k;
+                auto id = v.type().id();
+                if (id == LogicalTypeId::DOUBLE || id == LogicalTypeId::FLOAT) AppendKeyValue(k, v);
+                else k = v.ToString();
+                vh = std::hash<std::string>{}(k);
+                vh ^= static_cast<size_t>(id) * 0x9e3779b9u;
             }
             h ^= vh + 0x9e3779b9 + (h << 6) + (h >> 2);
         }
@@ -555,22 +569,7 @@ void MaterializeFromSubqueries(Catalog &catalog, TableRef &tref,
 QueryResult Connection::Query(const std::string &sql) {
     // The providers are fixed from here on (design L29).
     db_.MarkQueried();
-    auto result = RunStatements(sql);
-    // The backstop of design L23 (#33): a NaN that a path the expression
-    // executor does not see made (an aggregate over infinities) is an
-    // error, not a value.
-    for (auto &chunk : result.chunks) RefuseNaN(chunk);
-    for (auto &row : result.rows) {
-        for (auto &v : row) {
-            if (v.IsNull()) continue;
-            auto id = v.type().id();
-            if ((id == LogicalTypeId::DOUBLE && std::isnan(v.GetValue<double>())) ||
-                (id == LogicalTypeId::FLOAT && std::isnan(v.GetValue<float>()))) {
-                ThrowNaN();
-            }
-        }
-    }
-    return result;
+    return RunStatements(sql);
 }
 
 QueryResult Connection::RunStatements(const std::string &sql) {
@@ -1245,6 +1244,14 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                             if (!to_double(d)) {
                                 throw ConversionException(
                                     "Cannot coerce '" + src.ToString() + "' to integer");
+                            }
+                            // DuckDB's cast: rounded half to even, and a NaN
+                            // or a value past BIGINT is out of range. It was
+                            // truncated, and a NaN's cast undefined (#42).
+                            d = std::nearbyint(d);
+                            if (IsNaN(d) || !(d >= -9223372036854775808.0 && d < 9223372036854775808.0)) {
+                                throw ConversionException(
+                                    "Value " + src.ToString() + " out of range for target column");
                             }
                             v = static_cast<int64_t>(d);
                         }

@@ -99,7 +99,7 @@ TEST_CASE("Stage 8: functions and operators refuse the arguments DuckDB refuses"
     const char *queries[] = {
         "select mod(42, 0)",
         "SELECT 42 % 0",
-        "SELECT 10.0 % 0.0",
+        "SELECT 10.0 % 0.0",  // DECIMAL modulo: "Division by zero", not a NaN (#42)
         "SELECT 2147483647::INTEGER + 1::INTEGER",
         "SELECT 12345678901111111 % 2.0",
         "SELECT factorial(-1)",

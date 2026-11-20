@@ -47,6 +47,8 @@ struct EmitAggDesc {
     LogicalTypeId return_type_id = LogicalTypeId::INVALID;
     bool sum_with_offset = false;
     double sum_offset = 0.0;
+    // The argument is a FLOAT: MEDIAN interpolates in FLOAT, as DuckDB's.
+    bool arg_float = false;
 };
 
 // View into a single finalized AggState's emit-relevant fields. Built per
