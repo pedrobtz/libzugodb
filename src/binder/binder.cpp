@@ -1344,6 +1344,30 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
             "Invalid TIMESTAMP arithmetic: " + left->GetReturnType().ToString() +
             " " + expr.op + " " + right->GetReturnType().ToString());
     }
+    // Arithmetic of numbers only. A VARCHAR, BOOLEAN or TIME operand was
+    // typed INTEGER and read as garbage (1::TINYINT + 1::VARCHAR gave 1);
+    // DuckDB has no such function, or casts a literal (#34).
+    auto numeric_or_null = [](LogicalTypeId t) {
+        switch (t) {
+        case LogicalTypeId::TINYINT: case LogicalTypeId::SMALLINT: case LogicalTypeId::INTEGER:
+        case LogicalTypeId::BIGINT: case LogicalTypeId::UTINYINT: case LogicalTypeId::USMALLINT:
+        case LogicalTypeId::UINTEGER: case LogicalTypeId::UBIGINT: case LogicalTypeId::FLOAT:
+        case LogicalTypeId::DOUBLE: case LogicalTypeId::SQLNULL:
+            return true;
+        default:
+            return false;
+        }
+    };
+    bool bitwise = expr.op == "&" || expr.op == "|" || expr.op == "<<" || expr.op == ">>";
+    auto floating = [](LogicalTypeId t) {
+        return t == LogicalTypeId::FLOAT || t == LogicalTypeId::DOUBLE;
+    };
+    if (!numeric_or_null(left_id) || !numeric_or_null(right_id) ||
+        (bitwise && (floating(left_id) || floating(right_id)))) {
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            "No function matches " + left->GetReturnType().ToString() + " " + expr.op + " " +
+            right->GetReturnType().ToString());
+    }
     // DuckDB's ^ is POWER, not the bitwise exclusive or (2 ^ 3 gave 1).
     if (expr.op == "^") {
         std::vector<BoundExprPtr> pargs;
@@ -1401,6 +1425,29 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
     std::vector<BoundExprPtr> args;
     for (auto &arg : expr.arguments) {
         args.push_back(BindExpression(*arg, context));
+    }
+    // Arguments DuckDB refuses (#34): GCD, LCM and FACTORIAL of anything
+    // but integers (a string was read as 0), and CONTAINS of two NULLs,
+    // which matches more than one of DuckDB's overloads.
+    if (name == "GCD" || name == "LCM" || name == "FACTORIAL") {
+        for (auto &a : args) {
+            auto t = a->GetReturnType().id();
+            if (t != LogicalTypeId::TINYINT && t != LogicalTypeId::SMALLINT &&
+                t != LogicalTypeId::INTEGER && t != LogicalTypeId::BIGINT &&
+                t != LogicalTypeId::SQLNULL) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "No function matches " + StringUtil::Lower(name) + "() of a " +
+                    a->GetReturnType().ToString());
+            }
+        }
+    }
+    if (name == "CONTAINS" && !args.empty()) {
+        bool all_null = true;
+        for (auto &a : args) all_null = all_null && a->GetReturnType().id() == LogicalTypeId::SQLNULL;
+        if (all_null) {
+            throw BinderException(ErrorCode::TYPE_MISMATCH,
+                "Could not choose a best candidate function for contains(NULL, NULL)");
+        }
     }
     // A BLOB argument: the functions that read a BLOB's bytes as DuckDB
     // does. The others read it as text, gave a VARCHAR of its bytes or
@@ -1487,7 +1534,9 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
             {"REPLACE", 3, 3},     {"TRANSLATE", 3, 3},    {"SPLIT_PART", 3, 3},
             {"LPAD", 3, 3},        {"RPAD", 3, 3},         {"LEFT", 2, 2},
             {"RIGHT", 2, 2},       {"TRIM", 1, 2},         {"LTRIM", 1, 2},
-            {"RTRIM", 1, 2},
+            {"RTRIM", 1, 2},       {"CONCAT_WS", 2, SIZE_MAX},
+            {"GCD", 2, 2},         {"LCM", 2, 2},          {"FACTORIAL", 1, 1},
+            {"CHR", 1, 1},
         };
         for (const auto &a : kScalarArity) {
             if (name != a.name) continue;
@@ -1496,8 +1545,9 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
                 throw BinderException(ErrorCode::TYPE_MISMATCH,
                     "No function matches " + StringUtil::Lower(name) + "() with " +
                     std::to_string(n) + " argument(s); it takes " +
-                    (a.lo == a.hi ? std::to_string(a.lo)
-                                  : std::to_string(a.lo) + " to " + std::to_string(a.hi)));
+                    (a.lo == a.hi     ? std::to_string(a.lo)
+                     : a.hi == SIZE_MAX ? "at least " + std::to_string(a.lo)
+                                        : std::to_string(a.lo) + " to " + std::to_string(a.hi)));
             }
             break;
         }
@@ -2233,6 +2283,40 @@ LogicalType Binder::ResolveTypeName(const std::string &name) {
 
     // Strip parameters: DECIMAL(10,2) -> DECIMAL
     auto base = upper.substr(0, upper.find('('));
+    // Type parameters as DuckDB reads them (#34): FLOAT(p) is a FLOAT for
+    // p of 1 to 24 and a DOUBLE for 25 to 53; VARCHAR, DECIMAL and
+    // TIMESTAMP take theirs below; any other type takes none (they were
+    // dropped, INTEGER(1000) was an INTEGER).
+    if (upper != base) {
+        auto params = upper.substr(base.size());
+        if (base == "FLOAT" || base == "REAL" || base == "FLOAT4") {
+            if (params.size() < 3 || params.front() != '(' || params.back() != ')') {
+                throw BinderException(ErrorCode::TYPE_MISMATCH, "Invalid type " + name);
+            }
+            auto digits = params.substr(1, params.size() - 2);
+            long long p = -1;
+            if (!digits.empty() && digits.size() <= 6 &&
+                digits.find_first_not_of("0123456789") == std::string::npos) {
+                p = std::stoll(digits);
+            }
+            if (p < 1) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "precision for type float must be at least 1 bit");
+            }
+            if (p > 53) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "precision for type float must be less than 54 bits");
+            }
+            return p <= 24 ? LogicalType::FLOAT() : LogicalType::DOUBLE();
+        }
+        bool takes_params = base == "VARCHAR" || base == "TEXT" || base == "STRING" ||
+                            base == "CHAR" || base == "DECIMAL" || base == "NUMERIC" ||
+                            base == "TIMESTAMP";
+        if (!takes_params) {
+            throw BinderException(ErrorCode::TYPE_MISMATCH,
+                "Type " + base + " does not accept type parameters");
+        }
+    }
 
     if (base == "INTEGER" || base == "INT" || base == "INT4") return LogicalType::INTEGER();
     if (base == "BIGINT" || base == "INT8") return LogicalType::BIGINT();

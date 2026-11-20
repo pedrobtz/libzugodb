@@ -1223,8 +1223,10 @@ void ExpressionExecutor::ArithmeticTyped(const std::string &op, Vector &left, Ve
                     else r = m;
                 } // else r = 0 (already)
             } else if (op == "/") {
+                // The binder types / of integers DOUBLE, as DuckDB does;
+                // this is a guard.
                 if (b == 0) {
-                    overflow = true;  // -> NULL
+                    throw OutOfRangeException("Division by zero");
                 } else if (a == std::numeric_limits<T>::min() && b == -1) {
                     overflow = true;  // INT_MIN / -1 overflows
                 } else {
@@ -1234,8 +1236,10 @@ void ExpressionExecutor::ArithmeticTyped(const std::string &op, Vector &left, Ve
                 r = T{};
             }
             if (overflow) {
-                result.GetValidity().SetInvalid(i);
-                out[i] = T{};
+                // DuckDB's error; a NULL was a value DuckDB never gives
+                // (#34).
+                throw OutOfRangeException("Overflow in " + op + " of " +
+                                          std::to_string(a) + " and " + std::to_string(b));
             } else {
                 out[i] = r;
             }
@@ -1282,8 +1286,18 @@ static Vector CoerceVector(Vector &&src, const LogicalType &target_type, idx_t c
             copy_validity(); return out;
         }
         if (src_id == LogicalTypeId::BIGINT) {
+            // Past 2^53 a double rounds the integer. DuckDB computes a
+            // decimal literal's arithmetic (12345678901111111 % 2.0) in
+            // DECIMAL, exactly, and the engine has no DECIMAL (#34).
             auto *s = src.GetData<int64_t>();
-            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            const int64_t exact = int64_t(1) << 53;
+            for (idx_t i = 0; i < count; i++) {
+                if ((s[i] > exact || s[i] < -exact) && src.GetValidity().RowIsValid(i)) {
+                    throw NotImplementedException(
+                        "A BIGINT past 2^53 in floating-point arithmetic is not supported");
+                }
+                o[i] = static_cast<double>(s[i]);
+            }
             copy_validity(); return out;
         }
         if (src_id == LogicalTypeId::FLOAT) {
@@ -1477,14 +1491,17 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
         auto &ov = result.GetValidity();
         bool lvalid_all = lv.AllValid();
         bool rvalid_all = rv.AllValid();
+        // An integer % 0 is DuckDB's "Division by zero" error, not NULL
+        // (#34); INT_MIN % -1 is 0, not a trap.
         if (physical == PhysicalType::INT32) {
             auto *ld = left.GetData<int32_t>(), *rd = right.GetData<int32_t>();
             auto *out = result.GetData<int32_t>();
             for (idx_t i = 0; i < count; i++) {
                 bool li = lvalid_all || lv.RowIsValid(i);
                 bool ri = rvalid_all || rv.RowIsValid(i);
-                if (!li || !ri || rd[i] == 0) { ov.SetInvalid(i); out[i] = 0; }
-                else out[i] = ld[i] % rd[i];
+                if (!li || !ri) { ov.SetInvalid(i); out[i] = 0; }
+                else if (rd[i] == 0) throw OutOfRangeException("Division by zero");
+                else out[i] = rd[i] == -1 ? 0 : ld[i] % rd[i];
             }
         } else if (physical == PhysicalType::INT64) {
             auto *ld = left.GetData<int64_t>(), *rd = right.GetData<int64_t>();
@@ -1492,17 +1509,28 @@ void ExpressionExecutor::ExecuteArithmetic(const BoundArithmetic &expr, DataChun
             for (idx_t i = 0; i < count; i++) {
                 bool li = lvalid_all || lv.RowIsValid(i);
                 bool ri = rvalid_all || rv.RowIsValid(i);
-                if (!li || !ri || rd[i] == 0) { ov.SetInvalid(i); out[i] = 0; }
-                else out[i] = ld[i] % rd[i];
+                if (!li || !ri) { ov.SetInvalid(i); out[i] = 0; }
+                else if (rd[i] == 0) throw OutOfRangeException("Division by zero");
+                else out[i] = rd[i] == -1 ? 0 : ld[i] % rd[i];
+            }
+        } else if (physical == PhysicalType::FLOAT) {
+            // IEEE fmod: x % 0 is a NaN, which the engine refuses (#33).
+            // A FLOAT's buffer was read as doubles.
+            auto *ld = left.GetData<float>(), *rd = right.GetData<float>();
+            auto *out = result.GetData<float>();
+            for (idx_t i = 0; i < count; i++) {
+                bool li = lvalid_all || lv.RowIsValid(i);
+                bool ri = rvalid_all || rv.RowIsValid(i);
+                if (!li || !ri) { ov.SetInvalid(i); out[i] = 0.0f; }
+                else out[i] = std::fmod(ld[i], rd[i]);
             }
         } else {
-            // Float modulo via fmod.
             auto *ld = left.GetData<double>(), *rd = right.GetData<double>();
             auto *out = result.GetData<double>();
             for (idx_t i = 0; i < count; i++) {
                 bool li = lvalid_all || lv.RowIsValid(i);
                 bool ri = rvalid_all || rv.RowIsValid(i);
-                if (!li || !ri || rd[i] == 0.0) { ov.SetInvalid(i); out[i] = 0.0; }
+                if (!li || !ri) { ov.SetInvalid(i); out[i] = 0.0; }
                 else out[i] = std::fmod(ld[i], rd[i]);
             }
         }
@@ -2401,7 +2429,21 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
-            int32_t n = v.GetValue<int32_t>();
+            int64_t n = 0;
+            switch (v.type().id()) {
+            case LogicalTypeId::TINYINT:  n = v.GetValue<int8_t>(); break;
+            case LogicalTypeId::SMALLINT: n = v.GetValue<int16_t>(); break;
+            case LogicalTypeId::INTEGER:  n = v.GetValue<int32_t>(); break;
+            case LogicalTypeId::BIGINT:   n = v.GetValue<int64_t>(); break;
+            default:
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "No function matches chr() of a " + v.type().ToString());
+            }
+            // DuckDB's: a code point outside Unicode, or a surrogate, is
+            // an error, not a byte sequence (#34).
+            if (n < 0 || n > 0x10FFFF || (n >= 0xD800 && n <= 0xDFFF)) {
+                throw InvalidInputException("Invalid UTF8 Character " + std::to_string(n));
+            }
             std::string enc;
             if (n == 0) enc = std::string(1, '\0');
             else if (n < 0x80) enc = std::string(1, static_cast<char>(n));
@@ -2817,13 +2859,14 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                     // a NaN, which the engine refuses (#33).
                     result.GetData<double>()[i] = std::pow(d1, d2);
                 } else {
-                    // MOD(x, 0) -> NULL (was nan). Integer % already
-                    // returns NULL via the ExecuteArithmetic %-branch;
-                    // function-form MOD now matches.
-                    if (d2 == 0.0) {
-                        result.GetValidity().SetInvalid(i);
-                        continue;
-                    }
+                    // MOD(x, 0): DuckDB's "Division by zero" for integers,
+                    // a NaN (refused) for doubles; a NULL was neither
+                    // (#34).
+                    bool ints = v1.type().id() != LogicalTypeId::DOUBLE &&
+                                v1.type().id() != LogicalTypeId::FLOAT &&
+                                v2.type().id() != LogicalTypeId::DOUBLE &&
+                                v2.type().id() != LogicalTypeId::FLOAT;
+                    if (d2 == 0.0 && ints) throw OutOfRangeException("Division by zero");
                     result.GetData<double>()[i] = std::fmod(d1, d2);
                 }
             }
@@ -3191,22 +3234,40 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         Execute(*Arg(expr, 0), input, a_vec, count);
         Execute(*Arg(expr, 1), input, b_vec, count);
         auto as_i64 = [](const Value &v) -> int64_t {
-            return v.type().id() == LogicalTypeId::INTEGER ? v.GetValue<int32_t>()
-                 : v.type().id() == LogicalTypeId::BIGINT  ? v.GetValue<int64_t>()
-                 : static_cast<int64_t>(v.GetValue<double>());
+            switch (v.type().id()) {
+            case LogicalTypeId::TINYINT:  return v.GetValue<int8_t>();
+            case LogicalTypeId::SMALLINT: return v.GetValue<int16_t>();
+            case LogicalTypeId::INTEGER:  return v.GetValue<int32_t>();
+            default:                      return v.GetValue<int64_t>();
+            }
+        };
+        // Magnitudes as unsigned, so INT64_MIN has one; a result past
+        // BIGINT is an error, not a wrapped value (#34).
+        auto mag = [](int64_t x) -> uint64_t {
+            return x < 0 ? uint64_t(0) - static_cast<uint64_t>(x) : static_cast<uint64_t>(x);
         };
         for (idx_t i = 0; i < count; i++) {
             auto av = a_vec.GetValue(i), bv = b_vec.GetValue(i);
             if (av.IsNull() || bv.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
-            int64_t a = std::llabs(as_i64(av)), b = std::llabs(as_i64(bv));
-            int64_t x = a, y = b;
-            while (y) { int64_t t = x % y; x = y; y = t; }
-            int64_t g = x; // gcd
-            if (name == "GCD") {
-                result.SetValue(i, Value::BIGINT(g));
-            } else {
-                result.SetValue(i, Value::BIGINT(g == 0 ? 0 : (a / g) * b));
+            uint64_t a = mag(as_i64(av)), b = mag(as_i64(bv));
+            uint64_t x = a, y = b;
+            while (y) { uint64_t t = x % y; x = y; y = t; }
+            uint64_t g = x;
+            uint64_t r = g;
+            if (name == "LCM") {
+                r = 0;
+                if (g != 0) {
+                    uint64_t q = a / g;
+                    if (b != 0 && q > static_cast<uint64_t>(INT64_MAX) / b) {
+                        throw OutOfRangeException("lcm is out of range for BIGINT");
+                    }
+                    r = q * b;
+                }
             }
+            if (r > static_cast<uint64_t>(INT64_MAX)) {
+                throw OutOfRangeException(StringUtil::Lower(name) + " is out of range for BIGINT");
+            }
+            result.SetValue(i, Value::BIGINT(static_cast<int64_t>(r)));
         }
         return;
     }
@@ -3218,9 +3279,13 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             if (av.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             int64_t n = av.type().id() == LogicalTypeId::INTEGER ? av.GetValue<int32_t>()
                       : av.GetValue<int64_t>();
+            // DuckDB's error for a negative; past 20! a BIGINT wraps, and
+            // DuckDB's is a HUGEINT (#34).
+            if (n < 0) throw OutOfRangeException("factorial of a negative number is undefined");
+            if (n > 20) throw NotImplementedException("factorial past 20! (a HUGEINT) is not supported");
             int64_t f = 1;
             for (int64_t k = 2; k <= n; k++) f *= k;
-            result.SetValue(i, Value::BIGINT(n < 0 ? 1 : f));
+            result.SetValue(i, Value::BIGINT(f));
         }
         return;
     }

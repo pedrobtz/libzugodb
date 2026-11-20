@@ -964,6 +964,10 @@ ParsedExprPtr Parser::ParseComparison() {
         std::string out;
         out.reserve(pat_str.size());
         for (size_t i = 0; i < pat_str.size(); i++) {
+            if (pat_str[i] == esc_char && i + 1 == pat_str.size()) {
+                // DuckDB's error; it was read as a literal (#34).
+                throw ParserException("LIKE pattern must not end with escape character");
+            }
             if (pat_str[i] == esc_char && i + 1 < pat_str.size()) {
                 // Emit \ + literal next char. Existing backslashes in
                 // the original pattern remain literal too; we just
