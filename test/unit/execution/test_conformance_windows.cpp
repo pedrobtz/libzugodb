@@ -89,3 +89,20 @@ TEST_CASE("Stage 8: window aggregates over integers are exact, and NULL over no 
     conn.Query("INSERT INTO u VALUES (3, 9223372036854775807, 0), (3, 1, 0)");
     CHECK_THROWS(conn.Query("SELECT sum(x) OVER (PARTITION BY g) FROM u"));
 }
+
+// window/test_ntile.test, reached in Stage 9 once table names matched
+// ignoring case: NTILE with more buckets than rows gives each row its own
+// (DuckDB's), and a count below 1 is DuckDB's error. It gave 1, 251, 501,
+// 751 for NTILE(1000) over 4 rows, and took NTILE(-1) as NTILE(1).
+TEST_CASE("Stage 9: NTILE as DuckDB's, past the partition's size and below 1") {
+    Database db;
+    Connection conn(db);
+    CHECK(Run(conn, "SELECT x FROM (SELECT i, ntile(1000) OVER (ORDER BY i) AS x FROM "
+                    "(VALUES (1), (2), (3), (4)) t(i)) s ORDER BY i") ==
+          Rows{{"1"}, {"2"}, {"3"}, {"4"}});
+    CHECK(Run(conn, "SELECT x FROM (SELECT i, ntile(3) OVER (ORDER BY i) AS x FROM "
+                    "(VALUES (1), (2), (3), (4), (5), (6), (7)) t(i)) s ORDER BY i") ==
+          Rows{{"1"}, {"1"}, {"1"}, {"2"}, {"2"}, {"3"}, {"3"}});
+    CHECK_THROWS(conn.Query("SELECT ntile(-1) OVER (ORDER BY i) FROM (VALUES (1)) t(i)"));
+    CHECK_THROWS(conn.Query("SELECT ntile(0) OVER (ORDER BY i) FROM (VALUES (1)) t(i)"));
+}

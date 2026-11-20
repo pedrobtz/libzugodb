@@ -1740,6 +1740,56 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         }
         break;
     }
+    // Text and number functions take the types DuckDB's do ('S' text, 'N'
+    // a number, 'I' an integer; '*' is anything, read by the function
+    // itself). Another type was read as a string_t:
+    // UPPER(x LIKE y) read a BOOLEAN's byte as a string's header and past
+    // its buffer (Stage 9's SQL fuzzer). DuckDB has no such function.
+    {
+        struct TextArgs { const char *name; const char *kinds; };
+        static const TextArgs kTextArgs[] = {
+            {"UPPER", "S"}, {"LOWER", "S"}, {"LENGTH", "S"}, {"STRLEN", "S"},
+            {"REVERSE", "S"}, {"ASCII", "S"}, {"MD5", "S"}, {"SHA1", "S"}, {"SHA256", "S"},
+            {"TRIM", "SS"}, {"LTRIM", "SS"}, {"RTRIM", "SS"}, {"CONTAINS", "SS"},
+            {"STARTS_WITH", "SS"}, {"ENDS_WITH", "SS"}, {"PREFIX", "SS"}, {"SUFFIX", "SS"},
+            {"INSTR", "SS"}, {"STRPOS", "SS"}, {"POSITION", "SS"}, {"TRANSLATE", "SSS"},
+            {"REPLACE", "SSS"}, {"BIT_LENGTH", "S"}, {"OCTET_LENGTH", "S"},
+            {"FROM_BASE64", "S"}, {"UNHEX", "S"}, {"LEFT", "S*"}, {"RIGHT", "S*"},
+            {"REPEAT", "S*"}, {"SUBSTR", "S**"}, {"SUBSTRING", "S**"}, {"LPAD", "S*S"},
+            {"RPAD", "S*S"}, {"SPLIT_PART", "SS*"}, {"STRFTIME", "**"},
+            // Numbers ('N'), integers ('I'): SQRT of a VARCHAR column read its
+            // bytes as a double, ROUND of a DATE gave its day number.
+            {"ABS", "N"}, {"ACOS", "N"}, {"ACOSH", "N"}, {"ASIN", "N"}, {"ASINH", "N"},
+            {"ATAN", "N"}, {"ATAN2", "NN"}, {"ATANH", "N"}, {"CBRT", "N"}, {"CEIL", "N"},
+            {"CEILING", "N"}, {"COS", "N"}, {"COSH", "N"}, {"DEGREES", "N"}, {"EXP", "N"},
+            {"FACTORIAL", "I"}, {"FLOOR", "N"}, {"GCD", "II"}, {"LCM", "II"},
+            {"ISFINITE", "N"}, {"ISINF", "N"}, {"ISNAN", "N"}, {"LN", "N"}, {"LOG", "NN"},
+            {"LOG10", "N"}, {"LOG2", "N"}, {"MOD", "NN"}, {"POW", "NN"}, {"POWER", "NN"},
+            {"RADIANS", "N"}, {"ROUND", "NI"}, {"SIGN", "N"}, {"SIN", "N"}, {"SINH", "N"},
+            {"SQRT", "N"}, {"TAN", "N"}, {"TANH", "N"}, {"TRUNC", "NI"}, {"CHR", "I"},
+            {"MAKE_DATE", "III"}, {"MAKE_TIMESTAMP", "IIIIIN"},
+        };
+        for (const auto &t : kTextArgs) {
+            if (name != t.name) continue;
+            for (size_t k = 0; k < args.size() && t.kinds[k] != '\0'; k++) {
+                if (t.kinds[k] == '*') continue;
+                auto id = args[k]->GetReturnType().id();
+                bool integer = id == LogicalTypeId::TINYINT || id == LogicalTypeId::SMALLINT ||
+                               id == LogicalTypeId::INTEGER || id == LogicalTypeId::BIGINT;
+                bool number = integer || id == LogicalTypeId::FLOAT || id == LogicalTypeId::DOUBLE;
+                bool ok = id == LogicalTypeId::SQLNULL ||
+                          (t.kinds[k] == 'S' && (id == LogicalTypeId::VARCHAR ||
+                                                 id == LogicalTypeId::BLOB)) ||
+                          (t.kinds[k] == 'N' && number) || (t.kinds[k] == 'I' && integer);
+                if (!ok) {
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "No function matches " + StringUtil::Lower(name) + "() of a " +
+                        args[k]->GetReturnType().ToString());
+                }
+            }
+            break;
+        }
+    }
     // Date and time functions take a DATE or a TIMESTAMP, as DuckDB's do.
     // Another argument was read as one: an INTEGER as seconds, a BIGINT as
     // seconds or microseconds by its size, a TIME as midnight

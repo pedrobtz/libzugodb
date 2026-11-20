@@ -1870,6 +1870,7 @@ ParsedStmtPtr Parser::ParseDescribeStatement() {
         } else {
             // Bare identifier: DESCRIBE <table>
             tref->table_name = name;
+            stmt->table_name = name;
         }
     } else {
         ThrowError("DESCRIBE expects a table name, query, string literal, "

@@ -59,6 +59,22 @@
 
 namespace zugodb {
 
+// DuckDB's NTILE (SQLite's ntileValueFunc): row `pos` of a partition of
+// `ps` rows in `n` buckets, the first ps % n buckets one row larger, and
+// never more buckets than rows. pos * n / ps + 1 gave bucket 251 of a
+// 4-row partition for NTILE(1000) (Stage 9).
+static int64_t NtileBucket(idx_t pos, idx_t ps, int64_t n) {
+    int64_t total = static_cast<int64_t>(ps);
+    if (n > total) n = total;
+    int64_t size = total / n;
+    int64_t large = total - n * size;
+    int64_t small_end = large * (size + 1);
+    int64_t row = static_cast<int64_t>(pos);
+    if (row < small_end) return 1 + row / (size + 1);
+    return 1 + large + (row - small_end) / size;
+}
+
+
 // Forward declarations - classes that reference each other across definitions.
 class PhysicalHashJoin;
 class PhysicalParquetScan;
@@ -5091,7 +5107,10 @@ private:
             auto ctid = c.value.type().id();
             if (ctid == LogicalTypeId::INTEGER) info.ntile_buckets = c.value.GetValue<int32_t>();
             else if (ctid == LogicalTypeId::BIGINT) info.ntile_buckets = c.value.GetValue<int64_t>();
-            if (info.ntile_buckets <= 0) info.ntile_buckets = 1;
+            // DuckDB's error; a count below 1 was taken as 1 (Stage 9).
+            if (info.ntile_buckets <= 0) {
+                throw InvalidInputException("Argument for ntile must be greater than zero");
+            }
         }
         info.rank_order_col = INVALID_INDEX;
         info.rank_order_tid = LogicalTypeId::SQLNULL;
@@ -5264,7 +5283,7 @@ private:
             return Value::BIGINT(dense_cur_);
         }
         case WF_NTILE:
-            return Value::BIGINT(static_cast<int64_t>(pos * info.ntile_buckets / ps) + 1);
+            return Value::BIGINT(NtileBucket(pos, ps, info.ntile_buckets));
         case WF_LAG: {
             int64_t target = static_cast<int64_t>(pos) - info.lag_offset;
             if (target >= 0 && target < static_cast<int64_t>(ps) && info.arg_col != INVALID_INDEX)
@@ -5688,7 +5707,10 @@ private:
             auto ctid = c.value.type().id();
             if (ctid == LogicalTypeId::INTEGER) ntile_buckets = c.value.GetValue<int32_t>();
             else if (ctid == LogicalTypeId::BIGINT) ntile_buckets = c.value.GetValue<int64_t>();
-            if (ntile_buckets <= 0) ntile_buckets = 1;
+            // DuckDB's error; a count below 1 was taken as 1 (Stage 9).
+            if (ntile_buckets <= 0) {
+                throw InvalidInputException("Argument for ntile must be greater than zero");
+            }
         }
         idx_t rank_order_col = INVALID_INDEX;
         LogicalTypeId rank_order_tid = LogicalTypeId::SQLNULL;
@@ -5935,7 +5957,7 @@ private:
 
             case WF_NTILE:
                 for (idx_t pos = 0; pos < ps; pos++) {
-                    int64_t bucket = static_cast<int64_t>(pos * ntile_buckets / ps) + 1;
+                    int64_t bucket = NtileBucket(pos, ps, ntile_buckets);
                     output[indices[pos]][out_col] = Value::BIGINT(bucket);
                 }
                 break;

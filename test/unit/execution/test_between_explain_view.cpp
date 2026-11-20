@@ -142,14 +142,12 @@ TEST_CASE("PRAGMA table_info - returns columns") {
     CHECK(r.GetValue(1, 2).GetValue<std::string>() == "VARCHAR");
 }
 
-TEST_CASE("PRAGMA database_list - returns memory") {
+TEST_CASE("PRAGMA database_list - refused") {
+    // DuckDB's seq is an internal object id the engine has none of
+    // (Stage 9); it gave 0.
     Database db;
     Connection conn(db);
-
-    auto r = conn.Query("PRAGMA database_list");
-    CHECK(r.RowCount() == 1);
-    CHECK(r.column_names[1] == "name");
-    CHECK(r.GetValue(0, 1).GetValue<std::string>() == "memory");
+    CHECK_THROWS(conn.Query("PRAGMA database_list"));
 }
 
 TEST_CASE("PRAGMA table_info - missing table errors") {

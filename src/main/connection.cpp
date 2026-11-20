@@ -722,23 +722,18 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                         Value::INTEGER(static_cast<int32_t>(i)),
                         Value::VARCHAR(cols[i].name),
                         Value::VARCHAR(cols[i].type.ToString()),
-                        Value::BOOLEAN(false),
+                        // DuckDB's: NOT NULL and PRIMARY KEY (it gave false
+                        // for both, Stage 9).
+                        Value::BOOLEAN(cols[i].not_null || cols[i].is_primary_key),
                         Value(),
-                        Value::BOOLEAN(false)});
+                        Value::BOOLEAN(cols[i].is_primary_key)});
                 }
                 continue;
             }
             if (name == "DATABASE_LIST") {
-                final_result.column_names = {"seq", "name", "file"};
-                final_result.column_types = {
-                    LogicalType::BIGINT(), LogicalType::VARCHAR(),
-                    LogicalType::VARCHAR()};
-                // No ATTACH support yet; always the single in-memory database.
-                final_result.rows.push_back({
-                    Value::BIGINT(0),
-                    Value::VARCHAR("memory"),
-                    Value()});
-                continue;
+                // DuckDB's seq is the database's internal object id, which
+                // the engine has none of: refused (Stage 9).
+                throw NotImplementedException("PRAGMA database_list is not supported");
             }
             throw BinderException("Unknown PRAGMA: " + pr.name);
         }
@@ -771,11 +766,23 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 return pi == pat.size();
             };
 
+            // DuckDB has no LIKE on SHOW, and no SHOW COLUMNS: both were
+            // accepted (Stage 9).
+            if (!sh.like_pattern.empty()) {
+                throw ParserException("SHOW ... LIKE is not supported");
+            }
+            if (sh.kind == ShowStatement::Kind::COLUMNS) {
+                throw ParserException("SHOW COLUMNS is not supported; DESCRIBE gives a table's columns");
+            }
             if (sh.kind == ShowStatement::Kind::TABLES) {
                 final_result.column_names = {"name"};
                 final_result.column_types = {LogicalType::VARCHAR()};
                 auto &schema = db_.GetCatalog().GetSchema();
-                for (const auto &name : schema.GetTableNames()) {
+                // In DuckDB's order, by name, byte by byte; it was the hash
+                // map's order.
+                auto names = schema.GetTableNames();
+                std::sort(names.begin(), names.end());
+                for (const auto &name : names) {
                     if (like_match(name, sh.like_pattern)) {
                         final_result.rows.push_back({Value::VARCHAR(name)});
                     }
@@ -859,12 +866,23 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 LogicalType::VARCHAR(), LogicalType::VARCHAR(),
                 LogicalType::VARCHAR(), LogicalType::VARCHAR(),
                 LogicalType::VARCHAR(), LogicalType::VARCHAR()};
+            // DESCRIBE <table>: DuckDB's null is NO for a NOT NULL or PRIMARY
+            // KEY column and key PRI for the latter (they were YES and NULL,
+            // Stage 9). A query's columns are all YES.
+            TableCatalogEntry *described =
+                desc.table_name.empty() ? nullptr : db_.GetCatalog().GetTable(desc.table_name);
             for (idx_t i = 0; i < names.size(); i++) {
+                bool not_null = false, pk = false;
+                if (described && i < described->GetColumns().size()) {
+                    auto &c = described->GetColumns()[i];
+                    not_null = c.not_null || c.is_primary_key;
+                    pk = c.is_primary_key;
+                }
                 final_result.rows.push_back({
                     Value::VARCHAR(names[i]),
                     Value::VARCHAR(types[i].ToString()),
-                    Value::VARCHAR("YES"),
-                    Value(), Value(), Value()});
+                    Value::VARCHAR(not_null ? "NO" : "YES"),
+                    pk ? Value::VARCHAR("PRI") : Value(), Value(), Value()});
             }
             continue;
         }
