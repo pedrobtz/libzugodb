@@ -2,6 +2,50 @@
 
 ## libzugodb 0.4.0 (in development)
 
+- NaN with DuckDB's semantics (#42; design L30, superseding L23's
+  refusal). A NaN equals every NaN and is greater than `+inf` in
+  comparisons, `ORDER BY`, `MIN`/`MAX`, and is one key of `GROUP BY`,
+  `DISTINCT`, joins, set operations and `PARTITION BY`; `-0.0` is one key
+  with `0.0`. `0/0`, `sqrt(-1)`, `ln(-1)` and the like give NaN as DuckDB's
+  do, text `'nan'` reads as one, and tables, database files and results
+  hold it with its bits. The database format is unchanged (1001); a file
+  holding a NaN, which 0.3.0 refused, now loads. A one-header audit
+  (`include/slothdb/common/types/float_order.hpp`) covers every
+  floating-point comparison, sort, hash and key; two fast paths leave
+  floating-point arguments to the generic path. The oracle is 1,158
+  queries answered by DuckDB v2.0.0 (`tools/make_nan_cases.py`,
+  `test/fixtures/nan/`), replayed at thread caps 1 and 2 and over a
+  loaded database file.
+- A `FLOAT` or `DOUBLE` as text (`CAST ... AS VARCHAR`, `||`, `concat`,
+  `string_agg`) is DuckDB's: `1.0` where it was `1`, `-0.0`, `1e+20`,
+  `nan`/`-nan` (MinGW printed `nan(ind)`). With it, DuckDB's types for
+  `ROUND` and `TRUNC` of an integer (its own type), `MOD` of integers (the
+  integers' type) and `FLOAT` arithmetic (`FLOAT`, it was `DOUBLE`).
+- Wrong answers found on the way and fixed: `BETWEEN` and `IN` of mixed
+  types (`BIGINT` or `DOUBLE` column `BETWEEN 1 AND 10` was true of every
+  row, `IN (2, 3)` of none, `DATE BETWEEN` two strings always true), a
+  `NULL` bound of `BETWEEN`, the trigonometric functions' NULL for a NaN
+  or an infinity, `sign(NaN)`, `TRY_CAST('1e400' AS DOUBLE)` (NULL, now
+  `inf`), hexadecimal text read as a number, a finite `DOUBLE` past
+  `FLOAT`'s range cast to `inf` (DuckDB's error), `-0.0` as a literal
+  (DuckDB's `DECIMAL` zero, `0.0`), `count(DISTINCT)`, `GROUP BY` and joins
+  that kept `-0.0` from `0.0`, a probe-side `FLOAT`, `SMALLINT` or
+  `TINYINT` read as 0 by the fused join-aggregate, `MEDIAN`'s
+  interpolation, `var_pop` and `stddev_pop` of one value, `radians` and
+  `degrees`' last digit, and `INSERT ... SELECT` of a `DOUBLE` into an
+  integer column (truncated; now rounded as DuckDB's cast). Refused rather
+  than fixed: a `VALUES` column mixing string literals with another type
+  (#59), text with a fraction cast to an integer, and a `VARCHAR` column
+  `IN` or `BETWEEN` numbers.
+- For zugodb: `dbWriteTable()` of an R `NaN` now stores a NaN, as DuckDB
+  does; it was an engine error. The glue must keep mapping `NA_real_`
+  (a NaN with payload 1954) to NULL with `R_IsNA` before appending, since
+  the engine now stores any NaN's bits, and should map every NaN it reads
+  back to `R_NaN` so that no payload is taken for `NA`. A NaN's text in
+  SQL is `nan` or `-nan`. No path is added to the vendored tree but
+  `include/slothdb/common/types/float_order.hpp`, in an existing
+  directory; `include/slothdb/common/types/nan_guard.hpp` is removed.
+
 - Host-supplied function providers (Stage 11.1, #40; design L25, L29).
   `include/slothdb/main/providers.hpp`, plain C, defines a
   `zugodb_providers` set of versioned tables, `zugodb_regex_v1` and
