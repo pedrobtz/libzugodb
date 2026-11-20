@@ -103,3 +103,31 @@ TEST_CASE("Stage 8: text to TIMESTAMP by DuckDB's grammar, and its text") {
     CHECK_THROWS(conn.Query("INSERT INTO ts VALUES ('1993-02-29 00:00:00')"));
 }
 
+// ---------------------------------------------------------------------------
+// TIMESTAMP_S, TIMESTAMP_MS, TIMESTAMP_NS, TIMESTAMPTZ and TIMESTAMP(p)
+// (types/timestamp/alternative_timestamp_casts.test, test_timestamp_tz.test,
+// timestamp_precision.test) were the engine's TIMESTAMP under another
+// name, so '...33.846'::TIMESTAMP_S kept its milliseconds where DuckDB
+// rounds to 34, and TIMESTAMPTZ printed no offset: refused.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: the TIMESTAMP variants are refused") {
+    Database db;
+    Connection conn(db);
+    const char *queries[] = {
+        "SELECT '2024-05-10 11:06:33.846'::TIMESTAMP_S",
+        "SELECT '2024-05-10 11:06:33.123846'::TIMESTAMP_MS",
+        "SELECT '2023-12-08 08:51:39.123456'::TIMESTAMP_NS::TIME",
+        "SELECT '2021-11-15 02:30:00'::TIMESTAMP::TIMESTAMPTZ",
+        "SELECT '2020-01-01 01:23:45.123456789'::TIMESTAMP(3)",
+        "CREATE TABLE t(a TIMESTAMP(0))",
+        "CREATE TABLE t(a TIMETZ)",
+    };
+    for (auto *q : queries) {
+        CAPTURE(q);
+        CHECK_THROWS(conn.Query(q));
+    }
+    CHECK(Run(conn, "SELECT '2020-01-01 01:23:45.123456789'::TIMESTAMP(6), "
+                    "'2020-01-01 01:23:45'::DATETIME") ==
+          Rows{{"2020-01-01 01:23:45.123456", "2020-01-01 01:23:45"}});
+}

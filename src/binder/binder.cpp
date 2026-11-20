@@ -2081,10 +2081,23 @@ LogicalType Binder::ResolveTypeName(const std::string &name) {
     if (base == "BLOB" || base == "BYTEA") return LogicalType::BLOB();
     if (base == "DATE") return LogicalType::DATE();
     if (base == "TIME") return LogicalType::TIME();
-    if (base == "TIMESTAMP" || base == "TIMESTAMPTZ" ||
-        base == "TIMESTAMP_S" || base == "TIMESTAMP_MS" ||
-        base == "TIMESTAMP_NS" || base == "DATETIME")
-        return LogicalType::TIMESTAMP();
+    // The engine's TIMESTAMP is DuckDB's: microseconds, no time zone.
+    // DuckDB's seconds, milliseconds and nanoseconds timestamps and its
+    // TIMESTAMPTZ round, print and compare otherwise; aliased to TIMESTAMP
+    // they gave wrong values, so they are refused (Stage 8, #12). So is a
+    // precision other than DuckDB's microsecond ones, 4 to 6.
+    if (base == "TIMESTAMP_S" || base == "TIMESTAMP_MS" || base == "TIMESTAMP_NS" ||
+        base == "TIMESTAMPTZ" || base == "TIMESTAMP_TZ" || base == "TIMETZ" ||
+        base == "TIME_TZ") {
+        throw NotImplementedException(base + " is not supported");
+    }
+    if (base == "TIMESTAMP" && upper != base) {
+        auto p = upper.substr(base.size());
+        if (p != "(4)" && p != "(5)" && p != "(6)") {
+            throw NotImplementedException("TIMESTAMP" + p + " is not supported");
+        }
+    }
+    if (base == "TIMESTAMP" || base == "DATETIME") return LogicalType::TIMESTAMP();
 
     if (base == "DECIMAL" || base == "NUMERIC") {
         // SlothDB has no native DECIMAL execution path: INSERT into
