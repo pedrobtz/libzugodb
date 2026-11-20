@@ -1,6 +1,6 @@
 # Changelog
 
-## libzugodb 0.3.0 (in development)
+## libzugodb 0.3.0
 
 - A conformance runner, `tools/slt/` (`zugodb_slt`), runs DuckDB's own
   sqllogictest files through `Connection::Query` and classifies each case
