@@ -111,3 +111,38 @@ TEST_CASE("Threads - the window's row numbers match the table") {
         CHECK(bad == 0);
     }
 }
+
+TEST_CASE("Threads - the Parquet scan's throttled decode workers give the file's rows") {
+    // Eight row groups and at most 2 * workers + 2 decoded ahead, so at
+    // caps 2 and 4 workers wait on the consumer's next_emit_, which the
+    // consumer advanced outside the mutex before Stage 5 (a race TSan
+    // reports). The oracle is the file's own definition.
+    ThreadCapGuard cap;
+    REQUIRE(std::filesystem::exists(PARQUET_PATH));
+    Database db;
+    Connection conn(db);
+    zugodb::testing::AddParquetTable(db, "pq", PARQUET_PATH);
+    constexpr int64_t PARQUET_ROWS = 16384;
+    for (unsigned int n : {2u, 4u}) {
+        SetThreadCap(n);
+        INFO("cap " << n);
+        for (int round = 0; round < Rounds(); round++) {
+            auto r = conn.Query("SELECT k, v FROM pq WHERE v % 7 = 3");
+            int64_t expect = 3;
+            idx_t bad = 0;
+            for (idx_t i = 0; i < r.RowCount(); i++, expect += 7) {
+                int64_t k = r.GetValue(i, 0).GetValue<int64_t>();
+                int64_t v = r.GetValue(i, 1).GetValue<int64_t>();
+                if (v != expect || k != v % TABLE_GROUPS) bad++;
+            }
+            CHECK(r.RowCount() == (idx_t)((PARQUET_ROWS - 3 + 6) / 7));
+            CHECK(bad == 0);
+            auto all = conn.Query("SELECT v FROM pq");
+            REQUIRE(all.RowCount() == (idx_t)PARQUET_ROWS);
+            bad = 0;
+            for (idx_t i = 0; i < all.RowCount(); i++)
+                if (all.GetValue(i, 0).GetValue<int64_t>() != (int64_t)i) bad++;
+            CHECK(bad == 0);
+        }
+    }
+}

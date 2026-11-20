@@ -900,31 +900,35 @@ public:
         // immediately to the next without GetData returning empty.
         while (!current_work_ || chunks_in_current_ >= current_rg_size_) {
             if (next_emit_ >= effective_num_rgs_) return false;
+            const idx_t rg = next_emit_;
 
             if (workers_.empty()) {
                 // Single-threaded path: decode on demand inline.
-                current_work_ = DecodeRowGroup(next_emit_);
+                current_work_ = DecodeRowGroup(rg);
+                next_emit_++;
             } else {
                 std::unique_lock<std::mutex> lk(mu_);
                 slot_ready_cv_.wait(lk, [&] {
-                    return stop_.load() || slots_[next_emit_] != nullptr;
+                    return stop_.load() || slots_[rg] != nullptr;
                 });
                 if (stop_.load()) {
                     lk.unlock();
                     RethrowWorkerError();
                     return false;
                 }
-                current_work_ = std::move(slots_[next_emit_]);
-                // Wake any worker throttled by max_ahead - one slot just freed.
+                current_work_ = std::move(slots_[rg]);
+                // Advanced under mu_: a worker throttled by max_ahead reads
+                // next_emit_ in its wait predicate. Then wake it.
+                next_emit_++;
+                lk.unlock();
                 slot_free_cv_.notify_all();
             }
             // Pruned RGs contribute zero rows. Set size=0 and loop so we
             // pick up the next RG without paying the per-call return cost.
             current_rg_size_ = (current_work_ && current_work_->pruned) ? 0
                 : static_cast<idx_t>(
-                    reader_sp_->GetMeta().row_groups[next_emit_].num_rows);
+                    reader_sp_->GetMeta().row_groups[rg].num_rows);
             chunks_in_current_ = 0;
-            next_emit_++;
         }
 
         idx_t remaining = current_rg_size_ - chunks_in_current_;
@@ -1045,7 +1049,11 @@ public:
                 return nullptr;
             }
             work = std::move(slots_[next_emit_]);
+            rg_idx_out = next_emit_;
+            next_emit_++; // under mu_, as in GetData()
+            lk.unlock();
             slot_free_cv_.notify_all();
+            return work;
         }
         rg_idx_out = next_emit_;
         next_emit_++;
@@ -1507,7 +1515,7 @@ private:
     idx_t row_limit_ = 0;
     bool workers_spawned_ = false;
     std::atomic<idx_t> next_decode_{0};
-    idx_t next_emit_ = 0;            // main-thread only
+    idx_t next_emit_ = 0;            // written by the consumer only, under mu_ while workers run
     std::vector<std::unique_ptr<RGWork>> slots_; // indexed by rg_idx
     std::vector<std::thread> workers_;
     // How many workers there are, set before the first starts: WorkerLoop
