@@ -35,7 +35,7 @@ issue closed. zugodb then moves its pin.
 | 5 | [ThreadSanitizer in CI](#stage-5--threadsanitizer-in-ci) | 0.2.0 | + `linux-tsan` | [#7](https://github.com/pedrobtz/libzugodb/issues/7) | [#27](https://github.com/pedrobtz/libzugodb/pull/27) | 2026-11-20 |
 | 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | [#28](https://github.com/pedrobtz/libzugodb/pull/28) | 2026-11-20 |
 | 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | [#29](https://github.com/pedrobtz/libzugodb/pull/29) | 2026-11-20 |
-| 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | | |
+| 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | [#30](https://github.com/pedrobtz/libzugodb/pull/30) | |
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | | |
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | | |
 | 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | | |
@@ -487,6 +487,27 @@ subset is DuckDB's.
   holds them there.
 - No accepted case is without a fix, a refusal or a listed difference.
 - Every cause has a doctest that was seen to fail.
+
+**Deviations (2026-11-20).**
+
+- The causes did not fit one review. PR #30 lands thirteen: joins whose
+  condition has no column equality, `NATURAL JOIN`, date, time and
+  timestamp text (#25), the timestamp variants, `DECIMAL` (#26), window
+  shapes, UTF-8 string functions, aggregates, a `BIGINT` sum past 2^53,
+  small integers in floating-point arithmetic, and the runner's regex
+  results. The other eight causes, 86 cases (61 wrong, 25 accepted on the
+  macOS x86_64 ASan run), are sub-issues of
+  [v0.3.0](https://github.com/pedrobtz/libzugodb/issues/9): #31 to #38;
+  #39 is the Unicode case table that would lift a refusal of L22. Stage
+  8's exit criteria hold once those close, before v0.3.0 is tagged.
+- `EXPLAIN` queries are left out by the runner, not listed as
+  differences (L20). No listed difference was needed, so
+  `test/conformance/differences.tsv` and its test are not added yet.
+- Many cases that passed are now refused: those that used `DECIMAL` (143
+  on one run), `ILIKE` and `UPPER`/`LOWER` of non-ASCII text, and a
+  correlated subquery in a join condition, which passed only because the
+  condition was ignored. No case moved from passed or refused to wrong
+  or accepted.
 
 **Design.** [§3](design.md#3-dialect),
 [§5](design.md#5-conformance-and-its-oracles) and [zugodb Q18][zdesign].

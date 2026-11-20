@@ -1,10 +1,10 @@
 what	files	cases
-run	746	20461
-passed	592	5597
-refused	654	13565
-wrong	100	316
-accepted	47	47
-unreliable	141	936
+run	746	20194
+passed	581	5587
+refused	665	13934
+wrong	27	61
+accepted	25	25
+unreliable	96	587
 crashed	0	0
 hung	0	0
 not_run	0	0
@@ -22,3 +22,4 @@ left out: require json	4
 left out: require longdouble	1	
 left out: require parquet	5	
 left out: require windows	1	
+queries left out: regex results	47	263
