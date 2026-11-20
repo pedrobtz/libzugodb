@@ -72,3 +72,19 @@ TEST_CASE("Stage 8: a NULL key matches nothing, the string 'NULL' included") {
     conn.Query("INSERT INTO b VALUES (NULL), ('NULL')");
     CHECK(Run(conn, "SELECT count(*) FROM a JOIN b ON a.s = b.s") == Rows{{"1"}});
 }
+
+// ---------------------------------------------------------------------------
+// NATURAL JOIN (join/natural/natural_join.test) joined on the first column
+// of each side and showed the shared columns twice: refused. A join other
+// than CROSS without ON is a parser error, as in DuckDB.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: NATURAL JOIN and a join without ON are refused") {
+    Database db;
+    Connection conn(db);
+    MakeIntegers(conn);
+    CHECK_THROWS(conn.Query("SELECT * FROM integers NATURAL JOIN integers2"));
+    CHECK_THROWS(conn.Query("SELECT * FROM integers JOIN integers2"));
+    CHECK_THROWS(conn.Query("SELECT * FROM integers LEFT JOIN integers2"));
+    CHECK(Run(conn, "SELECT count(*) FROM integers CROSS JOIN integers2") == Rows{{"6"}});
+}
