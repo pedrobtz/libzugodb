@@ -9,6 +9,12 @@ option(SLOTHDB_BUILD_TESTS "Build tests" ON)
 option(SLOTHDB_BUILD_SHELL "Build CLI shell" OFF)
 option(SLOTHDB_SANITIZERS "Enable ASan/UBSan" OFF)
 option(SLOTHDB_FUZZ "Build the libFuzzer harnesses in fuzz/ (clang only)" OFF)
+option(SLOTHDB_TSAN "Enable ThreadSanitizer" OFF)
+
+if(SLOTHDB_TSAN AND (SLOTHDB_SANITIZERS OR SLOTHDB_FUZZ))
+    # TSan cannot be combined with ASan in one binary.
+    message(FATAL_ERROR "SLOTHDB_TSAN excludes SLOTHDB_SANITIZERS and SLOTHDB_FUZZ")
+endif()
 
 if(SLOTHDB_FUZZ)
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
