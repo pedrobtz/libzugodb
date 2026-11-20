@@ -29,6 +29,13 @@ build/test/slothdb_tests -ltc               # list test cases
 ```
 
 - `-DSLOTHDB_SANITIZERS=ON` builds with ASan and UBSan (a CI job).
+- `-DSLOTHDB_TSAN=ON` builds with ThreadSanitizer (the `linux-tsan` job),
+  not with `SLOTHDB_SANITIZERS` or `SLOTHDB_FUZZ`. Run the suite with
+  `TSAN_OPTIONS="halt_on_error=1 second_deadlock_stack=1"`;
+  `ZUGODB_THREAD_ROUNDS=n` repeats the multi-threaded loop of
+  `test/unit/execution/test_threads.cpp`. Apple clang has TSan. A kernel
+  with high mmap randomisation stops clang 18's TSan at start; the CI job
+  sets `vm.mmap_rnd_bits=28`.
 - `-DSLOTHDB_BUILD_SHELL=ON` adds the `slothdb` shell from `tools/shell/`.
 - `-DSLOTHDB_FUZZ=ON` (clang with libFuzzer; Apple clang lacks it) builds
   the harnesses in `fuzz/`; `fuzz/run.sh checkpoint_load 120
@@ -37,8 +44,9 @@ build/test/slothdb_tests -ltc               # list test cases
 - Warnings are `-Wall -Wextra -Wpedantic` (`/W4 /WX` under MSVC).
 
 CI (`.github/workflows/ci.yml`) runs the suite on Linux gcc, Linux with
-ASan and UBSan, macOS clang, and MinGW-w64 UCRT64, the toolchain of R's
-Rtools. A change must pass all four, and the `fuzz` job: libFuzzer over
+ASan and UBSan, Linux with ThreadSanitizer, macOS clang, and MinGW-w64
+UCRT64, the toolchain of R's Rtools. A change must pass all five, and the
+`fuzz` job: libFuzzer over
 the loader, 120 s per pull request and an hour weekly, with a floor on
 its reach.
 

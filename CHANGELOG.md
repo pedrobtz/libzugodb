@@ -1,6 +1,15 @@
 # Changelog
 
-## libzugodb 0.2.0 (in development)
+## libzugodb 0.2.0
+
+A minor version, as the database file's format changes (version 1001,
+with a checksum). SQL reads no file, a damaged database file is refused,
+an error on a worker thread is an error of the query, `HUGEINT`,
+`INTERVAL` and `UUID` are refused, two data races are fixed, and CI runs
+a fuzzer and ThreadSanitizer.
+For zugodb's `tools/vendor.yaml`, one file is new,
+`include/slothdb/common/crc32.hpp`; `src/api/` and `include/slothdb/api/`
+are removed (zugodb never vendored them).
 
 - Remove SlothDB's C API, `src/api/` and `include/slothdb/api/`, which
   served its Python binding. zugodb never vendored it. The `slothdb` shell
@@ -79,6 +88,19 @@
   `VarcharTypeInfo` and `LogicalType::VARCHAR_N` are removed. `fuzz/` holds the libFuzzer harness
   (`-DSLOTHDB_FUZZ=ON`, clang), its seed corpus and scripts, and CI runs
   it on every pull request and weekly; zugodb does not vendor it.
+- The window operator no longer races on its per-partition "sorted" flags.
+  From 200,000 rows and two partitions it sorts partitions on several
+  workers, and the flags were a `std::vector<bool>`, whose neighbours share
+  a word, so two workers wrote one word at once (a data race, undefined
+  behaviour; a lost flag only made a partition sort twice). They are one
+  byte each now. Found by ThreadSanitizer.
+- The Parquet scan's consumer advances its row-group counter under the
+  mutex its throttled decode workers read it with; it was incremented
+  after the lock was released, a data race, and the woken worker saw the
+  old value. Found by ThreadSanitizer.
+- CI runs the suite under ThreadSanitizer (`linux-tsan`, CMake option
+  `SLOTHDB_TSAN`), with a loop of multi-threaded queries at thread caps 2
+  and 4 whose results must equal those at cap 1.
 
 ## libzugodb 0.1.1
 
