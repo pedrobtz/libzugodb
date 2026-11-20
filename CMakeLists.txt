@@ -10,6 +10,12 @@ option(SLOTHDB_BUILD_SHELL "Build CLI shell" OFF)
 option(SLOTHDB_SANITIZERS "Enable ASan/UBSan" OFF)
 option(SLOTHDB_FUZZ "Build the libFuzzer harnesses in fuzz/ (clang only)" OFF)
 option(SLOTHDB_TSAN "Enable ThreadSanitizer" OFF)
+# The conformance runner in tools/slt (POSIX only: it forks a child per file).
+if(WIN32)
+    set(SLOTHDB_BUILD_SLT OFF CACHE BOOL "Build the conformance runner (tools/slt)")
+else()
+    option(SLOTHDB_BUILD_SLT "Build the conformance runner (tools/slt)" ON)
+endif()
 
 if(SLOTHDB_TSAN AND (SLOTHDB_SANITIZERS OR SLOTHDB_FUZZ))
     # TSan cannot be combined with ASan in one binary.
@@ -31,6 +37,10 @@ include(cmake/CompilerOptions.cmake)
 include(cmake/Platform.cmake)
 
 add_subdirectory(src)
+
+if(SLOTHDB_BUILD_SLT)
+    add_subdirectory(tools/slt)
+endif()
 
 if(SLOTHDB_FUZZ)
     add_subdirectory(fuzz)
