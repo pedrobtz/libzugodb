@@ -8,6 +8,8 @@
 #include "../conformance_rows.hpp"
 #include "slothdb/main/database.hpp"
 
+#include <cmath>
+
 using namespace zugodb;
 using namespace zugodb::conformance;
 

@@ -1,10 +1,10 @@
 what	files	cases
 run	746	20194
-passed	581	5587
-refused	665	13934
-wrong	27	61
-accepted	25	25
-unreliable	96	587
+passed	579	5627
+refused	669	14098
+wrong	0	0
+accepted	0	0
+unreliable	74	469
 crashed	0	0
 hung	0	0
 not_run	0	0
