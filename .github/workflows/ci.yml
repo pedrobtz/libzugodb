@@ -68,7 +68,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { target: checkpoint_load, source: src/storage/checkpoint.cpp, floor: 1 }
+          - { target: checkpoint_load, source: src/storage/checkpoint.cpp, floor: 240 }
     env:
       FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '3600' || inputs.fuzz_seconds || '120' }}
     steps:
