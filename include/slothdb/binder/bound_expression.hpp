@@ -3,6 +3,7 @@
 #include "slothdb/common/types/logical_type.hpp"
 #include "slothdb/common/constants.hpp"
 #include "slothdb/common/types/value.hpp"
+#include "slothdb/main/provider_set.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -173,6 +174,11 @@ public:
     // the aggregator and gating each update. NULL filter result acts as
     // false (matches SQL standard).
     BoundExprPtr filter;
+    // A function a host's provider computes (Stage 11.1, design L29): the
+    // regex call it resolved to, or the UTF-8 table LENGTH counts with.
+    // Carried here, not in a static, so two Databases never cross.
+    std::shared_ptr<const ProviderRegexCall> regex;
+    const zugodb_utf8_v1 *utf8 = nullptr;
 };
 
 // Bound CAST.

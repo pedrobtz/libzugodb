@@ -37,9 +37,14 @@ static bool IsFileTableFunction(const std::string &name) {
 // ============================================================================
 
 std::vector<ParsedStmtPtr> Parser::Parse(const std::string &sql) {
+    return Parse(sql, ParseOptions{});
+}
+
+std::vector<ParsedStmtPtr> Parser::Parse(const std::string &sql, const ParseOptions &options) {
     Tokenizer tokenizer(sql);
     auto tokens = tokenizer.Tokenize();
     Parser parser(std::move(tokens));
+    parser.options_ = options;
 
     std::vector<ParsedStmtPtr> statements;
     while (!parser.IsAtEnd()) {
@@ -1040,13 +1045,31 @@ ParsedExprPtr Parser::ParseComparison() {
         }
         pat = std::make_unique<ConstantExpression>(out, TokenType::STRING_LITERAL);
     };
-    // SIMILAR TO is a regular expression: refused (design L24).
+    // SIMILAR TO is a regular expression, DuckDB's regexp_full_match:
+    // refused without a regex provider (design L24, L29).
     {
         size_t k = pos_;
-        if (k < tokens_.size() && tokens_[k].type == TokenType::KW_NOT) k++;
+        bool negated = false;
+        if (k < tokens_.size() && tokens_[k].type == TokenType::KW_NOT) {
+            k++;
+            negated = true;
+        }
         if (k < tokens_.size() && tokens_[k].type == TokenType::IDENTIFIER &&
             StringUtil::Upper(tokens_[k].value) == "SIMILAR") {
-            RefuseRegex("SIMILAR TO");
+            if (!options_.regex) RefuseRegex("SIMILAR TO");
+            pos_ = k + 1;
+            Expect(TokenType::KW_TO, "after SIMILAR");
+            auto right = ParseAddSub();
+            if (CheckKeyword(TokenType::KW_ESCAPE)) {
+                throw NotImplementedException("SIMILAR TO ... ESCAPE is not supported");
+            }
+            std::vector<ParsedExprPtr> args;
+            args.push_back(std::move(left));
+            args.push_back(std::move(right));
+            ParsedExprPtr call =
+                std::make_unique<FunctionExpression>("REGEXP_FULL_MATCH", std::move(args));
+            if (negated) return std::make_unique<NegationExpression>(std::move(call));
+            return call;
         }
     }
     if (MatchKeyword(TokenType::KW_LIKE)) {

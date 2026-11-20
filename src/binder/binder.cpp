@@ -1644,6 +1644,111 @@ BoundExprPtr Binder::BindUnaryMinus(const UnaryMinusExpression &expr, BindContex
     return std::make_unique<BoundUnaryMinus>(std::move(child));
 }
 
+// A regex function through the host's provider (Stage 11.1, design L29):
+// regexp_matches, regexp_full_match (SIMILAR TO), regexp_replace and
+// regexp_extract with a group number. The options are a constant of 'c'
+// and 'i' (the last wins), with 'g' for regexp_replace; any other letter
+// is refused. A constant pattern is compiled here, once for the query.
+static BoundExprPtr BindRegexCall(const std::string &name, std::vector<BoundExprPtr> args,
+                                  const zugodb_regex_v1 &api) {
+    auto call = std::make_shared<ProviderRegexCall>();
+    call->api = &api;
+    call->what = StringUtil::Lower(name);
+    size_t lo = 2, hi = 3;
+    LogicalType ret = LogicalType::BOOLEAN();
+    if (name == "REGEXP_MATCHES") {
+        call->kind = ProviderRegexCall::Kind::MATCHES;
+    } else if (name == "REGEXP_FULL_MATCH") {
+        call->kind = ProviderRegexCall::Kind::FULL_MATCH;
+    } else if (name == "REGEXP_REPLACE") {
+        call->kind = ProviderRegexCall::Kind::REPLACE;
+        lo = 3;
+        hi = 4;
+        ret = LogicalType::VARCHAR();
+    } else {
+        call->kind = ProviderRegexCall::Kind::EXTRACT;
+        lo = 2;
+        hi = 4;
+        ret = LogicalType::VARCHAR();
+    }
+    size_t n = args.size();
+    if (n < lo || n > hi) {
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            "No function matches " + call->what + "() with " + std::to_string(n) +
+            " argument(s); it takes " + std::to_string(lo) + " to " + std::to_string(hi));
+    }
+    // The text arguments: the string, the pattern and the replacement.
+    size_t text_args = call->kind == ProviderRegexCall::Kind::REPLACE ? 3 : 2;
+    for (size_t i = 0; i < text_args; i++) {
+        auto t = args[i]->GetReturnType().id();
+        if (t != LogicalTypeId::VARCHAR && t != LogicalTypeId::SQLNULL) {
+            throw BinderException(ErrorCode::TYPE_MISMATCH,
+                "No function matches " + call->what + "() of a " +
+                args[i]->GetReturnType().ToString());
+        }
+    }
+    auto constant_of = [](const BoundExprPtr &e) -> const BoundConstant * {
+        return e->GetExpressionType() == BoundExpressionType::CONSTANT
+                   ? static_cast<const BoundConstant *>(e.get())
+                   : nullptr;
+    };
+    // regexp_extract's group: a constant integer, as DuckDB's.
+    size_t opt_index = text_args;
+    if (call->kind == ProviderRegexCall::Kind::EXTRACT && n >= 3) {
+        auto *g = constant_of(args[2]);
+        auto gt = args[2]->GetReturnType().id();
+        if (!g || g->value.IsNull() ||
+            (gt != LogicalTypeId::TINYINT && gt != LogicalTypeId::SMALLINT &&
+             gt != LogicalTypeId::INTEGER && gt != LogicalTypeId::BIGINT)) {
+            throw NotImplementedException(
+                "regexp_extract's group must be a constant integer");
+        }
+        int64_t gv = g->value.GetValue<int64_t>();
+        if (gv < 0 || gv > 1000) {
+            throw InvalidInputException("regexp_extract: group index " + std::to_string(gv) +
+                                        " is out of range");
+        }
+        call->group = static_cast<int>(gv);
+        opt_index = 3;
+    }
+    if (n > opt_index) {
+        auto *o = constant_of(args[opt_index]);
+        if (!o || o->value.IsNull() || o->value.type().id() != LogicalTypeId::VARCHAR) {
+            throw InvalidInputException(call->what + ": the options must be a constant string");
+        }
+        bool caseless = false;
+        for (char c : o->value.GetValue<std::string>()) {
+            if (c == 'c') {
+                caseless = false;
+            } else if (c == 'i') {
+                caseless = true;
+            } else if (c == 'g' && call->kind == ProviderRegexCall::Kind::REPLACE) {
+                call->global = true;
+            } else {
+                throw NotImplementedException(call->what + ": the option '" + std::string(1, c) +
+                                              "' is not supported");
+            }
+        }
+        if (caseless) call->flags |= ZUGODB_REGEX_CASELESS;
+    }
+    if (auto *p = constant_of(args[1])) {
+        if (p->value.IsNull()) {
+            call->constant_null = true;
+        } else {
+            call->constant = ProviderRegex::Compile(api, call->what,
+                                                    p->value.GetValue<std::string>(), call->flags);
+            if (call->group > call->constant->GroupCount()) {
+                throw InvalidInputException(call->what + ": the pattern has " +
+                                            std::to_string(call->constant->GroupCount()) +
+                                            " group(s), not " + std::to_string(call->group));
+            }
+        }
+    }
+    auto fn = std::make_unique<BoundFunction>(name, std::move(args), ret, false);
+    fn->regex = std::move(call);
+    return fn;
+}
+
 BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &context) {
     auto name = StringUtil::Upper(expr.function_name);
     // Canonical alias normalization — collapse SQL-standard synonyms
@@ -1708,6 +1813,12 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         "REGEXP_EXTRACT_ALL", "REGEXP_SPLIT_TO_ARRAY", "REGEXP_SPLIT_TO_TABLE",
         "STRING_SPLIT_REGEX", "STR_SPLIT_REGEX", "REGEXP_ESCAPE", "REGEXP", "REGEXP_LIKE",
         "REGEXP_MATCH", "SIMILAR_TO"};
+    const ProviderSet *providers = catalog_.GetProviders();
+    const zugodb_regex_v1 *regex_api = providers ? providers->Regex() : nullptr;
+    if (regex_api && (name == "REGEXP_MATCHES" || name == "REGEXP_FULL_MATCH" ||
+                      name == "REGEXP_REPLACE" || name == "REGEXP_EXTRACT")) {
+        return BindRegexCall(name, std::move(args), *regex_api);
+    }
     for (auto *f : kRegexFunctions) {
         if (name == f) RefuseRegex("Function " + StringUtil::Lower(name));
     }
@@ -2306,8 +2417,12 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         }
     }
 
-    return std::make_unique<BoundFunction>(name, std::move(args), return_type,
-                                            is_agg, expr.is_distinct);
+    auto bound_fn = std::make_unique<BoundFunction>(name, std::move(args), return_type,
+                                                    is_agg, expr.is_distinct);
+    // LENGTH counts code points through the host's UTF-8 table when it has
+    // one (Stage 11.1, design L29).
+    if (name == "LENGTH" && providers) bound_fn->utf8 = providers->Utf8();
+    return bound_fn;
 }
 
 // A decimal literal (`2.5`, `-2.5`; not `25e-1`) cast to an integer type,

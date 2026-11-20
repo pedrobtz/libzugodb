@@ -8,11 +8,19 @@
 
 namespace zugodb {
 
+// What the parser accepts beyond its fixed dialect.
+struct ParseOptions {
+    // `[NOT] SIMILAR TO` parses into regexp_full_match, which needs a
+    // regex provider; without one it is refused here (design L24, L29).
+    bool regex = false;
+};
+
 // Recursive-descent SQL parser. No external dependencies.
 class Parser {
 public:
     // Parse a SQL string into a list of statements.
     static std::vector<ParsedStmtPtr> Parse(const std::string &sql);
+    static std::vector<ParsedStmtPtr> Parse(const std::string &sql, const ParseOptions &options);
 
 private:
     explicit Parser(std::vector<Token> tokens);
@@ -79,6 +87,7 @@ private:
 
     std::vector<Token> tokens_;
     size_t pos_;
+    ParseOptions options_;
     int expr_depth_ = 0;
     static constexpr int MAX_EXPR_DEPTH = 256;
 };
