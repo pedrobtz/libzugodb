@@ -1521,6 +1521,12 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
                 return_type.id() == LogicalTypeId::TINYINT) {
                 return_type = LogicalType::BIGINT();
             }
+            // DuckDB's SUM of a FLOAT is a DOUBLE; typed FLOAT, the
+            // aggregate wrote its double sum into a float slot and read
+            // back 0 (#36).
+            if (return_type.id() == LogicalTypeId::FLOAT) {
+                return_type = LogicalType::DOUBLE();
+            }
         } else {
             return_type = LogicalType::DOUBLE();
         }
@@ -2046,7 +2052,13 @@ BoundExprPtr Binder::BindWindow(const WindowExpression &expr, BindContext &conte
         return_type = args.empty() ? LogicalType::SQLNULL() : args[0]->GetReturnType();
     } else if (name == "SUM") {
         return_type = args.empty() ? LogicalType::BIGINT() : args[0]->GetReturnType();
-        if (return_type.id() == LogicalTypeId::INTEGER) return_type = LogicalType::BIGINT();
+        if (return_type.id() == LogicalTypeId::INTEGER ||
+            return_type.id() == LogicalTypeId::SMALLINT ||
+            return_type.id() == LogicalTypeId::TINYINT) {
+            return_type = LogicalType::BIGINT();
+        }
+        // As the aggregate: a FLOAT's sum is a DOUBLE (#36).
+        if (return_type.id() == LogicalTypeId::FLOAT) return_type = LogicalType::DOUBLE();
     } else if (name == "COUNT") {
         return_type = LogicalType::BIGINT();
     } else if (name == "AVG") {
