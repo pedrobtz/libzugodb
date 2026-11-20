@@ -1,0 +1,1 @@
+SELECT round((-32768)::SMALLINT, -1);

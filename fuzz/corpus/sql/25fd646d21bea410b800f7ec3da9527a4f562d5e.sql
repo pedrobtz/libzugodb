@@ -1,0 +1,1 @@
+CREATE TABLE tinyint_limits AS SELECT (-128)::TINYINT min, 127::TINYINT max

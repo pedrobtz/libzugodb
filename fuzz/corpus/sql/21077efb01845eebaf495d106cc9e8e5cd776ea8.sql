@@ -1,0 +1,1 @@
+SELECT format_bytes(-9223372036854775808);

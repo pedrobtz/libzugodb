@@ -1,0 +1,1 @@
+SELECT i::FLOAT FROM uhugeints ORDER BY i

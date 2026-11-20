@@ -1,0 +1,1 @@
+SELECT EXTRACT(dow FROM cast('1970-01-01' AS DATE) + 6);

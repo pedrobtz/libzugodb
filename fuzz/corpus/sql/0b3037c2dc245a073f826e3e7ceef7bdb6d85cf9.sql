@@ -1,0 +1,1 @@
+CREATE TABLE mem.fact AS SELECT id, k FROM fact LIMIT 100

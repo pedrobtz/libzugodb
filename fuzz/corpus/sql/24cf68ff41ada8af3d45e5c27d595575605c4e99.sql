@@ -1,0 +1,1 @@
+CREATE TABLE zero_probe(id INTEGER, v DOUBLE, vf FLOAT);

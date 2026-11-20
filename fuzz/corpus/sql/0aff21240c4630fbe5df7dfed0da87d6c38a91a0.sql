@@ -1,0 +1,1 @@
+SELECT s FROM strings WHERE s NOT SIMILAR TO p

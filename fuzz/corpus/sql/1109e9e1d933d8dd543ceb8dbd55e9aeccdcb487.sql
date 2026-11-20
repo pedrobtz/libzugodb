@@ -1,0 +1,1 @@
+SELECT WEEKDAY(d) FROM dates;

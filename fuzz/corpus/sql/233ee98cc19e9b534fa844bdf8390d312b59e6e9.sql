@@ -1,0 +1,4 @@
+SELECT g, len(lttb(x::DOUBLE, y, 4 ORDER BY x))
+FROM (SELECT CASE WHEN i < 100 THEN 0 WHEN i < 110 THEN 1 ELSE 2 END AS g,
+             i AS x, CASE WHEN i % 3 = 0 THEN NULL ELSE (i % 7)::DOUBLE END AS y FROM range(115) t(i))
+GROUP BY g ORDER BY g

@@ -1,0 +1,1 @@
+SELECT EXTRACT(week FROM cast('2008-01-01' AS DATE));

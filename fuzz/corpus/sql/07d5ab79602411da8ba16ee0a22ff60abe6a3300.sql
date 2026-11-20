@@ -1,0 +1,3 @@
+SELECT i1.i, (SELECT STRING_AGG(i::VARCHAR, ',' ORDER BY i1.i+i) FROM integers WHERE i<=i1.i) c1
+FROM integers i1
+ORDER BY 1 NULLS LAST

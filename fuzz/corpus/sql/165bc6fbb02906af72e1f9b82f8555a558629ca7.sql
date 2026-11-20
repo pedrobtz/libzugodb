@@ -1,0 +1,1 @@
+SELECT (SELECT 1), sum(1) OVER w WINDOW w AS (), w AS (ORDER BY 1)

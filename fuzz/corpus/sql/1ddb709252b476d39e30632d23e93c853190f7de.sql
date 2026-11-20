@@ -1,0 +1,1 @@
+SELECT i::USMALLINT FROM smallints WHERE i>=0 ORDER BY i

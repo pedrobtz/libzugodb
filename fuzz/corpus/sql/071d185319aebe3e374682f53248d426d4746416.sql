@@ -1,0 +1,1 @@
+select 'ü'::blob;

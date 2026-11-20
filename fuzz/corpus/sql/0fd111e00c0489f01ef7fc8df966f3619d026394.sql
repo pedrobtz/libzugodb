@@ -1,0 +1,1 @@
+SELECT f, SUM(i) OVER (PARTITION BY f) FROM floats ORDER BY f

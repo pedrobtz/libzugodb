@@ -1939,8 +1939,8 @@ ParsedStmtPtr Parser::ParseMergeStatement() {
         stmt->target_alias = Advance().value;
     }
 
-    // USING source
-    MatchKeyword(TokenType::KW_USING);
+    // USING source: DuckDB's grammar requires it (it was optional).
+    Expect(TokenType::KW_USING, "in MERGE");
     stmt->source_table = ExpectIdentifier("for source table").value;
     if (MatchKeyword(TokenType::KW_AS) || (Check(TokenType::IDENTIFIER) &&
         !CheckKeyword(TokenType::KW_ON))) {
@@ -1973,7 +1973,7 @@ ParsedStmtPtr Parser::ParseMergeStatement() {
             } while (Match(TokenType::COMMA));
             Expect(TokenType::RPAREN, "after VALUES");
         } else {
-            MatchKeyword(TokenType::KW_MATCHED);
+            Expect(TokenType::KW_MATCHED, "after WHEN");
             // WHEN MATCHED THEN UPDATE
             Expect(TokenType::KW_THEN, "after MATCHED");
             Expect(TokenType::KW_UPDATE, "in MERGE");

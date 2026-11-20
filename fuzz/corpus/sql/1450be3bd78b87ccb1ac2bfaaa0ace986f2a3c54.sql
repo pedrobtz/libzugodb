@@ -1,0 +1,1 @@
+SELECT NOT(0), NOT(1), NOT(NULL)

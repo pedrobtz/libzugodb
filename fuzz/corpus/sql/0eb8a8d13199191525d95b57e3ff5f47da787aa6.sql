@@ -1,0 +1,1 @@
+SELECT i::TINYINT FROM usmallints ORDER BY i

@@ -1,0 +1,1 @@
+SELECT MAX(1, 2)

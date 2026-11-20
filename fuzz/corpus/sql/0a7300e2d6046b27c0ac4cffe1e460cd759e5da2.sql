@@ -1,0 +1,10 @@
+SELECT 
+	i,
+	{func}(ORDER BY i // 2, i) OVER w AS f,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY i // 2
+	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+	EXCLUDE TIES
+)
+ORDER BY i;

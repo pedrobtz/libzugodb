@@ -1,0 +1,1 @@
+SELECT 5 > ALL (SELECT x FROM (VALUES (1),(2)) s(x));

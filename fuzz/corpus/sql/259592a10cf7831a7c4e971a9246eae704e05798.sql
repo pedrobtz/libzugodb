@@ -1,0 +1,1 @@
+SELECT grp, FIRST(i ORDER BY i) FROM integers GROUP BY grp ORDER BY ALL

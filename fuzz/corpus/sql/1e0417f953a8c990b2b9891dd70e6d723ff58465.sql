@@ -1,0 +1,1 @@
+SELECT a FROM t1 JOIN BY (TYPE semi) t2 ON (a = b) ORDER BY a NULLS LAST;

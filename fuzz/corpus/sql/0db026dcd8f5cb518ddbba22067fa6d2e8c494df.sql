@@ -1,0 +1,3 @@
+SELECT k, LEAST(v, 21) as c, SUM(v) FROM r2l3r4l5i4i2l3v
+GROUP BY k, c
+ORDER BY 2, 3

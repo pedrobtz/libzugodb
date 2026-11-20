@@ -1,0 +1,1 @@
+SELECT '1f3'::DECIMAL

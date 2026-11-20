@@ -1,0 +1,1 @@
+INSERT INTO numbers VALUES (-42),(-1),(0), (1), (42), (NULL)

@@ -1,0 +1,1 @@
+SELECT i::UTINYINT FROM uintegers ORDER BY i

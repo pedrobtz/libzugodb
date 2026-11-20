@@ -1,0 +1,1 @@
+SELECT BIT_OR(1, 2, 3)

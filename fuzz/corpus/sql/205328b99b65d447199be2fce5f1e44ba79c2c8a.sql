@@ -1,0 +1,1 @@
+SELECT i::BIGINT FROM hugeints ORDER BY i

@@ -1,0 +1,1 @@
+CREATE TABLE int128_dec (v DECIMAL(38,2));

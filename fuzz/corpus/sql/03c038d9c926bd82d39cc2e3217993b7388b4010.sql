@@ -1,0 +1,1 @@
+SELECT min(v) EXPORT_STATE FROM (SELECT NULL::varchar AS v WHERE false) t;

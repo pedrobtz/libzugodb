@@ -1,0 +1,1 @@
+SELECT COUNT(*), COUNT(a), COUNT(b) FROM test

@@ -1,0 +1,7 @@
+SELECT l.a, r.b
+FROM (VALUES (1), (2)) l(a)
+FULL OUTER JOIN (VALUES (10), (20)) r(b)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND r.b = 10)
+ANTI JOIN (VALUES (100), (200)) s(c)
+  ON EXISTS (SELECT 1 WHERE l.a = 1 AND s.c = 100)
+ORDER BY ALL;

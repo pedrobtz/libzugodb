@@ -1,0 +1,1 @@
+SELECT (1, 1) <= ALL(SELECT * FROM (VALUES (1, 2), (2, 0)));

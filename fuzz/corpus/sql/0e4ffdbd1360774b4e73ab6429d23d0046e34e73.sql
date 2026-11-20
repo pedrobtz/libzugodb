@@ -1,0 +1,1 @@
+CREATE TABLE big (f BOOLEAN, s VARCHAR);

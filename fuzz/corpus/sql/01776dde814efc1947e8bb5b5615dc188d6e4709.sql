@@ -1,0 +1,1 @@
+SELECT i::FLOAT FROM bigints ORDER BY i

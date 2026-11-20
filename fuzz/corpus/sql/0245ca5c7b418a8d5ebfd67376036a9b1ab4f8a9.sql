@@ -1,0 +1,1 @@
+SELECT i::TINYINT FROM hugeints ORDER BY i

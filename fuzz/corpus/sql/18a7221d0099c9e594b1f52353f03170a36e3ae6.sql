@@ -1,0 +1,1 @@
+SELECT [1,2]::INT[2] LIMIT (SELECT 5);

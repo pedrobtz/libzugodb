@@ -1,0 +1,1 @@
+SELECT STRING_AGG(x, ',' ORDER BY x DESC), STRING_AGG(x, ',' ORDER BY x ASC) FROM strings;

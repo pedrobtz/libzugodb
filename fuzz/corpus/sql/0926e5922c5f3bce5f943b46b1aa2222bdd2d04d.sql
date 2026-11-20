@@ -1,0 +1,1 @@
+CREATE TABLE decimals2(i DECIMAL(38,1))

@@ -1,0 +1,1 @@
+CREATE TABLE mark(mark INTEGER, single INTEGER);

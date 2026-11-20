@@ -1,0 +1,1 @@
+SELECT suffix('abcdefghijklmnopqrstuvwxyz', 'vwxyz')

@@ -1,0 +1,1 @@
+SELECT i%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1

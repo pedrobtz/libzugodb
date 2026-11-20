@@ -1,0 +1,1 @@
+CREATE TABLE value_edges(i INTEGER, peer INTEGER, v INTEGER);

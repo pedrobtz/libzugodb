@@ -1,0 +1,1 @@
+SELECT COUNT(ALL) OVER () FROM range(3)

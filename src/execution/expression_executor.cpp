@@ -5049,17 +5049,19 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
                                     to_type == LogicalTypeId::USMALLINT ||
                                     to_type == LogicalTypeId::UINTEGER ||
                                     to_type == LogicalTypeId::UBIGINT)) {
-                double d = val.GetValue<double>();
-                if (!std::isfinite(d) ||
-                    d > static_cast<double>(std::numeric_limits<int64_t>::max()) ||
-                    d < static_cast<double>(std::numeric_limits<int64_t>::min())) {
-                    throw ConversionException("Value " + val.ToString() +
-                        " is out of range for the destination type");
-                }
                 // Round half-to-even (banker's rounding) per PG/DuckDB
                 // convention. Previously truncated toward zero — every
                 // CAST(1.6 AS INT) produced 1 instead of 2.
-                int64_t v = static_cast<int64_t>(std::nearbyint(d));
+                double d = std::nearbyint(val.GetValue<double>());
+                // 2^63 is a double but no BIGINT: `d > (double)INT64_MAX`
+                // let it through, an undefined conversion (Stage 9's SQL
+                // fuzzer: 9223372036854775807 read as a DOUBLE, cast back).
+                if (!std::isfinite(d) || d >= 9223372036854775808.0 ||
+                    d < -9223372036854775808.0) {
+                    throw ConversionException("Value " + val.ToString() +
+                        " is out of range for the destination type");
+                }
+                int64_t v = static_cast<int64_t>(d);
                 switch (to_type) {
                 case LogicalTypeId::TINYINT:
                     if (v < std::numeric_limits<int8_t>::min() || v > std::numeric_limits<int8_t>::max())

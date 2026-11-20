@@ -1,0 +1,1 @@
+CREATE TABLE non_inner_r(i INTEGER, j INTEGER);

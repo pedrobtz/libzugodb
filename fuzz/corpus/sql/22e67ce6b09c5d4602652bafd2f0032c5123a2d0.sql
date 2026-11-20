@@ -1,0 +1,1 @@
+CREATE TABLE build(i INTEGER);

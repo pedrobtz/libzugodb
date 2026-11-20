@@ -1,0 +1,1 @@
+SELECT EXTRACT(week FROM cast('2007-01-01' AS DATE) + 14);

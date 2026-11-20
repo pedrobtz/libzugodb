@@ -1,0 +1,1 @@
+SELECT BIT_AND(1, 2, 3)

@@ -1,0 +1,3 @@
+SELECT k, SUM(v) FROM longlists
+GROUP BY k
+ORDER BY 2

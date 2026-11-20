@@ -1,0 +1,1 @@
+CREATE TABLE times(i TIME)

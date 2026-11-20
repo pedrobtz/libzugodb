@@ -1,0 +1,1 @@
+SELECT 1 IN (SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);

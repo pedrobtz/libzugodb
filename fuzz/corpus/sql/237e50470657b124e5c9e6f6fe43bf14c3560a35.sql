@@ -1,0 +1,1 @@
+SELECT * FROM test WHERE NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b<test2.c AND test2.a>14) AND NOT EXISTS(SELECT * FROM test2 WHERE test.a=test2.a AND test.b>test2.c AND test2.a<10) order by 1;

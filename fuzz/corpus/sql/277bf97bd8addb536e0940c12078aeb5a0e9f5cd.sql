@@ -1,0 +1,1 @@
+SELECT i::UTINYINT FROM ubigints ORDER BY i

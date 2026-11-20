@@ -1,0 +1,1 @@
+CREATE TABLE pair_r_order(b INTEGER, y INTEGER);

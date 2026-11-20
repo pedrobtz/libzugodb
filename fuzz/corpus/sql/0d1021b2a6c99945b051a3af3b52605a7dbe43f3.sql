@@ -1,0 +1,1 @@
+SELECT AVG(nextval('seq'))

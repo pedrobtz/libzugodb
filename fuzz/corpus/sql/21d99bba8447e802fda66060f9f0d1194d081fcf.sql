@@ -1,0 +1,1 @@
+SELECT hamming('hallo', 'hallo')

@@ -5,3 +5,7 @@
 add_executable(checkpoint_load_fuzzer checkpoint_load.cpp)
 target_link_libraries(checkpoint_load_fuzzer PRIVATE slothdb_lib)
 target_link_options(checkpoint_load_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)
+
+add_executable(sql_fuzzer sql.cpp)
+target_link_libraries(sql_fuzzer PRIVATE slothdb_lib)
+target_link_options(sql_fuzzer PRIVATE -fsanitize=fuzzer,address,undefined)

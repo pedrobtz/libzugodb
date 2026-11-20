@@ -1,0 +1,1 @@
+CREATE TABLE utinyints AS SELECT i::UTINYINT i FROM (VALUES (0), (255)) tbl(i)

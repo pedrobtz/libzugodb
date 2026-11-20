@@ -1,0 +1,3 @@
+SELECT * FROM t l JOIN LATERAL (
+	SELECT * FROM t r WHERE l.k IS NOT DISTINCT FROM r.k AND l.id >= r.id AND l.id <> r.id
+	ORDER BY r.id DESC LIMIT 1) q ON TRUE ORDER BY ALL;

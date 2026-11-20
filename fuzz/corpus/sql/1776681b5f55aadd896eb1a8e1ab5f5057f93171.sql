@@ -1,0 +1,5 @@
+SELECT *
+FROM 
+	(SELECT * FROM two WHERE a % 2 = 0) t1
+	POSITIONAL JOIN
+	(SELECT * FROM three WHERE a % 2 = 1) t2

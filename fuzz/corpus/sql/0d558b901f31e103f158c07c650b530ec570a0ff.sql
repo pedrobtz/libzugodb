@@ -1,0 +1,1 @@
+SELECT i::HUGEINT FROM utinyints ORDER BY i

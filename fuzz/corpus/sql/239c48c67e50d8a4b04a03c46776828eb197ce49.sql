@@ -1,0 +1,1 @@
+INSERT INTO integers SELECT 2 FROM range(65534);

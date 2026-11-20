@@ -1,0 +1,1 @@
+INSERT INTO nx VALUES (NULL), (1);

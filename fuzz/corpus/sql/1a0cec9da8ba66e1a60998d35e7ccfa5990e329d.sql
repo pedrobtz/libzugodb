@@ -1,0 +1,1 @@
+SELECT id FROM t WHERE s ILIKE '%æther%' ESCAPE '\' ORDER BY id

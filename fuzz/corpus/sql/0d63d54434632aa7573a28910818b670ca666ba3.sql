@@ -1,0 +1,1 @@
+CREATE TABLE integers(id INTEGER, i INTEGER)

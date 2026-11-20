@@ -1,0 +1,1 @@
+CREATE TABLE mixed AS SELECT DATE '0002-01-01 (BC)' + INTERVAL (i) DAY d FROM range(1500) r(i);

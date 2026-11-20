@@ -1,0 +1,1 @@
+SELECT date_part(NULL::VARCHAR, NULL::TIMESTAMP) FROM dates;

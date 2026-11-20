@@ -1,0 +1,1 @@
+SELECT * FROM (VALUES (parse_dirname('path/to/file.csv', 'system')), (parse_dirname('path/to/file.csv\file2.csv', 'both_slash')), (parse_dirname('path/to/file.csv', 'forward_slash')), (parse_dirname('path\to\file.csv/file2.csv', 'backslash'))) tbl(i);

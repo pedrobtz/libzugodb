@@ -1,0 +1,3 @@
+CREATE TABLE single_build AS
+SELECT 1000000000042::BIGINT AS k, i::INTEGER AS g
+FROM range(10) t(i);

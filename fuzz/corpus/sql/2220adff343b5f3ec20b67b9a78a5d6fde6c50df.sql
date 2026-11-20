@@ -1,0 +1,1 @@
+SELECT count(*) FROM (SELECT CAST(NULL AS VARCHAR) AS ccy, id FROM fact) t JOIN dim d ON t.ccy IS NOT DISTINCT FROM d.k

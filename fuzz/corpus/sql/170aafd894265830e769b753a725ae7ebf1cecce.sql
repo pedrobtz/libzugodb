@@ -1,0 +1,1 @@
+select atanh({value});

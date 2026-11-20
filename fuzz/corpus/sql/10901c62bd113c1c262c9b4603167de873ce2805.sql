@@ -1,0 +1,1 @@
+SELECT overlay(NULL PLACING 'XX' FROM 2)

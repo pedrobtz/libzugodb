@@ -1,0 +1,1 @@
+SELECT k, SUM(v) FROM strlists GROUP BY k ORDER BY 2

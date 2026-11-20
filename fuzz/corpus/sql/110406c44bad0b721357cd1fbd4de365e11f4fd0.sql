@@ -1,0 +1,1 @@
+INSERT INTO probe VALUES (1),(2),(2),(NULL);

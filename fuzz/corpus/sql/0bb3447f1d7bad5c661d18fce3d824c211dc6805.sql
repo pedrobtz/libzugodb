@@ -1,0 +1,1 @@
+SELECT FIRST(1, 2, 3)

@@ -1,0 +1,1 @@
+CREATE TABLE mem.dim_i (k INTEGER PRIMARY KEY, name VARCHAR)

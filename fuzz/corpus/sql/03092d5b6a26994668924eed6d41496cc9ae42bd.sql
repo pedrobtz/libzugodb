@@ -1,0 +1,1 @@
+SELECT lttb(x::DOUBLE, NULL::DOUBLE, 5 ORDER BY x) FROM range(10) t(x)

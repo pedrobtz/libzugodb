@@ -1,0 +1,16 @@
+SELECT
+  id,
+  NTILE(2 ORDER BY y) OVER (
+    ORDER BY y
+    ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING
+  ) AS ntile_following,
+  NTILE(2 ORDER BY y) OVER (
+    ORDER BY y
+    ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING
+  ) AS ntile_preceding,
+  ROW_NUMBER(ORDER BY y) OVER (
+    ORDER BY y
+    ROWS BETWEEN 1 FOLLOWING AND 1 FOLLOWING
+  ) AS row_following
+FROM (VALUES (1, 1), (2, 2)) AS t(id, y)
+ORDER BY id;

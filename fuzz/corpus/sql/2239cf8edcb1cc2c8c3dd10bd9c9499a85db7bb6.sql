@@ -1,0 +1,1 @@
+SELECT s::USMALLINT FROM strings

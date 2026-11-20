@@ -1,0 +1,1 @@
+INSERT INTO u VALUES (-128), (127);

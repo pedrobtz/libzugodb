@@ -1,0 +1,1 @@
+INSERT INTO timestamp VALUES ('1993-20-14 00:00:00')

@@ -1,0 +1,1 @@
+SELECT finalize(list(i) EXPORT_STATE) FROM (SELECT NULL::INTEGER AS i WHERE false) t;

@@ -2319,9 +2319,73 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
                                             is_agg, expr.is_distinct);
 }
 
+// A decimal literal (`2.5`, `-2.5`; not `25e-1`) cast to an integer type,
+// as DuckDB casts its DECIMAL: rounded half away from zero (2.5 is 3), from
+// the literal's digits. The engine reads the literal as a DOUBLE, whose
+// cast rounds half to even (2.5 was 2) (Stage 9). False when `e` is not
+// such a literal.
+static bool DecimalLiteralToInteger(const ParsedExpression &e, LogicalTypeId target,
+                                    bool is_try, Value &out) {
+    const ParsedExpression *x = &e;
+    bool negative = false;
+    while (x->GetExpressionType() == ExpressionType::UNARY_MINUS) {
+        negative = !negative;
+        x = static_cast<const UnaryMinusExpression *>(x)->child.get();
+    }
+    if (x->GetExpressionType() != ExpressionType::CONSTANT) return false;
+    auto &c = static_cast<const ConstantExpression &>(*x);
+    if (c.is_null || c.literal_type != TokenType::FLOAT_LITERAL) return false;
+    const std::string &t = c.value;
+    if (t.find_first_of("eE") != std::string::npos) return false;
+    auto dot = t.find('.');
+    std::string whole = dot == std::string::npos ? t : t.substr(0, dot);
+    bool round_up = dot != std::string::npos && dot + 1 < t.size() && t[dot + 1] >= '5';
+    // The magnitude, digit by digit, checked against 2^63.
+    unsigned long long mag = 0;
+    const unsigned long long kLimit = 9223372036854775808ULL;
+    bool over = false;
+    for (char ch : whole) {
+        if (ch < '0' || ch > '9') return false;
+        if (mag > (kLimit - static_cast<unsigned>(ch - '0')) / 10) { over = true; break; }
+        mag = mag * 10 + static_cast<unsigned>(ch - '0');
+    }
+    if (!over && round_up) {
+        if (mag >= kLimit) over = true; else mag++;
+    }
+    long long lo, hi;
+    switch (target) {
+    case LogicalTypeId::TINYINT: lo = INT8_MIN; hi = INT8_MAX; break;
+    case LogicalTypeId::SMALLINT: lo = INT16_MIN; hi = INT16_MAX; break;
+    case LogicalTypeId::INTEGER: lo = INT32_MIN; hi = INT32_MAX; break;
+    case LogicalTypeId::BIGINT: lo = INT64_MIN; hi = INT64_MAX; break;
+    default: return false;
+    }
+    bool fits = !over && (negative ? mag <= static_cast<unsigned long long>(-(lo + 1)) + 1
+                                   : mag <= static_cast<unsigned long long>(hi));
+    // TRY_CAST past the range is NULL: the DOUBLE path gives it.
+    if (!fits && is_try) return false;
+    if (!fits) {
+        throw ConversionException("Failed to cast decimal value " + std::string(negative ? "-" : "") +
+                                  t + " to type " + LogicalType(target).ToString());
+    }
+    long long v = negative ? (mag == 0 ? 0 : -static_cast<long long>(mag - 1) - 1)
+                           : static_cast<long long>(mag);
+    switch (target) {
+    case LogicalTypeId::TINYINT: out = Value::TINYINT(static_cast<int8_t>(v)); break;
+    case LogicalTypeId::SMALLINT: out = Value::SMALLINT(static_cast<int16_t>(v)); break;
+    case LogicalTypeId::INTEGER: out = Value::INTEGER(static_cast<int32_t>(v)); break;
+    default: out = Value::BIGINT(static_cast<int64_t>(v)); break;
+    }
+    return true;
+}
+
 BoundExprPtr Binder::BindCast(const CastExpression &expr, BindContext &context) {
-    auto child = BindExpression(*expr.child, context);
     auto target = ResolveTypeName(expr.target_type);
+    Value literal;
+    if (DecimalLiteralToInteger(*expr.child, target.id(), expr.is_try, literal)) {
+        return std::make_unique<BoundConstant>(literal);
+    }
+    auto child = BindExpression(*expr.child, context);
     CheckBlobCast(child->GetReturnType(), target);
     return std::make_unique<BoundCast>(std::move(child), target, expr.is_try);
 }

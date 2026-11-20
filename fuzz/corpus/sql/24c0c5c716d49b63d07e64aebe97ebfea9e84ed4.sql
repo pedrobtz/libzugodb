@@ -1,0 +1,2 @@
+WITH s AS (SELECT avg(x) EXPORT_STATE st FROM (VALUES (INTERVAL '-1' DAY), (INTERVAL 0 DAY), (INTERVAL 0 DAY)) v(x))
+SELECT finalize(combine_aggr(st, 100000000)) FROM s;

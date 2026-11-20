@@ -1,0 +1,1 @@
+SELECT AVG(1, 2)

@@ -1,0 +1,1 @@
+SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i

@@ -1,0 +1,1 @@
+INSERT INTO truncme VALUES (42.123456, 37, 19), (-3.141592, -75, 5);

@@ -1,0 +1,1 @@
+SELECT ANY_VALUE(b) FROM tbl WHERE a=1

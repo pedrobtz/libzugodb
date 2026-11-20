@@ -1,0 +1,1 @@
+SELECT * FROM integers WHERE EXISTS(SELECT * FROM integers) ORDER BY i

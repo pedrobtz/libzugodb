@@ -1,0 +1,1 @@
+SELECT g, regr_count(d, d+1), regr_avgx(d, d+1), regr_avgy(d, d+1), regr_slope(d, d+1), regr_intercept(d, d+1), regr_r2(d, d+1), regr_sxx(d, d+1), regr_syy(d, d+1), regr_sxy(d, d+1) FROM dummy GROUP BY g ORDER BY g;

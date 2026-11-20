@@ -1,0 +1,1 @@
+SELECT i::FLOAT FROM utinyints ORDER BY i

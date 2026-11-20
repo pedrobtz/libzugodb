@@ -1,0 +1,1 @@
+CREATE TABLE cntn AS SELECT * FROM (VALUES (1), (NULL), (3)) AS v(id);

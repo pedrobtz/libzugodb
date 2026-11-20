@@ -1,0 +1,1 @@
+SELECT * FROM integers, LATERAL (SELECT *) t2(k) ORDER BY i;

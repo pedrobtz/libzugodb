@@ -1,0 +1,4 @@
+SELECT *
+FROM x
+LEFT JOIN y ON y1 IN (SELECT z1 FROM z)
+ORDER BY x1, x2, y1, y2;

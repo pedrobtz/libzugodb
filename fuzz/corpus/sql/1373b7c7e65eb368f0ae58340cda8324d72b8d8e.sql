@@ -1,0 +1,1 @@
+CREATE TABLE repro (i DECIMAL(15,2));

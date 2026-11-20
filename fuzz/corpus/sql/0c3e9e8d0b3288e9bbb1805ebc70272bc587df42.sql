@@ -1,0 +1,1 @@
+INSERT INTO test2 VALUES (1, NULL), (NULL, 10)

@@ -1,0 +1,3 @@
+SELECT ANY_VALUE(i) OVER (PARTITION BY i) AS a 
+FROM generate_series(1, 5) t(i)
+ORDER BY ALL

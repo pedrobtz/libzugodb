@@ -1,0 +1,1 @@
+SELECT (SELECT '1.0'::DECIMAL(2,1));

@@ -1,0 +1,1 @@
+SELECT i, COUNT() FROM integers GROUP BY i ORDER BY i

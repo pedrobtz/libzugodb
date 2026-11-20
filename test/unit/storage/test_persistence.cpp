@@ -587,7 +587,7 @@ TEST_CASE("Load - the table count is bounded by the bytes left") {
     CHECK(Has(Open(Bytes().U32(3).EmptyTable("a").EmptyTable("b").Zeros(16)),
               "table count 3 at offset 4096 is more than the 62 bytes left can hold"));
     CHECK(Has(Open(Bytes().U32(3).EmptyTable("a").EmptyTable("b").Zeros(17)),
-              "a table with no columns at offset 4150"));
+              "a table with no name at offset 4146"));
     // No tables, and nothing after the count.
     CHECK(Open(Bytes().U32(0)) == "");
     CHECK(Has(Open(Bytes().U32(1)), "table count 1 at offset 4096 is more than the 0 bytes left"));
@@ -623,12 +623,12 @@ TEST_CASE("Load - a string's length is bounded by the bytes left") {
 TEST_CASE("Load - the column count is bounded by the bytes left") {
     // After the count, two columns of 6 bytes and the row count's 8: the
     // bound is 20 / 5 = 4. At 4 the loader reads a third column from the
-    // row count's zeros, an empty name and type 0.
+    // row count's zeros, an empty name, which SQL cannot make.
     auto table = [](uint32_t count) {
         return Bytes().U32(1).Str("t").U32(count).Str("a").U8(5).Str("b").U8(5).U64(0);
     };
     CHECK(Open(table(2)) == "");
-    CHECK(Has(Open(table(4)), "unknown column type 0 at offset 4125"));
+    CHECK(Has(Open(table(4)), "a column with no name at offset 4121"));
     CHECK(Has(Open(table(5)), "column count 5 at offset 4105 is more than the 20 bytes left can hold"));
     CHECK(Has(Open(table(0)), "a table with no columns at offset 4105"));
     std::remove(HAND_DB_PATH);
@@ -729,6 +729,9 @@ TEST_CASE("Load - bytes after the last table, a table name twice and a column na
     CHECK(Open(two_columns("a", "b")) == "");
     CHECK(Has(Open(two_columns("a", "A")), "a second column of the same name"));
     CHECK(Has(Open(two_columns("a", "a")), "a second column of the same name"));
+    // An empty name is one SQL cannot make ("" is an error, Stage 9).
+    CHECK(Has(Open(Bytes().U32(1).EmptyTable("")), "a table with no name at offset 4100"));
+    CHECK(Has(Open(two_columns("a", "")), "a column with no name"));
     // Bytes past ASCII are not folded: these are two names.
     CHECK(Open(two_columns("\xc3\xa9", "\xc3\x89")) == "");
     std::remove(HAND_DB_PATH);

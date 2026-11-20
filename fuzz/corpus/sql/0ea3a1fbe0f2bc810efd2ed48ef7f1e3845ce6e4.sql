@@ -1,0 +1,1 @@
+SELECT TRY_CAST(s AS TINYINT) FROM strings

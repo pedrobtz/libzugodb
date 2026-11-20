@@ -1,0 +1,1 @@
+CREATE TABLE float_precision(f1 FLOAT(1), f24 FLOAT(24), f25 FLOAT(25), f53 FLOAT(53));

@@ -1,0 +1,1 @@
+SELECT i::BOOL FROM utinyints ORDER BY i

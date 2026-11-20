@@ -1,0 +1,1 @@
+CREATE VIEW test_view AS SELECT a FROM test LIMIT 20 %

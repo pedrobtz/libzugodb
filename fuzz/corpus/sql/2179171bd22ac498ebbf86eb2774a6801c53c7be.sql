@@ -1,0 +1,1 @@
+SELECT levenshtein(NULL, NULL)

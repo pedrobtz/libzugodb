@@ -1,0 +1,1 @@
+ALTER TABLE big_dim ADD PRIMARY KEY (id)

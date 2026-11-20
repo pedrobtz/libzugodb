@@ -1,0 +1,1 @@
+CREATE TABLE issue3105(gender VARCHAR, pay FLOAT);

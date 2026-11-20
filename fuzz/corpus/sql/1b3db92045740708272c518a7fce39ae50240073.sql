@@ -1,0 +1,1 @@
+INSERT INTO asof_nulls (time, value) VALUES ('2025-07-15 00:00:00', 42);

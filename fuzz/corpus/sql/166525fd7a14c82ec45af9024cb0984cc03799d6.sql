@@ -1,0 +1,1 @@
+SELECT id FROM t WHERE s ILIKE '%hello%' ESCAPE NULL ORDER BY id

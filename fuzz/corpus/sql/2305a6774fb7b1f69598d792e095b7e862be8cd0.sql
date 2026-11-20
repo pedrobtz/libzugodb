@@ -1,0 +1,3 @@
+CREATE OR REPLACE TABLE probe AS
+SELECT i, CASE WHEN i%17<>0 THEN 'abc'||chr(65+(i%26)::INTEGER)||i::VARCHAR END AS k
+FROM range(10003) t(i);

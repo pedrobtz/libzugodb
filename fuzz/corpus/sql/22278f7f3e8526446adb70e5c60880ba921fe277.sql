@@ -1,0 +1,1 @@
+SELECT {FUN}(s, -12345678, 12) FROM strings

@@ -1,0 +1,1 @@
+SELECT a, SUM(b) FROM test GROUP BY a ORDER BY a
