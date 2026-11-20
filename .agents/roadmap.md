@@ -39,7 +39,7 @@ issue closed. zugodb then moves its pin.
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | [#46](https://github.com/pedrobtz/libzugodb/pull/46) | 2026-11-20 |
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | [#52](https://github.com/pedrobtz/libzugodb/pull/52) | 2026-11-20 |
 | 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | [#54](https://github.com/pedrobtz/libzugodb/pull/54) | 2026-11-20 |
-| 11.1 | [Host-supplied function providers](#stage-111--host-supplied-function-providers) | 0.4.0 | ci | [#40](https://github.com/pedrobtz/libzugodb/issues/40) | | |
+| 11.1 | [Host-supplied function providers](#stage-111--host-supplied-function-providers) | 0.4.0 | ci | [#40](https://github.com/pedrobtz/libzugodb/issues/40) | [#57](https://github.com/pedrobtz/libzugodb/pull/57) | 2026-11-20 |
 | 12 | [The names become zugodb](#stage-12--the-names-become-zugodb) | 0.4.0 | ci | [#17](https://github.com/pedrobtz/libzugodb/issues/17) | | |
 <!-- markdownlint-enable MD013 -->
 
@@ -798,7 +798,40 @@ given.
 
 - Every `**Tests.**` line holds on all CI jobs.
 
-**Design.** L25 in [§8](design.md#8-decisions).
+**Deviations (2026-11-20).**
+
+- No query calls a provider on a worker thread (L29). After Stage 11 the
+  one query path on workers is the window's partition sort, which
+  evaluates no expression. So "calls at thread caps 1, 2 and 4" is the
+  wrapper over each table driven from 1, 2 and 4 threads directly, one
+  compiled pattern shared and match state per thread, plus a window
+  query over a regex key at caps 1, 2 and 4 that is checked to reach a
+  worker at cap 2. The design says queries call providers on the
+  query's thread until a parallel operator that evaluates expressions
+  returns.
+- The tables are the engine's own (`zugodb_regex_v1`,
+  `zugodb_utf8_v1`), not the family's: zugodb adapts zuregex's and
+  zuutf's with small functions (L29).
+- With a regex table, `regexp_matches`, `regexp_full_match`,
+  `regexp_replace`, `regexp_extract` (a constant integer group) and
+  `[NOT] SIMILAR TO` are computed. `regexp_split_to_array` stays refused
+  with them, as every function returning a `LIST` does, and so do `~`
+  and `!~`, which the tokenizer refuses, `regexp_escape` and
+  `SIMILAR TO ... ESCAPE`.
+- A provider set that is NULL, of another ABI or too small throws from
+  `SetProviders`; only a service table that cannot be used is treated as
+  absent.
+- UTF-8: only `LENGTH`'s count goes through the table, since the engine
+  validates nowhere today and the table gives no offsets; refusing
+  invalid UTF-8 is left to a change of its own, the same with and
+  without a provider.
+- The stage's tests are seen to fail first by mutation: each check the
+  engine makes (version, size, NULL member, status, compile once, the
+  UTF-8 route, `SIMILAR TO`'s parse, the buffer retry, set before the
+  first query, the match state freed) was removed in turn, and a test
+  failed each time.
+
+**Design.** L25 and L29 in [§8](design.md#8-decisions).
 
 ## Stage 12 — The names become zugodb
 

@@ -146,6 +146,28 @@ Operators: `+`, `-`, `*`, `/`, `%`, unary `-`, `^` (`power`), `||`,
 `[NOT] ILIKE` (ASCII patterns, design L22), `ESCAPE`, `EXISTS`, `CAST`,
 `TRY_CAST` and `::`.
 
+### Functions a host provides
+
+These need a table the engine's host supplies
+(`include/slothdb/main/providers.hpp`, design L25 and L29). Without one
+they are refused, with the error of the list below; this repository's
+tests and conformance counts run without one.
+
+- **Regular expressions**, with a regex table: `regexp_matches`,
+  `regexp_full_match`, `regexp_replace`, `regexp_extract` with a constant
+  integer group, and `[NOT] SIMILAR TO` (DuckDB's `regexp_full_match`).
+  The options are a constant string of `c` and `i` (the last wins), and
+  `g` for `regexp_replace`; any other letter is refused. The patterns'
+  meaning is the provider's, DuckDB's RE2. A limit the provider hits, an
+  invalid pattern and text that is not UTF-8 are errors. The other regex
+  forms stay refused with a table too: `~`, `!~`, `regexp_extract_all`,
+  `regexp_split_to_array`, `regexp_split_to_table`, `string_split_regex`,
+  `regexp_escape`, `regexp`, `regexp_like`, `regexp_match`,
+  `regexp_extract` with a list of names, and `SIMILAR TO ... ESCAPE`.
+- **UTF-8**, with a UTF-8 table: `length` counts the code points of valid
+  text through it. The answer is the engine's own either way, so this
+  table changes no result.
+
 ## Listed differences
 
 None. Where the engine cannot give DuckDB's answer, it refuses the
@@ -157,10 +179,12 @@ statement (below). The text of `EXPLAIN`'s plan is the engine's own
 Each of these is an error, by design, until the engine holds what DuckDB
 does:
 
-- **Regular expressions** (design L24, #40): `regexp_matches`,
+- **Regular expressions** (design L24, L29, #40): `regexp_matches`,
   `regexp_replace`, `regexp_extract`, `regexp_full_match`,
   `string_split_regex`, `REGEXP`, `SIMILAR TO`, `~`, `!~` and every other
-  regex function or operator, until a host supplies RE2's.
+  regex function or operator, without a host's regex table; with one,
+  those of [Functions a host provides](#functions-a-host-provides) are
+  computed and the rest stay refused.
 - **NaN** (design L23, #42): any expression, value or result that would
   be a NaN (`'nan'::DOUBLE`, `0.0 / 0`, `sqrt(-1)`). Infinities are kept.
 - **`DECIMAL` and `NUMERIC`** (#26): until a fixed-point type exists. A

@@ -1,4 +1,5 @@
 #include "slothdb/main/database.hpp"
+#include "slothdb/common/exception.hpp"
 #include "slothdb/storage/checkpoint.hpp"
 #include <cstdio>
 
@@ -21,6 +22,7 @@ Database::Database() : Database(DatabaseConfig{}) {}
 Database::Database(const std::string &path) {
     config_.path = path;
     catalog_ = std::make_unique<Catalog>();
+    catalog_->SetProviders(&providers_);
     txn_mgr_ = std::make_unique<TransactionManager>();
 
     if (!path.empty() && FileExists(path)) {
@@ -31,10 +33,27 @@ Database::Database(const std::string &path) {
 Database::Database(DatabaseConfig config)
     : config_(std::move(config)) {
     catalog_ = std::make_unique<Catalog>();
+    catalog_->SetProviders(&providers_);
     txn_mgr_ = std::make_unique<TransactionManager>();
 
     if (!config_.path.empty() && FileExists(config_.path)) {
         Checkpoint::Load(*catalog_, config_.path);
+    }
+}
+
+void Database::SetProviders(const zugodb_providers *providers) {
+    if (queried_.load()) {
+        throw InvalidInputException(
+            "SetProviders: the database has run a query; providers are set before the first");
+    }
+    if (providers_set_.exchange(true)) {
+        throw InvalidInputException("SetProviders: the providers are already set");
+    }
+    try {
+        providers_.Set(providers);
+    } catch (...) {
+        providers_set_.store(false);
+        throw;
     }
 }
 

@@ -553,6 +553,8 @@ void MaterializeFromSubqueries(Catalog &catalog, TableRef &tref,
 }
 
 QueryResult Connection::Query(const std::string &sql) {
+    // The providers are fixed from here on (design L29).
+    db_.MarkQueried();
     auto result = RunStatements(sql);
     // The backstop of design L23 (#33): a NaN that a path the expression
     // executor does not see made (an aggregate over infinities) is an
@@ -573,7 +575,11 @@ QueryResult Connection::Query(const std::string &sql) {
 
 QueryResult Connection::RunStatements(const std::string &sql) {
     // 1. Parse.
-    auto statements = Parser::Parse(sql);
+    // SIMILAR TO parses only when a regex provider is in use; without one
+    // the parser refuses it, as before providers (design L24, L29).
+    ParseOptions parse_options;
+    parse_options.regex = db_.GetProviders().Regex() != nullptr;
+    auto statements = Parser::Parse(sql, parse_options);
     // Per-statement source slices — used by CREATE VIEW and any other
     // path that needs to capture its own statement text without
     // accidentally absorbing trailing statements (see commit 1628b3f

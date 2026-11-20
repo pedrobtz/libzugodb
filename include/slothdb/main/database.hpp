@@ -1,7 +1,9 @@
 #pragma once
 
 #include "slothdb/catalog/catalog.hpp"
+#include "slothdb/main/provider_set.hpp"
 #include "slothdb/transaction/transaction.hpp"
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -30,8 +32,24 @@ public:
     TransactionManager &GetTransactionManager() { return *txn_mgr_; }
     const DatabaseConfig &GetConfig() const { return config_; }
 
+    // The host's function tables (providers.hpp; Stage 11.1, design L29).
+    // Once per Database, before its first query: a second call, or one
+    // after a query, throws InvalidInputException, as does a set that is
+    // NULL or not of this engine's ABI. A service table that cannot be
+    // used leaves its functions refused; GetProviderState says why.
+    void SetProviders(const zugodb_providers *providers);
+    ProviderState GetProviderState(ProviderService service) const {
+        return providers_.State(service);
+    }
+    const ProviderSet &GetProviders() const { return providers_; }
+    // Connection::Query calls this first; SetProviders is refused after.
+    void MarkQueried() { queried_.store(true); }
+
 private:
     DatabaseConfig config_;
+    ProviderSet providers_;
+    std::atomic<bool> providers_set_{false};
+    std::atomic<bool> queried_{false};
     std::unique_ptr<Catalog> catalog_;
     std::unique_ptr<TransactionManager> txn_mgr_;
 };

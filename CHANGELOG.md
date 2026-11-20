@@ -2,6 +2,35 @@
 
 ## libzugodb 0.4.0 (in development)
 
+- Host-supplied function providers (Stage 11.1, #40; design L25, L29).
+  `include/slothdb/main/providers.hpp`, plain C, defines a
+  `zugodb_providers` set of versioned tables, `zugodb_regex_v1` and
+  `zugodb_utf8_v1`, with slots reserved for UUIDs, random numbers and
+  decimals; `Database::SetProviders` takes it once, before the first
+  query, and `Database::GetProviderState` reports what became of each
+  table. With a regex table, `regexp_matches`, `regexp_full_match`,
+  `regexp_replace`, `regexp_extract` and `[NOT] SIMILAR TO` are computed
+  through it: a constant pattern is compiled once per query, match state
+  is made per call, and every error status, a hit limit among them, is a
+  query error. With a UTF-8 table, `length` counts valid text through it,
+  with the same answer. Without a table, or with one of another version,
+  too small or with a NULL member, every regex form is refused as in
+  0.3.0, so the conformance counts are unchanged.
+- For zugodb's glue (pedrobtz/zugodb#69): in `.onLoad`, after
+  `R_GetCCallable` fetches zuregex's and zuutf's tables, fill static
+  `zugodb_regex_v1` and `zugodb_utf8_v1` tables with small adapter
+  functions over them (statuses to `ZUGODB_PROVIDER_*`, zuutf's
+  `zuutf_result` to a status, zuregex's `zr_substitute` buffer protocol
+  to `replace`'s), and call `Database::SetProviders` on each `Database`
+  before its first query. Give no regex table until zuregex has its RE2
+  dialect (zuregex#211): the engine cannot check a table's semantics,
+  and a PCRE-backed one would answer DuckDB's SQL otherwise. The adapter
+  functions must call no R API: the engine may call them from any
+  thread. The vendored tree gains `include/slothdb/main/providers.hpp`,
+  `include/slothdb/main/provider_set.hpp` and
+  `src/main/provider_set.cpp`, in existing directories, with no new
+  compile definition.
+
 - The engine's file readers are removed (Stage 11, #16; design L28). SQL
   had reached none of them since 0.2.0: every file route is still refused
   by the parser, with the same message, and now nothing is behind the

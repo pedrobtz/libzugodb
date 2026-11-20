@@ -2106,9 +2106,93 @@ static std::string FormatStrftime(int64_t micros, const std::string &fmt) {
     return out;
 }
 
+// A regex function through the host's provider (Stage 11.1, design L29).
+// The pattern compiled at bind is shared; a pattern computed per row is
+// compiled when it changes. The match state is this call's, on this
+// thread, and freed when it returns or throws.
+static void ExecuteProviderRegex(const BoundFunction &expr, DataChunk &input, Vector &result,
+                                 idx_t count) {
+    const auto &call = *expr.regex;
+    using Kind = ProviderRegexCall::Kind;
+    size_t text_args = call.kind == Kind::REPLACE ? 3 : 2;
+    std::vector<std::unique_ptr<Vector>> vals;
+    bool all_null = call.constant_null;
+    for (size_t a = 0; a < text_args; a++) {
+        const auto &arg = *expr.arguments[a];
+        if (arg.GetReturnType().id() == LogicalTypeId::SQLNULL) all_null = true;
+        vals.push_back(std::make_unique<Vector>(arg.GetReturnType(), count));
+        if (!all_null) ExpressionExecutor::Execute(arg, input, *vals.back(), count);
+    }
+    bool boolean = call.kind == Kind::MATCHES || call.kind == Kind::FULL_MATCH;
+    if (all_null) {
+        for (idx_t i = 0; i < count; i++) result.GetValidity().SetInvalid(i);
+        return;
+    }
+    std::shared_ptr<const ProviderRegex> re = call.constant;
+    std::unique_ptr<ProviderRegexMatch> md;
+    if (re) md = std::make_unique<ProviderRegexMatch>(*re);
+    auto *out_bool = boolean ? result.GetData<bool>() : nullptr;
+    for (idx_t i = 0; i < count; i++) {
+        bool null_row = false;
+        for (auto &v : vals) null_row = null_row || !v->GetValidity().RowIsValid(i);
+        if (null_row) {
+            result.GetValidity().SetInvalid(i);
+            continue;
+        }
+        const auto &text = vals[0]->GetData<string_t>()[i];
+        if (!call.constant) {
+            const auto &pt = vals[1]->GetData<string_t>()[i];
+            std::string pattern(pt.GetData(), pt.GetSize());
+            if (!re || re->Text() != pattern) {
+                md.reset();
+                re.reset();
+                re = ProviderRegex::Compile(*call.api, call.what, pattern, call.flags);
+                if (call.group > re->GroupCount()) {
+                    throw InvalidInputException(call.what + ": the pattern has " +
+                                                std::to_string(re->GroupCount()) +
+                                                " group(s), not " + std::to_string(call.group));
+                }
+                md = std::make_unique<ProviderRegexMatch>(*re);
+            }
+        }
+        const char *d = text.GetData();
+        size_t n = text.GetSize();
+        switch (call.kind) {
+        case Kind::MATCHES:
+        case Kind::FULL_MATCH:
+            out_bool[i] = md->Search(d, n, call.kind == Kind::FULL_MATCH);
+            break;
+        case Kind::REPLACE: {
+            const auto &rw = vals[2]->GetData<string_t>()[i];
+            result.SetValue(i, Value::VARCHAR(md->Replace(
+                                   d, n, std::string(rw.GetData(), rw.GetSize()), call.global)));
+            break;
+        }
+        case Kind::EXTRACT: {
+            std::string piece;
+            size_t b = 0, e = 0;
+            if (md->Search(d, n, false) && md->Group(call.group, b, e)) {
+                if (e > n) {
+                    throw InvalidInputException(call.what +
+                                                ": the regex provider gave a group past the text");
+                }
+                piece.assign(d + b, e - b);
+            }
+            result.SetValue(i, Value::VARCHAR(piece));
+            break;
+        }
+        }
+    }
+}
+
 void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &input,
                                           Vector &result, idx_t count) {
     auto &name = expr.function_name;
+
+    if (expr.regex) {
+        ExecuteProviderRegex(expr, input, result, count);
+        return;
+    }
 
     // CASE(when1, then1, when2, then2, ..., [else])
     // IF(c, t, f) and IIF(c, t, f) reach the executor with the same arg
@@ -2285,10 +2369,9 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 // LENGTH counts grapheme clusters in DuckDB: code points
                 // where each is a cluster of its own (design L22).
                 RefuseUnlessSimpleGraphemes(std::string(d, n), "LENGTH");
-                cp = 0;
-                for (uint32_t j = 0; j < n; j++) {
-                    if ((static_cast<unsigned char>(d[j]) & 0xC0) != 0x80) cp++;
-                }
+                // Through the host's UTF-8 table when it has one; the same
+                // count as the engine's (Stage 11.1, design L29).
+                cp = static_cast<uint32_t>(CountCodePoints(expr.utf8, d, n));
             }
             out[i] = static_cast<int32_t>(cp);
         }
