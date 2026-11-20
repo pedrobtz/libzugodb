@@ -42,7 +42,7 @@ TEST_CASE("Stage 9: CASE, COALESCE, NULLIF, GREATEST and LEAST keep DuckDB's typ
     CHECK(r.column_types[4].ToString() == "FLOAT");
     CHECK(r.column_types[5].ToString() == "TINYINT");
     CHECK(Run(conn, "SELECT CASE WHEN false THEN 1 ELSE '2' END, coalesce(NULL, 1, 2.5)") ==
-          Rows{{"2", "1"}});
+          Rows{{"2", "1.0"}});
     // A VARCHAR column beside a number: DuckDB's type depends on which is
     // a literal; refused.
     conn.Query("CREATE TABLE t(s VARCHAR, i INTEGER)");
@@ -85,7 +85,7 @@ TEST_CASE("Stage 9: function arguments of the types and number DuckDB's take") {
         CAPTURE(sql);
         CHECK_THROWS(conn.Query(sql));
     }
-    CHECK(Run(conn, "SELECT sqrt(4), upper(s), length(s) FROM t") == Rows{{"2", "4", "1"}});
+    CHECK(Run(conn, "SELECT sqrt(4), upper(s), length(s) FROM t") == Rows{{"2.0", "4", "1"}});
 }
 
 TEST_CASE("Stage 9: names outside the registry are refused at bind time") {

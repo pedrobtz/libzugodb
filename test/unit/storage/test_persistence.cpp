@@ -717,16 +717,18 @@ TEST_CASE("Load - each value is checked against its type") {
         CHECK(Open(one(type, Bytes().U8(1))) == "");
         CHECK(Has(Open(one(type, Bytes().U8(0).Str("1"))), "value at offset 4124, which this engine cannot read back"));
     }
-    // A FLOAT or DOUBLE NaN, which the engine does not hold (#33, design
-    // L23); an infinity loads.
+    // Any bits of a FLOAT or DOUBLE load: an infinity, and a NaN of either
+    // sign and any payload (#42; 0.3.0 refused a NaN, design L23).
     double inf = std::numeric_limits<double>::infinity(), nan = std::nan("");
     float finf = std::numeric_limits<float>::infinity(), fnan = std::nanf("");
+    uint64_t payload_bits = 0xfff00000000007a2ULL;  // a negative signalling NaN, payload 1954
+    double payload;
+    std::memcpy(&payload, &payload_bits, sizeof payload);
     CHECK(Open(one(LogicalTypeId::DOUBLE, Bytes().U8(0).Raw(&inf, 8))) == "");
-    CHECK(Has(Open(one(LogicalTypeId::DOUBLE, Bytes().U8(0).Raw(&nan, 8))),
-              "DOUBLE value at offset 4124 is NaN, which this engine does not hold"));
+    CHECK(Open(one(LogicalTypeId::DOUBLE, Bytes().U8(0).Raw(&nan, 8))) == "");
+    CHECK(Open(one(LogicalTypeId::DOUBLE, Bytes().U8(0).Raw(&payload, 8))) == "");
     CHECK(Open(one(LogicalTypeId::FLOAT, Bytes().U8(0).Raw(&finf, 4))) == "");
-    CHECK(Has(Open(one(LogicalTypeId::FLOAT, Bytes().U8(0).Raw(&fnan, 4))),
-              "FLOAT value at offset 4124 is NaN, which this engine does not hold"));
+    CHECK(Open(one(LogicalTypeId::FLOAT, Bytes().U8(0).Raw(&fnan, 4))) == "");
     std::remove(HAND_DB_PATH);
 }
 

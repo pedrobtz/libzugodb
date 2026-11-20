@@ -51,9 +51,17 @@ const char *const kSchema[] = {
     "TIME '12:00:00', TIMESTAMP '2000-02-29 12:00:00', 'yz'), "
     "(NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL), "
     "(2, 0, 0, 0, 1e300, 3.5, '', NULL, DATE '1970-01-01', TIME '00:00:00', "
-    "TIMESTAMP '1970-01-01 00:00:00', NULL)",
+    "TIMESTAMP '1970-01-01 00:00:00', NULL), "
+    // NaN of both signs, the infinities and -0.0 (#42).
+    "(5, 1, 1, 1, 'nan'::DOUBLE, '-inf'::FLOAT, 'n', false, DATE '2024-01-01', TIME '01:02:03', "
+    "TIMESTAMP '2024-01-01 01:02:03', 'x'), "
+    "(6, 2, 2, 2, -('nan'::DOUBLE), 'nan'::FLOAT, 'nn', true, DATE '2024-01-02', TIME '01:02:04', "
+    "TIMESTAMP '2024-01-02 01:02:03', 'y'), "
+    "(7, 3, 3, 3, '-0.0'::DOUBLE, '-0.0'::FLOAT, 'z', NULL, NULL, NULL, NULL, NULL), "
+    "(8, 4, 4, 4, '-inf'::DOUBLE, 'inf'::FLOAT, NULL, NULL, NULL, NULL, NULL, NULL)",
     "CREATE TABLE t2(i INTEGER, s VARCHAR, d DOUBLE)",
-    "INSERT INTO t2 VALUES (1, 'a', 1.0), (2, 'b', NULL), (NULL, 'c', 3.0), (4, NULL, -4.0)",
+    "INSERT INTO t2 VALUES (1, 'a', 1.0), (2, 'b', NULL), (NULL, 'c', 3.0), (4, NULL, -4.0), "
+    "(5, 'n', 'nan'::DOUBLE), (6, 'z', '-0.0'::DOUBLE), (7, 'i', 'inf'::DOUBLE)",
     "CREATE VIEW v AS SELECT t1.i, t1.s, t2.d FROM t1 JOIN t2 ON t1.i = t2.i",
 };
 

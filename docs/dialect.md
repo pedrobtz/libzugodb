@@ -81,7 +81,28 @@ takes that type when it fits it, as DuckDB's does: `x + 1` of a `TINYINT`
 | `TIMESTAMP` | `DATETIME`, `TIMESTAMP(p)` for `p` of 4 to 6 |
 
 Integer arithmetic is done in the wider operand's type and an overflow is
-DuckDB's error (#43). `/` divides as doubles.
+DuckDB's error (#43). `/` divides as doubles. `FLOAT` arithmetic with a
+`FLOAT` or an integer is `FLOAT`, with a `DOUBLE` `DOUBLE`.
+
+### NaN, the infinities and -0.0
+
+As DuckDB's (design L30, #42): a NaN equals every NaN, whatever its sign,
+and is greater than every other value, `+inf` included, in comparisons,
+`ORDER BY` (after `+inf`, before `NULL` under `NULLS LAST`), `MIN` and
+`MAX`; every NaN is one key of `GROUP BY`, `DISTINCT`, a join, a set
+operation and `PARTITION BY`. `-0.0` equals `0.0` and is one key with it.
+`0 / 0`, `inf - inf`, `sqrt(-1)`, `ln(-1)`, `acos(2)` and a double's
+`% 0` are NaN; a NaN cast to an integer is an error (`NULL` under
+`TRY_CAST`), to `BOOLEAN` true; `sign` of one is 0. `'nan'`, `'-nan'`,
+`'nan(...)'`, `'inf'` and `'infinity'` are read in any case. A `FLOAT` or
+`DOUBLE` as text is DuckDB's: `1.0`, `1e+20`, `-0.0`, `inf`, `nan`, and
+`-nan` for a NaN whose sign bit is set. That sign, of a NaN arithmetic
+makes, is the hardware's, as in DuckDB (`(0.0 / 0.0)::VARCHAR` is `-nan`
+on x86-64 and `nan` on arm64); a literal's is fixed. Of equal values,
+`MIN` and `MAX` return the last, `GREATEST` and `LEAST` the first, a
+group its first row's, as DuckDB's (`GREATEST` and `LEAST` of `FLOAT`s
+return `0.0` for `-0.0` and the positive NaN, as DuckDB's do). A table and
+a database file hold a NaN with its bits.
 
 ## Functions
 
@@ -185,8 +206,12 @@ does:
   regex function or operator, without a host's regex table; with one,
   those of [Functions a host provides](#functions-a-host-provides) are
   computed and the rest stay refused.
-- **NaN** (design L23, #42): any expression, value or result that would
-  be a NaN (`'nan'::DOUBLE`, `0.0 / 0`, `sqrt(-1)`). Infinities are kept.
+- **Mixed types that DuckDB casts at run time**: a `VARCHAR` column
+  `IN` or `BETWEEN` numbers (DuckDB casts the column and fails on text that
+  is no number), a `VALUES` column that mixes string literals with values
+  of another type (DuckDB gives the literals that type, the engine's
+  column was `VARCHAR`; #59), and text with a fraction or an exponent
+  cast to an integer (`'1.5'::INTEGER` is 2 in DuckDB).
 - **`DECIMAL` and `NUMERIC`** (#26): until a fixed-point type exists. A
   decimal literal is a `DOUBLE`.
 - **The timestamp variants**: `TIMESTAMP_S`, `TIMESTAMP_MS`,

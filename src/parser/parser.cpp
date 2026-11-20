@@ -1216,6 +1216,33 @@ std::unique_ptr<SelectStatement> Parser::ParseValuesAsSelect() {
         ThrowError("VALUES requires at least one row");
     }
 
+    // A column that mixes a string literal with a value of another kind:
+    // DuckDB casts the literal to the other value's type ((2), ('10') is
+    // INTEGER, ordered 2 before 10), the engine's set operations made the
+    // column VARCHAR. Refused until VALUES types its columns as DuckDB's
+    // does (#59).
+    for (size_t c = 0; c < rows[0].size(); c++) {
+        bool string_literal = false, other = false;
+        for (auto &row : rows) {
+            if (c >= row.size() || !row[c]) continue;
+            auto &e = *row[c];
+            if (e.GetExpressionType() == ExpressionType::CONSTANT) {
+                auto &k = static_cast<const ConstantExpression &>(e);
+                if (k.is_null) continue;
+                if (k.literal_type == TokenType::STRING_LITERAL) {
+                    string_literal = true;
+                    continue;
+                }
+            }
+            other = true;
+        }
+        if (string_literal && other) {
+            throw NotImplementedException(
+                "A VALUES column of string literals and values of another type is not supported: "
+                "DuckDB gives the literals the other type (libzugodb#59)");
+        }
+    }
+
     // Build a SelectStatement chain via UNION ALL: each row becomes one
     // SELECT with positional column aliases (column0, column1, ...) on the
     // first; subsequent rows inherit positionally per SQL set-op rules.

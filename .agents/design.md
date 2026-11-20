@@ -75,9 +75,9 @@ What follows from it:
   decimal literal, `10.0 % 0.0`) are fixed or refused one by one.
 - The plan text of `EXPLAIN` is the engine's own, not DuckDB's; the
   conformance runner leaves such queries out (L20).
-- The engine holds no NaN (L23, until #42), and has no regular
-  expressions until a host provides RE2's (L24, #40): both are errors,
-  not approximations.
+- NaN, the infinities and -0.0 are DuckDB's (L30; L23 refused NaN until
+  #42), and the engine has no regular expressions until a host provides
+  RE2's (L24, #40): an error, not an approximation.
 
 ## 4. Parser
 
@@ -501,7 +501,8 @@ minor version.
 
 - **L23 (2026-11-20, Stage 8, decided with an advisor).** What the
   engine holds, and what a statement returns.
-  - No NaN. DuckDB orders NaN above every number and equal to itself;
+  - No NaN (superseded by L30, which gives NaN DuckDB's semantics and
+    lifts each refusal below). DuckDB orders NaN above every number and equal to itself;
     the engine's comparisons are IEEE's in many hand-written paths
     (sorts, joins, groups, `MIN`/`MAX`), and teaching each DuckDB's order
     would leave any path missed a silent wrong answer. So a NaN is an
@@ -840,6 +841,94 @@ minor version.
     and `Checkpoint::Load`, and is a change of its own.
   - Tests: stub tables in `test/unit/stub_providers.hpp` (a literal
     matcher, and a UTF-8 counter), no package of the family built here.
+
+- **L30 (2026-11-20, #42, decided with an advisor).** NaN with DuckDB's
+  semantics, superseding L23's refusal.
+  - The order. A NaN equals every NaN, whatever its sign or payload, and
+    is greater than every other value, `+inf` included; `-0.0` equals
+    `0.0`. One header, `include/slothdb/common/types/float_order.hpp`,
+    holds it (`SqlEq`, `SqlLess`, templates that are the built-in
+    operators for any other type), and `Value::operator==` and `<` use
+    it, so every path that compares `Value`s (sorts, set operations,
+    `IN`, `NULLIF`, `GREATEST`, window peers, `QUALIFY`) has it. NaN is
+    told by its bits, not `std::isnan`, which `-ffast-math` folds away
+    in the R package's build. A hash or a group key canonicalises
+    (`CanonicalKey`: every NaN one bit pattern, `-0.0` as `0.0`); the
+    value a group, a `DISTINCT` row or a join shows keeps its own bits.
+  - The audit. Every raw `double` or `float` comparison found in
+    `physical_planner.cpp`, `count_group_agg.cpp`, `agg_emit_helpers.cpp`
+    and `connection.cpp` uses the header: the typed `ORDER BY ... LIMIT`
+    heap, the window's typed sorts (serial and the parallel one), peers,
+    `ROW_NUMBER() = 1` reduction and `MIN`/`MAX`, the hash aggregate's
+    `MIN`/`MAX`, `COUNT(DISTINCT)` and single-column key, `MEDIAN`'s sort,
+    the hash join's keys (a FLOAT or DOUBLE key on either side is the
+    value as a canonical double; its text kept `nan` from `-nan` and
+    `-0.0` from `0.0`), and the set operations' row hash. Two fast paths
+    no longer take floating-point values and leave them to the generic
+    path: the COUNT-only multi-column `GROUP BY` (its key's raw bytes) and
+    the fused join-aggregate, which also read a probe-side `FLOAT`,
+    `SMALLINT` or `TINYINT` as 0. The simple-predicate compiler and the
+    GPU engine, which no query reaches, are left IEEE's.
+  - Ties. `MIN` and `MAX` keep the last of equal values, as DuckDB's
+    (`min` over `0.0` then `-0.0` is `-0.0`); `GREATEST` and `LEAST` the
+    first, except that DuckDB's of two or more `FLOAT`s returns through
+    its sort key, so `-0.0` is `0.0` and a NaN the positive one there.
+  - Making and holding one. `0/0`, `inf - inf`, `sqrt(-1)`, `ln(-1)`,
+    `acos(2)`, `x % 0` of doubles give the hardware's NaN, as DuckDB's
+    default `ieee_floating_point_ops` does; the trigonometric functions
+    gave NULL for a NaN or an infinity and `sign(NaN)` NULL, now DuckDB's
+    NaN, infinity and 0. `%` and `mod` of operands DuckDB types `DECIMAL`
+    or integer (`10.0 % 0.0`) stay "Division by zero" (the binder's
+    `decimal_mod`), and `-0.0` as a literal is DuckDB's `DECIMAL` zero,
+    `0.0`. Text is read by DuckDB's rules (`nan`, `-nan`, `nan(...)`,
+    `inf`, `infinity`, spaces and line ends around; no hexadecimal; past
+    the range an infinity, below it 0); a NaN cast to an integer is out
+    of range, to `BOOLEAN` true. `Append`, `Checkpoint::Load` (any bits:
+    the format is unchanged, 1001, and a file with a NaN that 0.3.0
+    refused now loads) and results hold a NaN with its bits.
+  - Text. A `FLOAT` or `DOUBLE` cast to `VARCHAR` (and `||`, `concat`,
+    `string_agg`) is DuckDB's: the shortest digits, `.0` on a whole
+    number, an exponent outside `[1e-4, 1e16)`, `-0.0`, `inf`, and `nan`
+    or `-nan` by the sign bit. It was `1` for `1.0`, and a NaN as the C
+    library prints it (`nan(ind)` under MinGW). The sign of a computed
+    NaN is the hardware's (`-nan` from `0/0` on x86-64, `nan` on arm64),
+    as DuckDB's is; a literal's and its negation's are fixed.
+  - Types the new text exposed, made DuckDB's: `ROUND` and `TRUNC` of an
+    integer keep its type (with DuckDB's rounding to a power of ten and
+    "Overflow in ROUND of integer"), `MOD` of integers is `%`, and
+    `FLOAT` arithmetic with a `FLOAT` or an integer is `FLOAT` (it was
+    `DOUBLE`, digits DuckDB does not give). `CEIL` and `FLOOR` of an
+    integer are `DOUBLE`s in DuckDB too.
+  - Found on the way and fixed, as the comparisons go through them:
+    `BETWEEN` and `IN` of mixed types (a `BIGINT` or `DOUBLE` column
+    `BETWEEN 1 AND 10` was true of every row, `IN (2, 3)` of none, a
+    `DATE BETWEEN` two strings always true) now unify their arguments'
+    types (`UnifyTypes`, a string literal taking the other's type;
+    `VARCHAR` column `IN (1)` is refused), and `BETWEEN` with a `NULL`
+    bound is three-valued. `INSERT ... SELECT` of a `DOUBLE` into an
+    integer column rounds half to even as DuckDB's cast (it truncated,
+    and a NaN's cast was undefined). Refused rather than fixed: a
+    `VALUES` column mixing string literals with another type (#59), and
+    text with a fraction or an exponent cast to an integer (DuckDB
+    rounds `'1.5'` to 2; `TRY_CAST` gave NULL).
+  - The oracle. `tools/make_nan_cases.py` runs 1,158 queries over NaN of
+    both signs, the infinities, both zeros, finite values and NULL
+    (comparisons, filters, `ORDER BY` both ways with `NULLS FIRST`/`LAST`
+    and `LIMIT`, `GROUP BY`, `DISTINCT`, `COUNT(DISTINCT)`, the
+    aggregates, joins inner and outer, set operations, windows, casts,
+    arithmetic and functions, and a 200,000-row table past the fast
+    paths' thresholds) against DuckDB v2.0.0's Python package and writes
+    `test/fixtures/nan/duckdb_cases.tsv`. `test/unit/execution/test_nan.cpp`
+    replays it at thread caps 1 and 2 and over the tables saved and
+    loaded: a NaN matches any NaN, any other double with its sign
+    (`-0.0` is not `0.0`, except where the case marks the zero's sign as
+    DuckDB's choice among equal values) and within 4 units in the last
+    place (glibc's, Apple's and MinGW's `sin`, `exp`, `cbrt` differ by
+    one), and an error must match an error. The four
+    cases the engine refuses are listed with their reasons in
+    `test/fixtures/nan/refused.tsv`, and one that starts passing fails
+    the test. The SQL fuzzer's tables hold NaN, `-NaN`, the infinities
+    and `-0.0`.
 
 ## 9. Open questions
 

@@ -143,6 +143,10 @@ public:
     std::string op;
     BoundExprPtr left;
     BoundExprPtr right;
+    // `%` whose operands DuckDB types DECIMAL or integer (`10.0 % 0.0`,
+    // `x % 0.0` of an integer `x`), which the engine computes as doubles:
+    // a zero divisor is DuckDB's "Division by zero", not a NaN (#42).
+    bool decimal_mod = false;
 };
 
 // Bound unary minus.
@@ -179,6 +183,8 @@ public:
     // Carried here, not in a static, so two Databases never cross.
     std::shared_ptr<const ProviderRegexCall> regex;
     const zugodb_utf8_v1 *utf8 = nullptr;
+    // MOD of operands DuckDB types DECIMAL or integer, as BoundArithmetic's.
+    bool decimal_mod = false;
 };
 
 // Bound CAST.

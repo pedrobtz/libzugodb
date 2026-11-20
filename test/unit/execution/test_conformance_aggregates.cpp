@@ -90,9 +90,9 @@ TEST_CASE("Stage 8: SUM of a FLOAT, with FILTER and over a window") {
                "('male', 300, 1), ('female', 150, 1), ('female', 250, 1)");
     CHECK(Run(conn, "SELECT SUM(pay) FILTER (WHERE gender = 'male'), "
                     "SUM(pay) FILTER (WHERE gender = 'female'), SUM(pay) FROM issue3105") ==
-          Rows{{"600", "400", "1000"}});
-    CHECK(Run(conn, "SELECT SUM(pay) FROM issue3105 WHERE gender = 'female'") == Rows{{"400"}});
+          Rows{{"600.0", "400.0", "1000.0"}});
+    CHECK(Run(conn, "SELECT SUM(pay) FROM issue3105 WHERE gender = 'female'") == Rows{{"400.0"}});
     // Over a window too, and a SMALLINT's sum is a BIGINT there.
     CHECK(Run(conn, "SELECT SUM(pay) OVER (), SUM(s) OVER () FROM issue3105 LIMIT 1") ==
-          Rows{{"1000", "60003"}});
+          Rows{{"1000.0", "60003"}});
 }

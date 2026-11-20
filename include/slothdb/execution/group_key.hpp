@@ -7,6 +7,7 @@
 // made ('a|', 'b') and ('a', '|b') one group, "NULL|" made a NULL and the
 // text 'NULL' one, and std::to_string(double) kept six decimals.
 
+#include "slothdb/common/types/float_order.hpp"
 #include "slothdb/common/types/value.hpp"
 #include "slothdb/common/types/vector.hpp"
 
@@ -30,10 +31,10 @@ inline void AppendKeyRaw(std::string &key, T v) {
     key.append(reinterpret_cast<const char *>(&v), sizeof v);
 }
 
-// -0.0 and 0.0 are one group. No table holds a NaN (design L23).
+// -0.0 and 0.0 are one group, and so is every NaN, whatever its sign or
+// payload, as DuckDB's (#42).
 inline void AppendKeyDouble(std::string &key, double d) {
-    if (d == 0.0) d = 0.0;
-    AppendKeyRaw(key, d);
+    AppendKeyRaw(key, CanonicalKey(d));
 }
 
 inline void AppendKeyValue(std::string &key, const Value &v) {

@@ -139,14 +139,13 @@ TEST_CASE("#43: * at each integer type's limit, and one past it") {
 TEST_CASE("#43: / of integers is a DOUBLE and does not overflow") {
     Database db;
     Connection conn(db);
-    // DuckDB: (-128)::TINYINT / (-1)::TINYINT is 128.0, a DOUBLE (Value::ToString
-    // prints it 128).
+    // DuckDB: (-128)::TINYINT / (-1)::TINYINT is 128.0, a DOUBLE.
     CHECK(One(conn, "SELECT (-128)::TINYINT / (-1)::TINYINT") ==
-          std::make_pair(std::string("128"), std::string("DOUBLE")));
+          std::make_pair(std::string("128.0"), std::string("DOUBLE")));
     CHECK(One(conn, "SELECT (-32768)::SMALLINT / (-1)::SMALLINT") ==
-          std::make_pair(std::string("32768"), std::string("DOUBLE")));
+          std::make_pair(std::string("32768.0"), std::string("DOUBLE")));
     CHECK(One(conn, "SELECT (-2147483648)::INTEGER / (-1)::INTEGER") ==
-          std::make_pair(std::string("2147483648"), std::string("DOUBLE")));
+          std::make_pair(std::string("2147483648.0"), std::string("DOUBLE")));
     CHECK(One(conn, "SELECT 7::TINYINT / 2::TINYINT") ==
           std::make_pair(std::string("3.5"), std::string("DOUBLE")));
 }
@@ -244,9 +243,24 @@ TEST_CASE("#43: TRUNC, CEIL, ROUND and ABS of every integer width") {
     // CEIL, FLOOR and ROUND gave 0 for TINYINT and SMALLINT.
     CHECK(Run(conn, "SELECT trunc(54::TINYINT), trunc((-27)::SMALLINT), trunc(-27::INTEGER), "
                     "trunc(-27::BIGINT), trunc(-42.5::FLOAT)") ==
-          Rows{{"54", "-27", "-27", "-27", "-42"}});
+          Rows{{"54", "-27", "-27", "-27", "-42.0"}});
+    // DuckDB's CEIL and FLOOR of an integer are DOUBLEs, its ROUND and TRUNC
+    // keep the integer's type (#42; they were DOUBLEs too).
     CHECK(Run(conn, "SELECT ceil(2::TINYINT), floor((-2)::SMALLINT), round(3::TINYINT)") ==
-          Rows{{"2", "-2", "3"}});
+          Rows{{"2.0", "-2.0", "3"}});
+    auto r = conn.Query("SELECT round(7::TINYINT, -1), trunc(17::INTEGER, -1), round(-15::BIGINT, -1), "
+                        "round(7::SMALLINT, 2), round(7::INTEGER, -20), mod(42, 5), mod(42::TINYINT, 5)");
+    CHECK(Collect(r) == Rows{{"10", "10", "-20", "7", "0", "2", "2"}});
+    CHECK(r.column_types[0].id() == LogicalTypeId::TINYINT);
+    CHECK(r.column_types[1].id() == LogicalTypeId::INTEGER);
+    CHECK(r.column_types[2].id() == LogicalTypeId::BIGINT);
+    CHECK(r.column_types[3].id() == LogicalTypeId::SMALLINT);
+    CHECK(r.column_types[5].id() == LogicalTypeId::INTEGER);
+    CHECK(r.column_types[6].id() == LogicalTypeId::TINYINT);
+    // DuckDB's "Overflow in ROUND of integer" and "Division by zero".
+    CHECK_THROWS(conn.Query("SELECT round(125::TINYINT, -1)"));
+    CHECK_THROWS(conn.Query("SELECT round(9223372036854775807::BIGINT, -1)"));
+    CHECK_THROWS(conn.Query("SELECT mod(7, 0)"));
     // DuckDB: "Overflow on abs(-128)"; it was NULL.
     CHECK(Run(conn, "SELECT abs((-127)::TINYINT)") == Rows{{"127"}});
     CHECK_THROWS(conn.Query("SELECT abs((-128)::TINYINT)"));

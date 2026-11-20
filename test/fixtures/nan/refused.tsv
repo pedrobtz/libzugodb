@@ -1,0 +1,7 @@
+# The cases of duckdb_cases.tsv the engine refuses where DuckDB answers:
+# the SQL, a tab, and why. test_nan.cpp fails on a refusal not listed here
+# and on a listed case the engine answers.
+SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.d = t.d)	a correlated subquery in WHERE EXISTS is not bound (the outer table is not in scope)
+SELECT g, sum(r) FROM (SELECT g, row_number() OVER (PARTITION BY g ORDER BY d, id) AS r FROM big QUALIFY r <= 10) GROUP BY g	QUALIFY does not see a select-list alias
+SELECT CAST('1.5' AS INTEGER)	DuckDB reads text with a fraction as a number and rounds it; the engine does not (a NULL under TRY_CAST was a wrong answer)
+SELECT TRY_CAST('1.5' AS INTEGER)	as above

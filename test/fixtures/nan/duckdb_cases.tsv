@@ -1,0 +1,1168 @@
+# DuckDB 2.0.0 (Python package), tools/make_nan_cases.py; see its docstring for the format.
+1	setup	CREATE TABLE t (id INTEGER, d DOUBLE, f FLOAT, g INTEGER)	
+2	setup	INSERT INTO t VALUES (1, 'nan'::DOUBLE, 'nan'::FLOAT, 1), (2, -('nan'::DOUBLE), -('nan'::FLOAT), 1), (3, 'inf'::DOUBLE, 'inf'::FLOAT, 2), (4, '-inf'::DOUBLE, '-inf'::FLOAT, 2), (5, '0.0'::DOUBLE, '0.0'::FLOAT, 3), (6, '-0.0'::DOUBLE, '-0.0'::FLOAT, 3), (7, '1.5'::DOUBLE, '1.5'::FLOAT, 1), (8, '-2'::DOUBLE, '-2'::FLOAT, 2), (9, NULL::DOUBLE, NULL::FLOAT, 3), (10, 'nan'::DOUBLE, 'nan'::FLOAT, 2), (11, '1.5'::DOUBLE, '1.5'::FLOAT, 3), (12, '-0.0'::DOUBLE, '-0.0'::FLOAT, 1)	
+3	setup	CREATE TABLE u (id INTEGER, d DOUBLE, f FLOAT)	
+4	setup	INSERT INTO u VALUES (1, -('nan'::DOUBLE), -('nan'::FLOAT)), (2, '0.0'::DOUBLE, '0.0'::FLOAT), (3, '-0.0'::DOUBLE, '-0.0'::FLOAT), (4, 'inf'::DOUBLE, 'inf'::FLOAT), (5, '1.5'::DOUBLE, '1.5'::FLOAT), (6, NULL::DOUBLE, NULL::FLOAT), (7, 'nan'::DOUBLE, 'nan'::FLOAT)	
+5	setup	CREATE TABLE digits (x INTEGER)	
+6	setup	INSERT INTO digits VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9)	
+7	setup	CREATE TABLE two (x INTEGER)	
+8	setup	INSERT INTO two VALUES (0), (1)	
+9	setup	CREATE TABLE big AS SELECT i AS id, CASE i % 9 WHEN 0 THEN 'nan'::DOUBLE WHEN 1 THEN -('nan'::DOUBLE) WHEN 2 THEN 'inf'::DOUBLE WHEN 3 THEN '-inf'::DOUBLE WHEN 4 THEN '0.0'::DOUBLE WHEN 5 THEN '-0.0'::DOUBLE WHEN 6 THEN (i % 50)::DOUBLE WHEN 7 THEN NULL ELSE '1.5'::DOUBLE END AS d, i % 3 AS g FROM (SELECT a.x + 10 * b.x + 100 * c.x + 1000 * e.x + 10000 * f.x + 100000 * h.x AS i FROM digits a, digits b, digits c, digits e, digits f, two h) s	
+10	o	SELECT 'nan'::DOUBLE = 'nan'::DOUBLE, 'nan'::DOUBLE <> 'nan'::DOUBLE, 'nan'::DOUBLE < 'nan'::DOUBLE, 'nan'::DOUBLE > 'nan'::DOUBLE, 'nan'::DOUBLE <= 'nan'::DOUBLE, 'nan'::DOUBLE >= 'nan'::DOUBLE, 'nan'::DOUBLE IS DISTINCT FROM 'nan'::DOUBLE, 'nan'::DOUBLE IS NOT DISTINCT FROM 'nan'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+11	o	SELECT 'nan'::DOUBLE = -('nan'::DOUBLE), 'nan'::DOUBLE <> -('nan'::DOUBLE), 'nan'::DOUBLE < -('nan'::DOUBLE), 'nan'::DOUBLE > -('nan'::DOUBLE), 'nan'::DOUBLE <= -('nan'::DOUBLE), 'nan'::DOUBLE >= -('nan'::DOUBLE), 'nan'::DOUBLE IS DISTINCT FROM -('nan'::DOUBLE), 'nan'::DOUBLE IS NOT DISTINCT FROM -('nan'::DOUBLE)	b1,b0,b0,b0,b1,b1,b0,b1
+12	o	SELECT 'nan'::DOUBLE = 'inf'::DOUBLE, 'nan'::DOUBLE <> 'inf'::DOUBLE, 'nan'::DOUBLE < 'inf'::DOUBLE, 'nan'::DOUBLE > 'inf'::DOUBLE, 'nan'::DOUBLE <= 'inf'::DOUBLE, 'nan'::DOUBLE >= 'inf'::DOUBLE, 'nan'::DOUBLE IS DISTINCT FROM 'inf'::DOUBLE, 'nan'::DOUBLE IS NOT DISTINCT FROM 'inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+13	o	SELECT 'nan'::DOUBLE = '-inf'::DOUBLE, 'nan'::DOUBLE <> '-inf'::DOUBLE, 'nan'::DOUBLE < '-inf'::DOUBLE, 'nan'::DOUBLE > '-inf'::DOUBLE, 'nan'::DOUBLE <= '-inf'::DOUBLE, 'nan'::DOUBLE >= '-inf'::DOUBLE, 'nan'::DOUBLE IS DISTINCT FROM '-inf'::DOUBLE, 'nan'::DOUBLE IS NOT DISTINCT FROM '-inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+14	o	SELECT 'nan'::DOUBLE = '0.0'::DOUBLE, 'nan'::DOUBLE <> '0.0'::DOUBLE, 'nan'::DOUBLE < '0.0'::DOUBLE, 'nan'::DOUBLE > '0.0'::DOUBLE, 'nan'::DOUBLE <= '0.0'::DOUBLE, 'nan'::DOUBLE >= '0.0'::DOUBLE, 'nan'::DOUBLE IS DISTINCT FROM '0.0'::DOUBLE, 'nan'::DOUBLE IS NOT DISTINCT FROM '0.0'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+15	o	SELECT 'nan'::DOUBLE = '-0.0'::DOUBLE, 'nan'::DOUBLE <> '-0.0'::DOUBLE, 'nan'::DOUBLE < '-0.0'::DOUBLE, 'nan'::DOUBLE > '-0.0'::DOUBLE, 'nan'::DOUBLE <= '-0.0'::DOUBLE, 'nan'::DOUBLE >= '-0.0'::DOUBLE, 'nan'::DOUBLE IS DISTINCT FROM '-0.0'::DOUBLE, 'nan'::DOUBLE IS NOT DISTINCT FROM '-0.0'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+16	o	SELECT 'nan'::DOUBLE = '1.5'::DOUBLE, 'nan'::DOUBLE <> '1.5'::DOUBLE, 'nan'::DOUBLE < '1.5'::DOUBLE, 'nan'::DOUBLE > '1.5'::DOUBLE, 'nan'::DOUBLE <= '1.5'::DOUBLE, 'nan'::DOUBLE >= '1.5'::DOUBLE, 'nan'::DOUBLE IS DISTINCT FROM '1.5'::DOUBLE, 'nan'::DOUBLE IS NOT DISTINCT FROM '1.5'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+17	o	SELECT 'nan'::DOUBLE = '-2'::DOUBLE, 'nan'::DOUBLE <> '-2'::DOUBLE, 'nan'::DOUBLE < '-2'::DOUBLE, 'nan'::DOUBLE > '-2'::DOUBLE, 'nan'::DOUBLE <= '-2'::DOUBLE, 'nan'::DOUBLE >= '-2'::DOUBLE, 'nan'::DOUBLE IS DISTINCT FROM '-2'::DOUBLE, 'nan'::DOUBLE IS NOT DISTINCT FROM '-2'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+18	o	SELECT 'nan'::DOUBLE = NULL::DOUBLE, 'nan'::DOUBLE <> NULL::DOUBLE, 'nan'::DOUBLE < NULL::DOUBLE, 'nan'::DOUBLE > NULL::DOUBLE, 'nan'::DOUBLE <= NULL::DOUBLE, 'nan'::DOUBLE >= NULL::DOUBLE, 'nan'::DOUBLE IS DISTINCT FROM NULL::DOUBLE, 'nan'::DOUBLE IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b1,b0
+19	o	SELECT -('nan'::DOUBLE) = 'nan'::DOUBLE, -('nan'::DOUBLE) <> 'nan'::DOUBLE, -('nan'::DOUBLE) < 'nan'::DOUBLE, -('nan'::DOUBLE) > 'nan'::DOUBLE, -('nan'::DOUBLE) <= 'nan'::DOUBLE, -('nan'::DOUBLE) >= 'nan'::DOUBLE, -('nan'::DOUBLE) IS DISTINCT FROM 'nan'::DOUBLE, -('nan'::DOUBLE) IS NOT DISTINCT FROM 'nan'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+20	o	SELECT -('nan'::DOUBLE) = -('nan'::DOUBLE), -('nan'::DOUBLE) <> -('nan'::DOUBLE), -('nan'::DOUBLE) < -('nan'::DOUBLE), -('nan'::DOUBLE) > -('nan'::DOUBLE), -('nan'::DOUBLE) <= -('nan'::DOUBLE), -('nan'::DOUBLE) >= -('nan'::DOUBLE), -('nan'::DOUBLE) IS DISTINCT FROM -('nan'::DOUBLE), -('nan'::DOUBLE) IS NOT DISTINCT FROM -('nan'::DOUBLE)	b1,b0,b0,b0,b1,b1,b0,b1
+21	o	SELECT -('nan'::DOUBLE) = 'inf'::DOUBLE, -('nan'::DOUBLE) <> 'inf'::DOUBLE, -('nan'::DOUBLE) < 'inf'::DOUBLE, -('nan'::DOUBLE) > 'inf'::DOUBLE, -('nan'::DOUBLE) <= 'inf'::DOUBLE, -('nan'::DOUBLE) >= 'inf'::DOUBLE, -('nan'::DOUBLE) IS DISTINCT FROM 'inf'::DOUBLE, -('nan'::DOUBLE) IS NOT DISTINCT FROM 'inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+22	o	SELECT -('nan'::DOUBLE) = '-inf'::DOUBLE, -('nan'::DOUBLE) <> '-inf'::DOUBLE, -('nan'::DOUBLE) < '-inf'::DOUBLE, -('nan'::DOUBLE) > '-inf'::DOUBLE, -('nan'::DOUBLE) <= '-inf'::DOUBLE, -('nan'::DOUBLE) >= '-inf'::DOUBLE, -('nan'::DOUBLE) IS DISTINCT FROM '-inf'::DOUBLE, -('nan'::DOUBLE) IS NOT DISTINCT FROM '-inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+23	o	SELECT -('nan'::DOUBLE) = '0.0'::DOUBLE, -('nan'::DOUBLE) <> '0.0'::DOUBLE, -('nan'::DOUBLE) < '0.0'::DOUBLE, -('nan'::DOUBLE) > '0.0'::DOUBLE, -('nan'::DOUBLE) <= '0.0'::DOUBLE, -('nan'::DOUBLE) >= '0.0'::DOUBLE, -('nan'::DOUBLE) IS DISTINCT FROM '0.0'::DOUBLE, -('nan'::DOUBLE) IS NOT DISTINCT FROM '0.0'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+24	o	SELECT -('nan'::DOUBLE) = '-0.0'::DOUBLE, -('nan'::DOUBLE) <> '-0.0'::DOUBLE, -('nan'::DOUBLE) < '-0.0'::DOUBLE, -('nan'::DOUBLE) > '-0.0'::DOUBLE, -('nan'::DOUBLE) <= '-0.0'::DOUBLE, -('nan'::DOUBLE) >= '-0.0'::DOUBLE, -('nan'::DOUBLE) IS DISTINCT FROM '-0.0'::DOUBLE, -('nan'::DOUBLE) IS NOT DISTINCT FROM '-0.0'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+25	o	SELECT -('nan'::DOUBLE) = '1.5'::DOUBLE, -('nan'::DOUBLE) <> '1.5'::DOUBLE, -('nan'::DOUBLE) < '1.5'::DOUBLE, -('nan'::DOUBLE) > '1.5'::DOUBLE, -('nan'::DOUBLE) <= '1.5'::DOUBLE, -('nan'::DOUBLE) >= '1.5'::DOUBLE, -('nan'::DOUBLE) IS DISTINCT FROM '1.5'::DOUBLE, -('nan'::DOUBLE) IS NOT DISTINCT FROM '1.5'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+26	o	SELECT -('nan'::DOUBLE) = '-2'::DOUBLE, -('nan'::DOUBLE) <> '-2'::DOUBLE, -('nan'::DOUBLE) < '-2'::DOUBLE, -('nan'::DOUBLE) > '-2'::DOUBLE, -('nan'::DOUBLE) <= '-2'::DOUBLE, -('nan'::DOUBLE) >= '-2'::DOUBLE, -('nan'::DOUBLE) IS DISTINCT FROM '-2'::DOUBLE, -('nan'::DOUBLE) IS NOT DISTINCT FROM '-2'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+27	o	SELECT -('nan'::DOUBLE) = NULL::DOUBLE, -('nan'::DOUBLE) <> NULL::DOUBLE, -('nan'::DOUBLE) < NULL::DOUBLE, -('nan'::DOUBLE) > NULL::DOUBLE, -('nan'::DOUBLE) <= NULL::DOUBLE, -('nan'::DOUBLE) >= NULL::DOUBLE, -('nan'::DOUBLE) IS DISTINCT FROM NULL::DOUBLE, -('nan'::DOUBLE) IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b1,b0
+28	o	SELECT 'inf'::DOUBLE = 'nan'::DOUBLE, 'inf'::DOUBLE <> 'nan'::DOUBLE, 'inf'::DOUBLE < 'nan'::DOUBLE, 'inf'::DOUBLE > 'nan'::DOUBLE, 'inf'::DOUBLE <= 'nan'::DOUBLE, 'inf'::DOUBLE >= 'nan'::DOUBLE, 'inf'::DOUBLE IS DISTINCT FROM 'nan'::DOUBLE, 'inf'::DOUBLE IS NOT DISTINCT FROM 'nan'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+29	o	SELECT 'inf'::DOUBLE = -('nan'::DOUBLE), 'inf'::DOUBLE <> -('nan'::DOUBLE), 'inf'::DOUBLE < -('nan'::DOUBLE), 'inf'::DOUBLE > -('nan'::DOUBLE), 'inf'::DOUBLE <= -('nan'::DOUBLE), 'inf'::DOUBLE >= -('nan'::DOUBLE), 'inf'::DOUBLE IS DISTINCT FROM -('nan'::DOUBLE), 'inf'::DOUBLE IS NOT DISTINCT FROM -('nan'::DOUBLE)	b0,b1,b1,b0,b1,b0,b1,b0
+30	o	SELECT 'inf'::DOUBLE = 'inf'::DOUBLE, 'inf'::DOUBLE <> 'inf'::DOUBLE, 'inf'::DOUBLE < 'inf'::DOUBLE, 'inf'::DOUBLE > 'inf'::DOUBLE, 'inf'::DOUBLE <= 'inf'::DOUBLE, 'inf'::DOUBLE >= 'inf'::DOUBLE, 'inf'::DOUBLE IS DISTINCT FROM 'inf'::DOUBLE, 'inf'::DOUBLE IS NOT DISTINCT FROM 'inf'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+31	o	SELECT 'inf'::DOUBLE = '-inf'::DOUBLE, 'inf'::DOUBLE <> '-inf'::DOUBLE, 'inf'::DOUBLE < '-inf'::DOUBLE, 'inf'::DOUBLE > '-inf'::DOUBLE, 'inf'::DOUBLE <= '-inf'::DOUBLE, 'inf'::DOUBLE >= '-inf'::DOUBLE, 'inf'::DOUBLE IS DISTINCT FROM '-inf'::DOUBLE, 'inf'::DOUBLE IS NOT DISTINCT FROM '-inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+32	o	SELECT 'inf'::DOUBLE = '0.0'::DOUBLE, 'inf'::DOUBLE <> '0.0'::DOUBLE, 'inf'::DOUBLE < '0.0'::DOUBLE, 'inf'::DOUBLE > '0.0'::DOUBLE, 'inf'::DOUBLE <= '0.0'::DOUBLE, 'inf'::DOUBLE >= '0.0'::DOUBLE, 'inf'::DOUBLE IS DISTINCT FROM '0.0'::DOUBLE, 'inf'::DOUBLE IS NOT DISTINCT FROM '0.0'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+33	o	SELECT 'inf'::DOUBLE = '-0.0'::DOUBLE, 'inf'::DOUBLE <> '-0.0'::DOUBLE, 'inf'::DOUBLE < '-0.0'::DOUBLE, 'inf'::DOUBLE > '-0.0'::DOUBLE, 'inf'::DOUBLE <= '-0.0'::DOUBLE, 'inf'::DOUBLE >= '-0.0'::DOUBLE, 'inf'::DOUBLE IS DISTINCT FROM '-0.0'::DOUBLE, 'inf'::DOUBLE IS NOT DISTINCT FROM '-0.0'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+34	o	SELECT 'inf'::DOUBLE = '1.5'::DOUBLE, 'inf'::DOUBLE <> '1.5'::DOUBLE, 'inf'::DOUBLE < '1.5'::DOUBLE, 'inf'::DOUBLE > '1.5'::DOUBLE, 'inf'::DOUBLE <= '1.5'::DOUBLE, 'inf'::DOUBLE >= '1.5'::DOUBLE, 'inf'::DOUBLE IS DISTINCT FROM '1.5'::DOUBLE, 'inf'::DOUBLE IS NOT DISTINCT FROM '1.5'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+35	o	SELECT 'inf'::DOUBLE = '-2'::DOUBLE, 'inf'::DOUBLE <> '-2'::DOUBLE, 'inf'::DOUBLE < '-2'::DOUBLE, 'inf'::DOUBLE > '-2'::DOUBLE, 'inf'::DOUBLE <= '-2'::DOUBLE, 'inf'::DOUBLE >= '-2'::DOUBLE, 'inf'::DOUBLE IS DISTINCT FROM '-2'::DOUBLE, 'inf'::DOUBLE IS NOT DISTINCT FROM '-2'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+36	o	SELECT 'inf'::DOUBLE = NULL::DOUBLE, 'inf'::DOUBLE <> NULL::DOUBLE, 'inf'::DOUBLE < NULL::DOUBLE, 'inf'::DOUBLE > NULL::DOUBLE, 'inf'::DOUBLE <= NULL::DOUBLE, 'inf'::DOUBLE >= NULL::DOUBLE, 'inf'::DOUBLE IS DISTINCT FROM NULL::DOUBLE, 'inf'::DOUBLE IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b1,b0
+37	o	SELECT '-inf'::DOUBLE = 'nan'::DOUBLE, '-inf'::DOUBLE <> 'nan'::DOUBLE, '-inf'::DOUBLE < 'nan'::DOUBLE, '-inf'::DOUBLE > 'nan'::DOUBLE, '-inf'::DOUBLE <= 'nan'::DOUBLE, '-inf'::DOUBLE >= 'nan'::DOUBLE, '-inf'::DOUBLE IS DISTINCT FROM 'nan'::DOUBLE, '-inf'::DOUBLE IS NOT DISTINCT FROM 'nan'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+38	o	SELECT '-inf'::DOUBLE = -('nan'::DOUBLE), '-inf'::DOUBLE <> -('nan'::DOUBLE), '-inf'::DOUBLE < -('nan'::DOUBLE), '-inf'::DOUBLE > -('nan'::DOUBLE), '-inf'::DOUBLE <= -('nan'::DOUBLE), '-inf'::DOUBLE >= -('nan'::DOUBLE), '-inf'::DOUBLE IS DISTINCT FROM -('nan'::DOUBLE), '-inf'::DOUBLE IS NOT DISTINCT FROM -('nan'::DOUBLE)	b0,b1,b1,b0,b1,b0,b1,b0
+39	o	SELECT '-inf'::DOUBLE = 'inf'::DOUBLE, '-inf'::DOUBLE <> 'inf'::DOUBLE, '-inf'::DOUBLE < 'inf'::DOUBLE, '-inf'::DOUBLE > 'inf'::DOUBLE, '-inf'::DOUBLE <= 'inf'::DOUBLE, '-inf'::DOUBLE >= 'inf'::DOUBLE, '-inf'::DOUBLE IS DISTINCT FROM 'inf'::DOUBLE, '-inf'::DOUBLE IS NOT DISTINCT FROM 'inf'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+40	o	SELECT '-inf'::DOUBLE = '-inf'::DOUBLE, '-inf'::DOUBLE <> '-inf'::DOUBLE, '-inf'::DOUBLE < '-inf'::DOUBLE, '-inf'::DOUBLE > '-inf'::DOUBLE, '-inf'::DOUBLE <= '-inf'::DOUBLE, '-inf'::DOUBLE >= '-inf'::DOUBLE, '-inf'::DOUBLE IS DISTINCT FROM '-inf'::DOUBLE, '-inf'::DOUBLE IS NOT DISTINCT FROM '-inf'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+41	o	SELECT '-inf'::DOUBLE = '0.0'::DOUBLE, '-inf'::DOUBLE <> '0.0'::DOUBLE, '-inf'::DOUBLE < '0.0'::DOUBLE, '-inf'::DOUBLE > '0.0'::DOUBLE, '-inf'::DOUBLE <= '0.0'::DOUBLE, '-inf'::DOUBLE >= '0.0'::DOUBLE, '-inf'::DOUBLE IS DISTINCT FROM '0.0'::DOUBLE, '-inf'::DOUBLE IS NOT DISTINCT FROM '0.0'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+42	o	SELECT '-inf'::DOUBLE = '-0.0'::DOUBLE, '-inf'::DOUBLE <> '-0.0'::DOUBLE, '-inf'::DOUBLE < '-0.0'::DOUBLE, '-inf'::DOUBLE > '-0.0'::DOUBLE, '-inf'::DOUBLE <= '-0.0'::DOUBLE, '-inf'::DOUBLE >= '-0.0'::DOUBLE, '-inf'::DOUBLE IS DISTINCT FROM '-0.0'::DOUBLE, '-inf'::DOUBLE IS NOT DISTINCT FROM '-0.0'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+43	o	SELECT '-inf'::DOUBLE = '1.5'::DOUBLE, '-inf'::DOUBLE <> '1.5'::DOUBLE, '-inf'::DOUBLE < '1.5'::DOUBLE, '-inf'::DOUBLE > '1.5'::DOUBLE, '-inf'::DOUBLE <= '1.5'::DOUBLE, '-inf'::DOUBLE >= '1.5'::DOUBLE, '-inf'::DOUBLE IS DISTINCT FROM '1.5'::DOUBLE, '-inf'::DOUBLE IS NOT DISTINCT FROM '1.5'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+44	o	SELECT '-inf'::DOUBLE = '-2'::DOUBLE, '-inf'::DOUBLE <> '-2'::DOUBLE, '-inf'::DOUBLE < '-2'::DOUBLE, '-inf'::DOUBLE > '-2'::DOUBLE, '-inf'::DOUBLE <= '-2'::DOUBLE, '-inf'::DOUBLE >= '-2'::DOUBLE, '-inf'::DOUBLE IS DISTINCT FROM '-2'::DOUBLE, '-inf'::DOUBLE IS NOT DISTINCT FROM '-2'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+45	o	SELECT '-inf'::DOUBLE = NULL::DOUBLE, '-inf'::DOUBLE <> NULL::DOUBLE, '-inf'::DOUBLE < NULL::DOUBLE, '-inf'::DOUBLE > NULL::DOUBLE, '-inf'::DOUBLE <= NULL::DOUBLE, '-inf'::DOUBLE >= NULL::DOUBLE, '-inf'::DOUBLE IS DISTINCT FROM NULL::DOUBLE, '-inf'::DOUBLE IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b1,b0
+46	o	SELECT '0.0'::DOUBLE = 'nan'::DOUBLE, '0.0'::DOUBLE <> 'nan'::DOUBLE, '0.0'::DOUBLE < 'nan'::DOUBLE, '0.0'::DOUBLE > 'nan'::DOUBLE, '0.0'::DOUBLE <= 'nan'::DOUBLE, '0.0'::DOUBLE >= 'nan'::DOUBLE, '0.0'::DOUBLE IS DISTINCT FROM 'nan'::DOUBLE, '0.0'::DOUBLE IS NOT DISTINCT FROM 'nan'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+47	o	SELECT '0.0'::DOUBLE = -('nan'::DOUBLE), '0.0'::DOUBLE <> -('nan'::DOUBLE), '0.0'::DOUBLE < -('nan'::DOUBLE), '0.0'::DOUBLE > -('nan'::DOUBLE), '0.0'::DOUBLE <= -('nan'::DOUBLE), '0.0'::DOUBLE >= -('nan'::DOUBLE), '0.0'::DOUBLE IS DISTINCT FROM -('nan'::DOUBLE), '0.0'::DOUBLE IS NOT DISTINCT FROM -('nan'::DOUBLE)	b0,b1,b1,b0,b1,b0,b1,b0
+48	o	SELECT '0.0'::DOUBLE = 'inf'::DOUBLE, '0.0'::DOUBLE <> 'inf'::DOUBLE, '0.0'::DOUBLE < 'inf'::DOUBLE, '0.0'::DOUBLE > 'inf'::DOUBLE, '0.0'::DOUBLE <= 'inf'::DOUBLE, '0.0'::DOUBLE >= 'inf'::DOUBLE, '0.0'::DOUBLE IS DISTINCT FROM 'inf'::DOUBLE, '0.0'::DOUBLE IS NOT DISTINCT FROM 'inf'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+49	o	SELECT '0.0'::DOUBLE = '-inf'::DOUBLE, '0.0'::DOUBLE <> '-inf'::DOUBLE, '0.0'::DOUBLE < '-inf'::DOUBLE, '0.0'::DOUBLE > '-inf'::DOUBLE, '0.0'::DOUBLE <= '-inf'::DOUBLE, '0.0'::DOUBLE >= '-inf'::DOUBLE, '0.0'::DOUBLE IS DISTINCT FROM '-inf'::DOUBLE, '0.0'::DOUBLE IS NOT DISTINCT FROM '-inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+50	o	SELECT '0.0'::DOUBLE = '0.0'::DOUBLE, '0.0'::DOUBLE <> '0.0'::DOUBLE, '0.0'::DOUBLE < '0.0'::DOUBLE, '0.0'::DOUBLE > '0.0'::DOUBLE, '0.0'::DOUBLE <= '0.0'::DOUBLE, '0.0'::DOUBLE >= '0.0'::DOUBLE, '0.0'::DOUBLE IS DISTINCT FROM '0.0'::DOUBLE, '0.0'::DOUBLE IS NOT DISTINCT FROM '0.0'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+51	o	SELECT '0.0'::DOUBLE = '-0.0'::DOUBLE, '0.0'::DOUBLE <> '-0.0'::DOUBLE, '0.0'::DOUBLE < '-0.0'::DOUBLE, '0.0'::DOUBLE > '-0.0'::DOUBLE, '0.0'::DOUBLE <= '-0.0'::DOUBLE, '0.0'::DOUBLE >= '-0.0'::DOUBLE, '0.0'::DOUBLE IS DISTINCT FROM '-0.0'::DOUBLE, '0.0'::DOUBLE IS NOT DISTINCT FROM '-0.0'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+52	o	SELECT '0.0'::DOUBLE = '1.5'::DOUBLE, '0.0'::DOUBLE <> '1.5'::DOUBLE, '0.0'::DOUBLE < '1.5'::DOUBLE, '0.0'::DOUBLE > '1.5'::DOUBLE, '0.0'::DOUBLE <= '1.5'::DOUBLE, '0.0'::DOUBLE >= '1.5'::DOUBLE, '0.0'::DOUBLE IS DISTINCT FROM '1.5'::DOUBLE, '0.0'::DOUBLE IS NOT DISTINCT FROM '1.5'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+53	o	SELECT '0.0'::DOUBLE = '-2'::DOUBLE, '0.0'::DOUBLE <> '-2'::DOUBLE, '0.0'::DOUBLE < '-2'::DOUBLE, '0.0'::DOUBLE > '-2'::DOUBLE, '0.0'::DOUBLE <= '-2'::DOUBLE, '0.0'::DOUBLE >= '-2'::DOUBLE, '0.0'::DOUBLE IS DISTINCT FROM '-2'::DOUBLE, '0.0'::DOUBLE IS NOT DISTINCT FROM '-2'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+54	o	SELECT '0.0'::DOUBLE = NULL::DOUBLE, '0.0'::DOUBLE <> NULL::DOUBLE, '0.0'::DOUBLE < NULL::DOUBLE, '0.0'::DOUBLE > NULL::DOUBLE, '0.0'::DOUBLE <= NULL::DOUBLE, '0.0'::DOUBLE >= NULL::DOUBLE, '0.0'::DOUBLE IS DISTINCT FROM NULL::DOUBLE, '0.0'::DOUBLE IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b1,b0
+55	o	SELECT '-0.0'::DOUBLE = 'nan'::DOUBLE, '-0.0'::DOUBLE <> 'nan'::DOUBLE, '-0.0'::DOUBLE < 'nan'::DOUBLE, '-0.0'::DOUBLE > 'nan'::DOUBLE, '-0.0'::DOUBLE <= 'nan'::DOUBLE, '-0.0'::DOUBLE >= 'nan'::DOUBLE, '-0.0'::DOUBLE IS DISTINCT FROM 'nan'::DOUBLE, '-0.0'::DOUBLE IS NOT DISTINCT FROM 'nan'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+56	o	SELECT '-0.0'::DOUBLE = -('nan'::DOUBLE), '-0.0'::DOUBLE <> -('nan'::DOUBLE), '-0.0'::DOUBLE < -('nan'::DOUBLE), '-0.0'::DOUBLE > -('nan'::DOUBLE), '-0.0'::DOUBLE <= -('nan'::DOUBLE), '-0.0'::DOUBLE >= -('nan'::DOUBLE), '-0.0'::DOUBLE IS DISTINCT FROM -('nan'::DOUBLE), '-0.0'::DOUBLE IS NOT DISTINCT FROM -('nan'::DOUBLE)	b0,b1,b1,b0,b1,b0,b1,b0
+57	o	SELECT '-0.0'::DOUBLE = 'inf'::DOUBLE, '-0.0'::DOUBLE <> 'inf'::DOUBLE, '-0.0'::DOUBLE < 'inf'::DOUBLE, '-0.0'::DOUBLE > 'inf'::DOUBLE, '-0.0'::DOUBLE <= 'inf'::DOUBLE, '-0.0'::DOUBLE >= 'inf'::DOUBLE, '-0.0'::DOUBLE IS DISTINCT FROM 'inf'::DOUBLE, '-0.0'::DOUBLE IS NOT DISTINCT FROM 'inf'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+58	o	SELECT '-0.0'::DOUBLE = '-inf'::DOUBLE, '-0.0'::DOUBLE <> '-inf'::DOUBLE, '-0.0'::DOUBLE < '-inf'::DOUBLE, '-0.0'::DOUBLE > '-inf'::DOUBLE, '-0.0'::DOUBLE <= '-inf'::DOUBLE, '-0.0'::DOUBLE >= '-inf'::DOUBLE, '-0.0'::DOUBLE IS DISTINCT FROM '-inf'::DOUBLE, '-0.0'::DOUBLE IS NOT DISTINCT FROM '-inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+59	o	SELECT '-0.0'::DOUBLE = '0.0'::DOUBLE, '-0.0'::DOUBLE <> '0.0'::DOUBLE, '-0.0'::DOUBLE < '0.0'::DOUBLE, '-0.0'::DOUBLE > '0.0'::DOUBLE, '-0.0'::DOUBLE <= '0.0'::DOUBLE, '-0.0'::DOUBLE >= '0.0'::DOUBLE, '-0.0'::DOUBLE IS DISTINCT FROM '0.0'::DOUBLE, '-0.0'::DOUBLE IS NOT DISTINCT FROM '0.0'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+60	o	SELECT '-0.0'::DOUBLE = '-0.0'::DOUBLE, '-0.0'::DOUBLE <> '-0.0'::DOUBLE, '-0.0'::DOUBLE < '-0.0'::DOUBLE, '-0.0'::DOUBLE > '-0.0'::DOUBLE, '-0.0'::DOUBLE <= '-0.0'::DOUBLE, '-0.0'::DOUBLE >= '-0.0'::DOUBLE, '-0.0'::DOUBLE IS DISTINCT FROM '-0.0'::DOUBLE, '-0.0'::DOUBLE IS NOT DISTINCT FROM '-0.0'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+61	o	SELECT '-0.0'::DOUBLE = '1.5'::DOUBLE, '-0.0'::DOUBLE <> '1.5'::DOUBLE, '-0.0'::DOUBLE < '1.5'::DOUBLE, '-0.0'::DOUBLE > '1.5'::DOUBLE, '-0.0'::DOUBLE <= '1.5'::DOUBLE, '-0.0'::DOUBLE >= '1.5'::DOUBLE, '-0.0'::DOUBLE IS DISTINCT FROM '1.5'::DOUBLE, '-0.0'::DOUBLE IS NOT DISTINCT FROM '1.5'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+62	o	SELECT '-0.0'::DOUBLE = '-2'::DOUBLE, '-0.0'::DOUBLE <> '-2'::DOUBLE, '-0.0'::DOUBLE < '-2'::DOUBLE, '-0.0'::DOUBLE > '-2'::DOUBLE, '-0.0'::DOUBLE <= '-2'::DOUBLE, '-0.0'::DOUBLE >= '-2'::DOUBLE, '-0.0'::DOUBLE IS DISTINCT FROM '-2'::DOUBLE, '-0.0'::DOUBLE IS NOT DISTINCT FROM '-2'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+63	o	SELECT '-0.0'::DOUBLE = NULL::DOUBLE, '-0.0'::DOUBLE <> NULL::DOUBLE, '-0.0'::DOUBLE < NULL::DOUBLE, '-0.0'::DOUBLE > NULL::DOUBLE, '-0.0'::DOUBLE <= NULL::DOUBLE, '-0.0'::DOUBLE >= NULL::DOUBLE, '-0.0'::DOUBLE IS DISTINCT FROM NULL::DOUBLE, '-0.0'::DOUBLE IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b1,b0
+64	o	SELECT '1.5'::DOUBLE = 'nan'::DOUBLE, '1.5'::DOUBLE <> 'nan'::DOUBLE, '1.5'::DOUBLE < 'nan'::DOUBLE, '1.5'::DOUBLE > 'nan'::DOUBLE, '1.5'::DOUBLE <= 'nan'::DOUBLE, '1.5'::DOUBLE >= 'nan'::DOUBLE, '1.5'::DOUBLE IS DISTINCT FROM 'nan'::DOUBLE, '1.5'::DOUBLE IS NOT DISTINCT FROM 'nan'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+65	o	SELECT '1.5'::DOUBLE = -('nan'::DOUBLE), '1.5'::DOUBLE <> -('nan'::DOUBLE), '1.5'::DOUBLE < -('nan'::DOUBLE), '1.5'::DOUBLE > -('nan'::DOUBLE), '1.5'::DOUBLE <= -('nan'::DOUBLE), '1.5'::DOUBLE >= -('nan'::DOUBLE), '1.5'::DOUBLE IS DISTINCT FROM -('nan'::DOUBLE), '1.5'::DOUBLE IS NOT DISTINCT FROM -('nan'::DOUBLE)	b0,b1,b1,b0,b1,b0,b1,b0
+66	o	SELECT '1.5'::DOUBLE = 'inf'::DOUBLE, '1.5'::DOUBLE <> 'inf'::DOUBLE, '1.5'::DOUBLE < 'inf'::DOUBLE, '1.5'::DOUBLE > 'inf'::DOUBLE, '1.5'::DOUBLE <= 'inf'::DOUBLE, '1.5'::DOUBLE >= 'inf'::DOUBLE, '1.5'::DOUBLE IS DISTINCT FROM 'inf'::DOUBLE, '1.5'::DOUBLE IS NOT DISTINCT FROM 'inf'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+67	o	SELECT '1.5'::DOUBLE = '-inf'::DOUBLE, '1.5'::DOUBLE <> '-inf'::DOUBLE, '1.5'::DOUBLE < '-inf'::DOUBLE, '1.5'::DOUBLE > '-inf'::DOUBLE, '1.5'::DOUBLE <= '-inf'::DOUBLE, '1.5'::DOUBLE >= '-inf'::DOUBLE, '1.5'::DOUBLE IS DISTINCT FROM '-inf'::DOUBLE, '1.5'::DOUBLE IS NOT DISTINCT FROM '-inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+68	o	SELECT '1.5'::DOUBLE = '0.0'::DOUBLE, '1.5'::DOUBLE <> '0.0'::DOUBLE, '1.5'::DOUBLE < '0.0'::DOUBLE, '1.5'::DOUBLE > '0.0'::DOUBLE, '1.5'::DOUBLE <= '0.0'::DOUBLE, '1.5'::DOUBLE >= '0.0'::DOUBLE, '1.5'::DOUBLE IS DISTINCT FROM '0.0'::DOUBLE, '1.5'::DOUBLE IS NOT DISTINCT FROM '0.0'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+69	o	SELECT '1.5'::DOUBLE = '-0.0'::DOUBLE, '1.5'::DOUBLE <> '-0.0'::DOUBLE, '1.5'::DOUBLE < '-0.0'::DOUBLE, '1.5'::DOUBLE > '-0.0'::DOUBLE, '1.5'::DOUBLE <= '-0.0'::DOUBLE, '1.5'::DOUBLE >= '-0.0'::DOUBLE, '1.5'::DOUBLE IS DISTINCT FROM '-0.0'::DOUBLE, '1.5'::DOUBLE IS NOT DISTINCT FROM '-0.0'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+70	o	SELECT '1.5'::DOUBLE = '1.5'::DOUBLE, '1.5'::DOUBLE <> '1.5'::DOUBLE, '1.5'::DOUBLE < '1.5'::DOUBLE, '1.5'::DOUBLE > '1.5'::DOUBLE, '1.5'::DOUBLE <= '1.5'::DOUBLE, '1.5'::DOUBLE >= '1.5'::DOUBLE, '1.5'::DOUBLE IS DISTINCT FROM '1.5'::DOUBLE, '1.5'::DOUBLE IS NOT DISTINCT FROM '1.5'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+71	o	SELECT '1.5'::DOUBLE = '-2'::DOUBLE, '1.5'::DOUBLE <> '-2'::DOUBLE, '1.5'::DOUBLE < '-2'::DOUBLE, '1.5'::DOUBLE > '-2'::DOUBLE, '1.5'::DOUBLE <= '-2'::DOUBLE, '1.5'::DOUBLE >= '-2'::DOUBLE, '1.5'::DOUBLE IS DISTINCT FROM '-2'::DOUBLE, '1.5'::DOUBLE IS NOT DISTINCT FROM '-2'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+72	o	SELECT '1.5'::DOUBLE = NULL::DOUBLE, '1.5'::DOUBLE <> NULL::DOUBLE, '1.5'::DOUBLE < NULL::DOUBLE, '1.5'::DOUBLE > NULL::DOUBLE, '1.5'::DOUBLE <= NULL::DOUBLE, '1.5'::DOUBLE >= NULL::DOUBLE, '1.5'::DOUBLE IS DISTINCT FROM NULL::DOUBLE, '1.5'::DOUBLE IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b1,b0
+73	o	SELECT '-2'::DOUBLE = 'nan'::DOUBLE, '-2'::DOUBLE <> 'nan'::DOUBLE, '-2'::DOUBLE < 'nan'::DOUBLE, '-2'::DOUBLE > 'nan'::DOUBLE, '-2'::DOUBLE <= 'nan'::DOUBLE, '-2'::DOUBLE >= 'nan'::DOUBLE, '-2'::DOUBLE IS DISTINCT FROM 'nan'::DOUBLE, '-2'::DOUBLE IS NOT DISTINCT FROM 'nan'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+74	o	SELECT '-2'::DOUBLE = -('nan'::DOUBLE), '-2'::DOUBLE <> -('nan'::DOUBLE), '-2'::DOUBLE < -('nan'::DOUBLE), '-2'::DOUBLE > -('nan'::DOUBLE), '-2'::DOUBLE <= -('nan'::DOUBLE), '-2'::DOUBLE >= -('nan'::DOUBLE), '-2'::DOUBLE IS DISTINCT FROM -('nan'::DOUBLE), '-2'::DOUBLE IS NOT DISTINCT FROM -('nan'::DOUBLE)	b0,b1,b1,b0,b1,b0,b1,b0
+75	o	SELECT '-2'::DOUBLE = 'inf'::DOUBLE, '-2'::DOUBLE <> 'inf'::DOUBLE, '-2'::DOUBLE < 'inf'::DOUBLE, '-2'::DOUBLE > 'inf'::DOUBLE, '-2'::DOUBLE <= 'inf'::DOUBLE, '-2'::DOUBLE >= 'inf'::DOUBLE, '-2'::DOUBLE IS DISTINCT FROM 'inf'::DOUBLE, '-2'::DOUBLE IS NOT DISTINCT FROM 'inf'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+76	o	SELECT '-2'::DOUBLE = '-inf'::DOUBLE, '-2'::DOUBLE <> '-inf'::DOUBLE, '-2'::DOUBLE < '-inf'::DOUBLE, '-2'::DOUBLE > '-inf'::DOUBLE, '-2'::DOUBLE <= '-inf'::DOUBLE, '-2'::DOUBLE >= '-inf'::DOUBLE, '-2'::DOUBLE IS DISTINCT FROM '-inf'::DOUBLE, '-2'::DOUBLE IS NOT DISTINCT FROM '-inf'::DOUBLE	b0,b1,b0,b1,b0,b1,b1,b0
+77	o	SELECT '-2'::DOUBLE = '0.0'::DOUBLE, '-2'::DOUBLE <> '0.0'::DOUBLE, '-2'::DOUBLE < '0.0'::DOUBLE, '-2'::DOUBLE > '0.0'::DOUBLE, '-2'::DOUBLE <= '0.0'::DOUBLE, '-2'::DOUBLE >= '0.0'::DOUBLE, '-2'::DOUBLE IS DISTINCT FROM '0.0'::DOUBLE, '-2'::DOUBLE IS NOT DISTINCT FROM '0.0'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+78	o	SELECT '-2'::DOUBLE = '-0.0'::DOUBLE, '-2'::DOUBLE <> '-0.0'::DOUBLE, '-2'::DOUBLE < '-0.0'::DOUBLE, '-2'::DOUBLE > '-0.0'::DOUBLE, '-2'::DOUBLE <= '-0.0'::DOUBLE, '-2'::DOUBLE >= '-0.0'::DOUBLE, '-2'::DOUBLE IS DISTINCT FROM '-0.0'::DOUBLE, '-2'::DOUBLE IS NOT DISTINCT FROM '-0.0'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+79	o	SELECT '-2'::DOUBLE = '1.5'::DOUBLE, '-2'::DOUBLE <> '1.5'::DOUBLE, '-2'::DOUBLE < '1.5'::DOUBLE, '-2'::DOUBLE > '1.5'::DOUBLE, '-2'::DOUBLE <= '1.5'::DOUBLE, '-2'::DOUBLE >= '1.5'::DOUBLE, '-2'::DOUBLE IS DISTINCT FROM '1.5'::DOUBLE, '-2'::DOUBLE IS NOT DISTINCT FROM '1.5'::DOUBLE	b0,b1,b1,b0,b1,b0,b1,b0
+80	o	SELECT '-2'::DOUBLE = '-2'::DOUBLE, '-2'::DOUBLE <> '-2'::DOUBLE, '-2'::DOUBLE < '-2'::DOUBLE, '-2'::DOUBLE > '-2'::DOUBLE, '-2'::DOUBLE <= '-2'::DOUBLE, '-2'::DOUBLE >= '-2'::DOUBLE, '-2'::DOUBLE IS DISTINCT FROM '-2'::DOUBLE, '-2'::DOUBLE IS NOT DISTINCT FROM '-2'::DOUBLE	b1,b0,b0,b0,b1,b1,b0,b1
+81	o	SELECT '-2'::DOUBLE = NULL::DOUBLE, '-2'::DOUBLE <> NULL::DOUBLE, '-2'::DOUBLE < NULL::DOUBLE, '-2'::DOUBLE > NULL::DOUBLE, '-2'::DOUBLE <= NULL::DOUBLE, '-2'::DOUBLE >= NULL::DOUBLE, '-2'::DOUBLE IS DISTINCT FROM NULL::DOUBLE, '-2'::DOUBLE IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b1,b0
+82	o	SELECT NULL::DOUBLE = 'nan'::DOUBLE, NULL::DOUBLE <> 'nan'::DOUBLE, NULL::DOUBLE < 'nan'::DOUBLE, NULL::DOUBLE > 'nan'::DOUBLE, NULL::DOUBLE <= 'nan'::DOUBLE, NULL::DOUBLE >= 'nan'::DOUBLE, NULL::DOUBLE IS DISTINCT FROM 'nan'::DOUBLE, NULL::DOUBLE IS NOT DISTINCT FROM 'nan'::DOUBLE	N,N,N,N,N,N,b1,b0
+83	o	SELECT NULL::DOUBLE = -('nan'::DOUBLE), NULL::DOUBLE <> -('nan'::DOUBLE), NULL::DOUBLE < -('nan'::DOUBLE), NULL::DOUBLE > -('nan'::DOUBLE), NULL::DOUBLE <= -('nan'::DOUBLE), NULL::DOUBLE >= -('nan'::DOUBLE), NULL::DOUBLE IS DISTINCT FROM -('nan'::DOUBLE), NULL::DOUBLE IS NOT DISTINCT FROM -('nan'::DOUBLE)	N,N,N,N,N,N,b1,b0
+84	o	SELECT NULL::DOUBLE = 'inf'::DOUBLE, NULL::DOUBLE <> 'inf'::DOUBLE, NULL::DOUBLE < 'inf'::DOUBLE, NULL::DOUBLE > 'inf'::DOUBLE, NULL::DOUBLE <= 'inf'::DOUBLE, NULL::DOUBLE >= 'inf'::DOUBLE, NULL::DOUBLE IS DISTINCT FROM 'inf'::DOUBLE, NULL::DOUBLE IS NOT DISTINCT FROM 'inf'::DOUBLE	N,N,N,N,N,N,b1,b0
+85	o	SELECT NULL::DOUBLE = '-inf'::DOUBLE, NULL::DOUBLE <> '-inf'::DOUBLE, NULL::DOUBLE < '-inf'::DOUBLE, NULL::DOUBLE > '-inf'::DOUBLE, NULL::DOUBLE <= '-inf'::DOUBLE, NULL::DOUBLE >= '-inf'::DOUBLE, NULL::DOUBLE IS DISTINCT FROM '-inf'::DOUBLE, NULL::DOUBLE IS NOT DISTINCT FROM '-inf'::DOUBLE	N,N,N,N,N,N,b1,b0
+86	o	SELECT NULL::DOUBLE = '0.0'::DOUBLE, NULL::DOUBLE <> '0.0'::DOUBLE, NULL::DOUBLE < '0.0'::DOUBLE, NULL::DOUBLE > '0.0'::DOUBLE, NULL::DOUBLE <= '0.0'::DOUBLE, NULL::DOUBLE >= '0.0'::DOUBLE, NULL::DOUBLE IS DISTINCT FROM '0.0'::DOUBLE, NULL::DOUBLE IS NOT DISTINCT FROM '0.0'::DOUBLE	N,N,N,N,N,N,b1,b0
+87	o	SELECT NULL::DOUBLE = '-0.0'::DOUBLE, NULL::DOUBLE <> '-0.0'::DOUBLE, NULL::DOUBLE < '-0.0'::DOUBLE, NULL::DOUBLE > '-0.0'::DOUBLE, NULL::DOUBLE <= '-0.0'::DOUBLE, NULL::DOUBLE >= '-0.0'::DOUBLE, NULL::DOUBLE IS DISTINCT FROM '-0.0'::DOUBLE, NULL::DOUBLE IS NOT DISTINCT FROM '-0.0'::DOUBLE	N,N,N,N,N,N,b1,b0
+88	o	SELECT NULL::DOUBLE = '1.5'::DOUBLE, NULL::DOUBLE <> '1.5'::DOUBLE, NULL::DOUBLE < '1.5'::DOUBLE, NULL::DOUBLE > '1.5'::DOUBLE, NULL::DOUBLE <= '1.5'::DOUBLE, NULL::DOUBLE >= '1.5'::DOUBLE, NULL::DOUBLE IS DISTINCT FROM '1.5'::DOUBLE, NULL::DOUBLE IS NOT DISTINCT FROM '1.5'::DOUBLE	N,N,N,N,N,N,b1,b0
+89	o	SELECT NULL::DOUBLE = '-2'::DOUBLE, NULL::DOUBLE <> '-2'::DOUBLE, NULL::DOUBLE < '-2'::DOUBLE, NULL::DOUBLE > '-2'::DOUBLE, NULL::DOUBLE <= '-2'::DOUBLE, NULL::DOUBLE >= '-2'::DOUBLE, NULL::DOUBLE IS DISTINCT FROM '-2'::DOUBLE, NULL::DOUBLE IS NOT DISTINCT FROM '-2'::DOUBLE	N,N,N,N,N,N,b1,b0
+90	o	SELECT NULL::DOUBLE = NULL::DOUBLE, NULL::DOUBLE <> NULL::DOUBLE, NULL::DOUBLE < NULL::DOUBLE, NULL::DOUBLE > NULL::DOUBLE, NULL::DOUBLE <= NULL::DOUBLE, NULL::DOUBLE >= NULL::DOUBLE, NULL::DOUBLE IS DISTINCT FROM NULL::DOUBLE, NULL::DOUBLE IS NOT DISTINCT FROM NULL::DOUBLE	N,N,N,N,N,N,b0,b1
+91	o	SELECT 'nan'::FLOAT = 'nan'::FLOAT, 'nan'::FLOAT <> 'nan'::FLOAT, 'nan'::FLOAT < 'nan'::FLOAT, 'nan'::FLOAT > 'nan'::FLOAT, 'nan'::FLOAT <= 'nan'::FLOAT, 'nan'::FLOAT >= 'nan'::FLOAT, 'nan'::FLOAT IS DISTINCT FROM 'nan'::FLOAT, 'nan'::FLOAT IS NOT DISTINCT FROM 'nan'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+92	o	SELECT 'nan'::FLOAT = -('nan'::FLOAT), 'nan'::FLOAT <> -('nan'::FLOAT), 'nan'::FLOAT < -('nan'::FLOAT), 'nan'::FLOAT > -('nan'::FLOAT), 'nan'::FLOAT <= -('nan'::FLOAT), 'nan'::FLOAT >= -('nan'::FLOAT), 'nan'::FLOAT IS DISTINCT FROM -('nan'::FLOAT), 'nan'::FLOAT IS NOT DISTINCT FROM -('nan'::FLOAT)	b1,b0,b0,b0,b1,b1,b0,b1
+93	o	SELECT 'nan'::FLOAT = 'inf'::FLOAT, 'nan'::FLOAT <> 'inf'::FLOAT, 'nan'::FLOAT < 'inf'::FLOAT, 'nan'::FLOAT > 'inf'::FLOAT, 'nan'::FLOAT <= 'inf'::FLOAT, 'nan'::FLOAT >= 'inf'::FLOAT, 'nan'::FLOAT IS DISTINCT FROM 'inf'::FLOAT, 'nan'::FLOAT IS NOT DISTINCT FROM 'inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+94	o	SELECT 'nan'::FLOAT = '-inf'::FLOAT, 'nan'::FLOAT <> '-inf'::FLOAT, 'nan'::FLOAT < '-inf'::FLOAT, 'nan'::FLOAT > '-inf'::FLOAT, 'nan'::FLOAT <= '-inf'::FLOAT, 'nan'::FLOAT >= '-inf'::FLOAT, 'nan'::FLOAT IS DISTINCT FROM '-inf'::FLOAT, 'nan'::FLOAT IS NOT DISTINCT FROM '-inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+95	o	SELECT 'nan'::FLOAT = '0.0'::FLOAT, 'nan'::FLOAT <> '0.0'::FLOAT, 'nan'::FLOAT < '0.0'::FLOAT, 'nan'::FLOAT > '0.0'::FLOAT, 'nan'::FLOAT <= '0.0'::FLOAT, 'nan'::FLOAT >= '0.0'::FLOAT, 'nan'::FLOAT IS DISTINCT FROM '0.0'::FLOAT, 'nan'::FLOAT IS NOT DISTINCT FROM '0.0'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+96	o	SELECT 'nan'::FLOAT = '-0.0'::FLOAT, 'nan'::FLOAT <> '-0.0'::FLOAT, 'nan'::FLOAT < '-0.0'::FLOAT, 'nan'::FLOAT > '-0.0'::FLOAT, 'nan'::FLOAT <= '-0.0'::FLOAT, 'nan'::FLOAT >= '-0.0'::FLOAT, 'nan'::FLOAT IS DISTINCT FROM '-0.0'::FLOAT, 'nan'::FLOAT IS NOT DISTINCT FROM '-0.0'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+97	o	SELECT 'nan'::FLOAT = '1.5'::FLOAT, 'nan'::FLOAT <> '1.5'::FLOAT, 'nan'::FLOAT < '1.5'::FLOAT, 'nan'::FLOAT > '1.5'::FLOAT, 'nan'::FLOAT <= '1.5'::FLOAT, 'nan'::FLOAT >= '1.5'::FLOAT, 'nan'::FLOAT IS DISTINCT FROM '1.5'::FLOAT, 'nan'::FLOAT IS NOT DISTINCT FROM '1.5'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+98	o	SELECT 'nan'::FLOAT = '-2'::FLOAT, 'nan'::FLOAT <> '-2'::FLOAT, 'nan'::FLOAT < '-2'::FLOAT, 'nan'::FLOAT > '-2'::FLOAT, 'nan'::FLOAT <= '-2'::FLOAT, 'nan'::FLOAT >= '-2'::FLOAT, 'nan'::FLOAT IS DISTINCT FROM '-2'::FLOAT, 'nan'::FLOAT IS NOT DISTINCT FROM '-2'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+99	o	SELECT 'nan'::FLOAT = NULL::FLOAT, 'nan'::FLOAT <> NULL::FLOAT, 'nan'::FLOAT < NULL::FLOAT, 'nan'::FLOAT > NULL::FLOAT, 'nan'::FLOAT <= NULL::FLOAT, 'nan'::FLOAT >= NULL::FLOAT, 'nan'::FLOAT IS DISTINCT FROM NULL::FLOAT, 'nan'::FLOAT IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b1,b0
+100	o	SELECT -('nan'::FLOAT) = 'nan'::FLOAT, -('nan'::FLOAT) <> 'nan'::FLOAT, -('nan'::FLOAT) < 'nan'::FLOAT, -('nan'::FLOAT) > 'nan'::FLOAT, -('nan'::FLOAT) <= 'nan'::FLOAT, -('nan'::FLOAT) >= 'nan'::FLOAT, -('nan'::FLOAT) IS DISTINCT FROM 'nan'::FLOAT, -('nan'::FLOAT) IS NOT DISTINCT FROM 'nan'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+101	o	SELECT -('nan'::FLOAT) = -('nan'::FLOAT), -('nan'::FLOAT) <> -('nan'::FLOAT), -('nan'::FLOAT) < -('nan'::FLOAT), -('nan'::FLOAT) > -('nan'::FLOAT), -('nan'::FLOAT) <= -('nan'::FLOAT), -('nan'::FLOAT) >= -('nan'::FLOAT), -('nan'::FLOAT) IS DISTINCT FROM -('nan'::FLOAT), -('nan'::FLOAT) IS NOT DISTINCT FROM -('nan'::FLOAT)	b1,b0,b0,b0,b1,b1,b0,b1
+102	o	SELECT -('nan'::FLOAT) = 'inf'::FLOAT, -('nan'::FLOAT) <> 'inf'::FLOAT, -('nan'::FLOAT) < 'inf'::FLOAT, -('nan'::FLOAT) > 'inf'::FLOAT, -('nan'::FLOAT) <= 'inf'::FLOAT, -('nan'::FLOAT) >= 'inf'::FLOAT, -('nan'::FLOAT) IS DISTINCT FROM 'inf'::FLOAT, -('nan'::FLOAT) IS NOT DISTINCT FROM 'inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+103	o	SELECT -('nan'::FLOAT) = '-inf'::FLOAT, -('nan'::FLOAT) <> '-inf'::FLOAT, -('nan'::FLOAT) < '-inf'::FLOAT, -('nan'::FLOAT) > '-inf'::FLOAT, -('nan'::FLOAT) <= '-inf'::FLOAT, -('nan'::FLOAT) >= '-inf'::FLOAT, -('nan'::FLOAT) IS DISTINCT FROM '-inf'::FLOAT, -('nan'::FLOAT) IS NOT DISTINCT FROM '-inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+104	o	SELECT -('nan'::FLOAT) = '0.0'::FLOAT, -('nan'::FLOAT) <> '0.0'::FLOAT, -('nan'::FLOAT) < '0.0'::FLOAT, -('nan'::FLOAT) > '0.0'::FLOAT, -('nan'::FLOAT) <= '0.0'::FLOAT, -('nan'::FLOAT) >= '0.0'::FLOAT, -('nan'::FLOAT) IS DISTINCT FROM '0.0'::FLOAT, -('nan'::FLOAT) IS NOT DISTINCT FROM '0.0'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+105	o	SELECT -('nan'::FLOAT) = '-0.0'::FLOAT, -('nan'::FLOAT) <> '-0.0'::FLOAT, -('nan'::FLOAT) < '-0.0'::FLOAT, -('nan'::FLOAT) > '-0.0'::FLOAT, -('nan'::FLOAT) <= '-0.0'::FLOAT, -('nan'::FLOAT) >= '-0.0'::FLOAT, -('nan'::FLOAT) IS DISTINCT FROM '-0.0'::FLOAT, -('nan'::FLOAT) IS NOT DISTINCT FROM '-0.0'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+106	o	SELECT -('nan'::FLOAT) = '1.5'::FLOAT, -('nan'::FLOAT) <> '1.5'::FLOAT, -('nan'::FLOAT) < '1.5'::FLOAT, -('nan'::FLOAT) > '1.5'::FLOAT, -('nan'::FLOAT) <= '1.5'::FLOAT, -('nan'::FLOAT) >= '1.5'::FLOAT, -('nan'::FLOAT) IS DISTINCT FROM '1.5'::FLOAT, -('nan'::FLOAT) IS NOT DISTINCT FROM '1.5'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+107	o	SELECT -('nan'::FLOAT) = '-2'::FLOAT, -('nan'::FLOAT) <> '-2'::FLOAT, -('nan'::FLOAT) < '-2'::FLOAT, -('nan'::FLOAT) > '-2'::FLOAT, -('nan'::FLOAT) <= '-2'::FLOAT, -('nan'::FLOAT) >= '-2'::FLOAT, -('nan'::FLOAT) IS DISTINCT FROM '-2'::FLOAT, -('nan'::FLOAT) IS NOT DISTINCT FROM '-2'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+108	o	SELECT -('nan'::FLOAT) = NULL::FLOAT, -('nan'::FLOAT) <> NULL::FLOAT, -('nan'::FLOAT) < NULL::FLOAT, -('nan'::FLOAT) > NULL::FLOAT, -('nan'::FLOAT) <= NULL::FLOAT, -('nan'::FLOAT) >= NULL::FLOAT, -('nan'::FLOAT) IS DISTINCT FROM NULL::FLOAT, -('nan'::FLOAT) IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b1,b0
+109	o	SELECT 'inf'::FLOAT = 'nan'::FLOAT, 'inf'::FLOAT <> 'nan'::FLOAT, 'inf'::FLOAT < 'nan'::FLOAT, 'inf'::FLOAT > 'nan'::FLOAT, 'inf'::FLOAT <= 'nan'::FLOAT, 'inf'::FLOAT >= 'nan'::FLOAT, 'inf'::FLOAT IS DISTINCT FROM 'nan'::FLOAT, 'inf'::FLOAT IS NOT DISTINCT FROM 'nan'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+110	o	SELECT 'inf'::FLOAT = -('nan'::FLOAT), 'inf'::FLOAT <> -('nan'::FLOAT), 'inf'::FLOAT < -('nan'::FLOAT), 'inf'::FLOAT > -('nan'::FLOAT), 'inf'::FLOAT <= -('nan'::FLOAT), 'inf'::FLOAT >= -('nan'::FLOAT), 'inf'::FLOAT IS DISTINCT FROM -('nan'::FLOAT), 'inf'::FLOAT IS NOT DISTINCT FROM -('nan'::FLOAT)	b0,b1,b1,b0,b1,b0,b1,b0
+111	o	SELECT 'inf'::FLOAT = 'inf'::FLOAT, 'inf'::FLOAT <> 'inf'::FLOAT, 'inf'::FLOAT < 'inf'::FLOAT, 'inf'::FLOAT > 'inf'::FLOAT, 'inf'::FLOAT <= 'inf'::FLOAT, 'inf'::FLOAT >= 'inf'::FLOAT, 'inf'::FLOAT IS DISTINCT FROM 'inf'::FLOAT, 'inf'::FLOAT IS NOT DISTINCT FROM 'inf'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+112	o	SELECT 'inf'::FLOAT = '-inf'::FLOAT, 'inf'::FLOAT <> '-inf'::FLOAT, 'inf'::FLOAT < '-inf'::FLOAT, 'inf'::FLOAT > '-inf'::FLOAT, 'inf'::FLOAT <= '-inf'::FLOAT, 'inf'::FLOAT >= '-inf'::FLOAT, 'inf'::FLOAT IS DISTINCT FROM '-inf'::FLOAT, 'inf'::FLOAT IS NOT DISTINCT FROM '-inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+113	o	SELECT 'inf'::FLOAT = '0.0'::FLOAT, 'inf'::FLOAT <> '0.0'::FLOAT, 'inf'::FLOAT < '0.0'::FLOAT, 'inf'::FLOAT > '0.0'::FLOAT, 'inf'::FLOAT <= '0.0'::FLOAT, 'inf'::FLOAT >= '0.0'::FLOAT, 'inf'::FLOAT IS DISTINCT FROM '0.0'::FLOAT, 'inf'::FLOAT IS NOT DISTINCT FROM '0.0'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+114	o	SELECT 'inf'::FLOAT = '-0.0'::FLOAT, 'inf'::FLOAT <> '-0.0'::FLOAT, 'inf'::FLOAT < '-0.0'::FLOAT, 'inf'::FLOAT > '-0.0'::FLOAT, 'inf'::FLOAT <= '-0.0'::FLOAT, 'inf'::FLOAT >= '-0.0'::FLOAT, 'inf'::FLOAT IS DISTINCT FROM '-0.0'::FLOAT, 'inf'::FLOAT IS NOT DISTINCT FROM '-0.0'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+115	o	SELECT 'inf'::FLOAT = '1.5'::FLOAT, 'inf'::FLOAT <> '1.5'::FLOAT, 'inf'::FLOAT < '1.5'::FLOAT, 'inf'::FLOAT > '1.5'::FLOAT, 'inf'::FLOAT <= '1.5'::FLOAT, 'inf'::FLOAT >= '1.5'::FLOAT, 'inf'::FLOAT IS DISTINCT FROM '1.5'::FLOAT, 'inf'::FLOAT IS NOT DISTINCT FROM '1.5'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+116	o	SELECT 'inf'::FLOAT = '-2'::FLOAT, 'inf'::FLOAT <> '-2'::FLOAT, 'inf'::FLOAT < '-2'::FLOAT, 'inf'::FLOAT > '-2'::FLOAT, 'inf'::FLOAT <= '-2'::FLOAT, 'inf'::FLOAT >= '-2'::FLOAT, 'inf'::FLOAT IS DISTINCT FROM '-2'::FLOAT, 'inf'::FLOAT IS NOT DISTINCT FROM '-2'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+117	o	SELECT 'inf'::FLOAT = NULL::FLOAT, 'inf'::FLOAT <> NULL::FLOAT, 'inf'::FLOAT < NULL::FLOAT, 'inf'::FLOAT > NULL::FLOAT, 'inf'::FLOAT <= NULL::FLOAT, 'inf'::FLOAT >= NULL::FLOAT, 'inf'::FLOAT IS DISTINCT FROM NULL::FLOAT, 'inf'::FLOAT IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b1,b0
+118	o	SELECT '-inf'::FLOAT = 'nan'::FLOAT, '-inf'::FLOAT <> 'nan'::FLOAT, '-inf'::FLOAT < 'nan'::FLOAT, '-inf'::FLOAT > 'nan'::FLOAT, '-inf'::FLOAT <= 'nan'::FLOAT, '-inf'::FLOAT >= 'nan'::FLOAT, '-inf'::FLOAT IS DISTINCT FROM 'nan'::FLOAT, '-inf'::FLOAT IS NOT DISTINCT FROM 'nan'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+119	o	SELECT '-inf'::FLOAT = -('nan'::FLOAT), '-inf'::FLOAT <> -('nan'::FLOAT), '-inf'::FLOAT < -('nan'::FLOAT), '-inf'::FLOAT > -('nan'::FLOAT), '-inf'::FLOAT <= -('nan'::FLOAT), '-inf'::FLOAT >= -('nan'::FLOAT), '-inf'::FLOAT IS DISTINCT FROM -('nan'::FLOAT), '-inf'::FLOAT IS NOT DISTINCT FROM -('nan'::FLOAT)	b0,b1,b1,b0,b1,b0,b1,b0
+120	o	SELECT '-inf'::FLOAT = 'inf'::FLOAT, '-inf'::FLOAT <> 'inf'::FLOAT, '-inf'::FLOAT < 'inf'::FLOAT, '-inf'::FLOAT > 'inf'::FLOAT, '-inf'::FLOAT <= 'inf'::FLOAT, '-inf'::FLOAT >= 'inf'::FLOAT, '-inf'::FLOAT IS DISTINCT FROM 'inf'::FLOAT, '-inf'::FLOAT IS NOT DISTINCT FROM 'inf'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+121	o	SELECT '-inf'::FLOAT = '-inf'::FLOAT, '-inf'::FLOAT <> '-inf'::FLOAT, '-inf'::FLOAT < '-inf'::FLOAT, '-inf'::FLOAT > '-inf'::FLOAT, '-inf'::FLOAT <= '-inf'::FLOAT, '-inf'::FLOAT >= '-inf'::FLOAT, '-inf'::FLOAT IS DISTINCT FROM '-inf'::FLOAT, '-inf'::FLOAT IS NOT DISTINCT FROM '-inf'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+122	o	SELECT '-inf'::FLOAT = '0.0'::FLOAT, '-inf'::FLOAT <> '0.0'::FLOAT, '-inf'::FLOAT < '0.0'::FLOAT, '-inf'::FLOAT > '0.0'::FLOAT, '-inf'::FLOAT <= '0.0'::FLOAT, '-inf'::FLOAT >= '0.0'::FLOAT, '-inf'::FLOAT IS DISTINCT FROM '0.0'::FLOAT, '-inf'::FLOAT IS NOT DISTINCT FROM '0.0'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+123	o	SELECT '-inf'::FLOAT = '-0.0'::FLOAT, '-inf'::FLOAT <> '-0.0'::FLOAT, '-inf'::FLOAT < '-0.0'::FLOAT, '-inf'::FLOAT > '-0.0'::FLOAT, '-inf'::FLOAT <= '-0.0'::FLOAT, '-inf'::FLOAT >= '-0.0'::FLOAT, '-inf'::FLOAT IS DISTINCT FROM '-0.0'::FLOAT, '-inf'::FLOAT IS NOT DISTINCT FROM '-0.0'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+124	o	SELECT '-inf'::FLOAT = '1.5'::FLOAT, '-inf'::FLOAT <> '1.5'::FLOAT, '-inf'::FLOAT < '1.5'::FLOAT, '-inf'::FLOAT > '1.5'::FLOAT, '-inf'::FLOAT <= '1.5'::FLOAT, '-inf'::FLOAT >= '1.5'::FLOAT, '-inf'::FLOAT IS DISTINCT FROM '1.5'::FLOAT, '-inf'::FLOAT IS NOT DISTINCT FROM '1.5'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+125	o	SELECT '-inf'::FLOAT = '-2'::FLOAT, '-inf'::FLOAT <> '-2'::FLOAT, '-inf'::FLOAT < '-2'::FLOAT, '-inf'::FLOAT > '-2'::FLOAT, '-inf'::FLOAT <= '-2'::FLOAT, '-inf'::FLOAT >= '-2'::FLOAT, '-inf'::FLOAT IS DISTINCT FROM '-2'::FLOAT, '-inf'::FLOAT IS NOT DISTINCT FROM '-2'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+126	o	SELECT '-inf'::FLOAT = NULL::FLOAT, '-inf'::FLOAT <> NULL::FLOAT, '-inf'::FLOAT < NULL::FLOAT, '-inf'::FLOAT > NULL::FLOAT, '-inf'::FLOAT <= NULL::FLOAT, '-inf'::FLOAT >= NULL::FLOAT, '-inf'::FLOAT IS DISTINCT FROM NULL::FLOAT, '-inf'::FLOAT IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b1,b0
+127	o	SELECT '0.0'::FLOAT = 'nan'::FLOAT, '0.0'::FLOAT <> 'nan'::FLOAT, '0.0'::FLOAT < 'nan'::FLOAT, '0.0'::FLOAT > 'nan'::FLOAT, '0.0'::FLOAT <= 'nan'::FLOAT, '0.0'::FLOAT >= 'nan'::FLOAT, '0.0'::FLOAT IS DISTINCT FROM 'nan'::FLOAT, '0.0'::FLOAT IS NOT DISTINCT FROM 'nan'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+128	o	SELECT '0.0'::FLOAT = -('nan'::FLOAT), '0.0'::FLOAT <> -('nan'::FLOAT), '0.0'::FLOAT < -('nan'::FLOAT), '0.0'::FLOAT > -('nan'::FLOAT), '0.0'::FLOAT <= -('nan'::FLOAT), '0.0'::FLOAT >= -('nan'::FLOAT), '0.0'::FLOAT IS DISTINCT FROM -('nan'::FLOAT), '0.0'::FLOAT IS NOT DISTINCT FROM -('nan'::FLOAT)	b0,b1,b1,b0,b1,b0,b1,b0
+129	o	SELECT '0.0'::FLOAT = 'inf'::FLOAT, '0.0'::FLOAT <> 'inf'::FLOAT, '0.0'::FLOAT < 'inf'::FLOAT, '0.0'::FLOAT > 'inf'::FLOAT, '0.0'::FLOAT <= 'inf'::FLOAT, '0.0'::FLOAT >= 'inf'::FLOAT, '0.0'::FLOAT IS DISTINCT FROM 'inf'::FLOAT, '0.0'::FLOAT IS NOT DISTINCT FROM 'inf'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+130	o	SELECT '0.0'::FLOAT = '-inf'::FLOAT, '0.0'::FLOAT <> '-inf'::FLOAT, '0.0'::FLOAT < '-inf'::FLOAT, '0.0'::FLOAT > '-inf'::FLOAT, '0.0'::FLOAT <= '-inf'::FLOAT, '0.0'::FLOAT >= '-inf'::FLOAT, '0.0'::FLOAT IS DISTINCT FROM '-inf'::FLOAT, '0.0'::FLOAT IS NOT DISTINCT FROM '-inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+131	o	SELECT '0.0'::FLOAT = '0.0'::FLOAT, '0.0'::FLOAT <> '0.0'::FLOAT, '0.0'::FLOAT < '0.0'::FLOAT, '0.0'::FLOAT > '0.0'::FLOAT, '0.0'::FLOAT <= '0.0'::FLOAT, '0.0'::FLOAT >= '0.0'::FLOAT, '0.0'::FLOAT IS DISTINCT FROM '0.0'::FLOAT, '0.0'::FLOAT IS NOT DISTINCT FROM '0.0'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+132	o	SELECT '0.0'::FLOAT = '-0.0'::FLOAT, '0.0'::FLOAT <> '-0.0'::FLOAT, '0.0'::FLOAT < '-0.0'::FLOAT, '0.0'::FLOAT > '-0.0'::FLOAT, '0.0'::FLOAT <= '-0.0'::FLOAT, '0.0'::FLOAT >= '-0.0'::FLOAT, '0.0'::FLOAT IS DISTINCT FROM '-0.0'::FLOAT, '0.0'::FLOAT IS NOT DISTINCT FROM '-0.0'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+133	o	SELECT '0.0'::FLOAT = '1.5'::FLOAT, '0.0'::FLOAT <> '1.5'::FLOAT, '0.0'::FLOAT < '1.5'::FLOAT, '0.0'::FLOAT > '1.5'::FLOAT, '0.0'::FLOAT <= '1.5'::FLOAT, '0.0'::FLOAT >= '1.5'::FLOAT, '0.0'::FLOAT IS DISTINCT FROM '1.5'::FLOAT, '0.0'::FLOAT IS NOT DISTINCT FROM '1.5'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+134	o	SELECT '0.0'::FLOAT = '-2'::FLOAT, '0.0'::FLOAT <> '-2'::FLOAT, '0.0'::FLOAT < '-2'::FLOAT, '0.0'::FLOAT > '-2'::FLOAT, '0.0'::FLOAT <= '-2'::FLOAT, '0.0'::FLOAT >= '-2'::FLOAT, '0.0'::FLOAT IS DISTINCT FROM '-2'::FLOAT, '0.0'::FLOAT IS NOT DISTINCT FROM '-2'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+135	o	SELECT '0.0'::FLOAT = NULL::FLOAT, '0.0'::FLOAT <> NULL::FLOAT, '0.0'::FLOAT < NULL::FLOAT, '0.0'::FLOAT > NULL::FLOAT, '0.0'::FLOAT <= NULL::FLOAT, '0.0'::FLOAT >= NULL::FLOAT, '0.0'::FLOAT IS DISTINCT FROM NULL::FLOAT, '0.0'::FLOAT IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b1,b0
+136	o	SELECT '-0.0'::FLOAT = 'nan'::FLOAT, '-0.0'::FLOAT <> 'nan'::FLOAT, '-0.0'::FLOAT < 'nan'::FLOAT, '-0.0'::FLOAT > 'nan'::FLOAT, '-0.0'::FLOAT <= 'nan'::FLOAT, '-0.0'::FLOAT >= 'nan'::FLOAT, '-0.0'::FLOAT IS DISTINCT FROM 'nan'::FLOAT, '-0.0'::FLOAT IS NOT DISTINCT FROM 'nan'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+137	o	SELECT '-0.0'::FLOAT = -('nan'::FLOAT), '-0.0'::FLOAT <> -('nan'::FLOAT), '-0.0'::FLOAT < -('nan'::FLOAT), '-0.0'::FLOAT > -('nan'::FLOAT), '-0.0'::FLOAT <= -('nan'::FLOAT), '-0.0'::FLOAT >= -('nan'::FLOAT), '-0.0'::FLOAT IS DISTINCT FROM -('nan'::FLOAT), '-0.0'::FLOAT IS NOT DISTINCT FROM -('nan'::FLOAT)	b0,b1,b1,b0,b1,b0,b1,b0
+138	o	SELECT '-0.0'::FLOAT = 'inf'::FLOAT, '-0.0'::FLOAT <> 'inf'::FLOAT, '-0.0'::FLOAT < 'inf'::FLOAT, '-0.0'::FLOAT > 'inf'::FLOAT, '-0.0'::FLOAT <= 'inf'::FLOAT, '-0.0'::FLOAT >= 'inf'::FLOAT, '-0.0'::FLOAT IS DISTINCT FROM 'inf'::FLOAT, '-0.0'::FLOAT IS NOT DISTINCT FROM 'inf'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+139	o	SELECT '-0.0'::FLOAT = '-inf'::FLOAT, '-0.0'::FLOAT <> '-inf'::FLOAT, '-0.0'::FLOAT < '-inf'::FLOAT, '-0.0'::FLOAT > '-inf'::FLOAT, '-0.0'::FLOAT <= '-inf'::FLOAT, '-0.0'::FLOAT >= '-inf'::FLOAT, '-0.0'::FLOAT IS DISTINCT FROM '-inf'::FLOAT, '-0.0'::FLOAT IS NOT DISTINCT FROM '-inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+140	o	SELECT '-0.0'::FLOAT = '0.0'::FLOAT, '-0.0'::FLOAT <> '0.0'::FLOAT, '-0.0'::FLOAT < '0.0'::FLOAT, '-0.0'::FLOAT > '0.0'::FLOAT, '-0.0'::FLOAT <= '0.0'::FLOAT, '-0.0'::FLOAT >= '0.0'::FLOAT, '-0.0'::FLOAT IS DISTINCT FROM '0.0'::FLOAT, '-0.0'::FLOAT IS NOT DISTINCT FROM '0.0'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+141	o	SELECT '-0.0'::FLOAT = '-0.0'::FLOAT, '-0.0'::FLOAT <> '-0.0'::FLOAT, '-0.0'::FLOAT < '-0.0'::FLOAT, '-0.0'::FLOAT > '-0.0'::FLOAT, '-0.0'::FLOAT <= '-0.0'::FLOAT, '-0.0'::FLOAT >= '-0.0'::FLOAT, '-0.0'::FLOAT IS DISTINCT FROM '-0.0'::FLOAT, '-0.0'::FLOAT IS NOT DISTINCT FROM '-0.0'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+142	o	SELECT '-0.0'::FLOAT = '1.5'::FLOAT, '-0.0'::FLOAT <> '1.5'::FLOAT, '-0.0'::FLOAT < '1.5'::FLOAT, '-0.0'::FLOAT > '1.5'::FLOAT, '-0.0'::FLOAT <= '1.5'::FLOAT, '-0.0'::FLOAT >= '1.5'::FLOAT, '-0.0'::FLOAT IS DISTINCT FROM '1.5'::FLOAT, '-0.0'::FLOAT IS NOT DISTINCT FROM '1.5'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+143	o	SELECT '-0.0'::FLOAT = '-2'::FLOAT, '-0.0'::FLOAT <> '-2'::FLOAT, '-0.0'::FLOAT < '-2'::FLOAT, '-0.0'::FLOAT > '-2'::FLOAT, '-0.0'::FLOAT <= '-2'::FLOAT, '-0.0'::FLOAT >= '-2'::FLOAT, '-0.0'::FLOAT IS DISTINCT FROM '-2'::FLOAT, '-0.0'::FLOAT IS NOT DISTINCT FROM '-2'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+144	o	SELECT '-0.0'::FLOAT = NULL::FLOAT, '-0.0'::FLOAT <> NULL::FLOAT, '-0.0'::FLOAT < NULL::FLOAT, '-0.0'::FLOAT > NULL::FLOAT, '-0.0'::FLOAT <= NULL::FLOAT, '-0.0'::FLOAT >= NULL::FLOAT, '-0.0'::FLOAT IS DISTINCT FROM NULL::FLOAT, '-0.0'::FLOAT IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b1,b0
+145	o	SELECT '1.5'::FLOAT = 'nan'::FLOAT, '1.5'::FLOAT <> 'nan'::FLOAT, '1.5'::FLOAT < 'nan'::FLOAT, '1.5'::FLOAT > 'nan'::FLOAT, '1.5'::FLOAT <= 'nan'::FLOAT, '1.5'::FLOAT >= 'nan'::FLOAT, '1.5'::FLOAT IS DISTINCT FROM 'nan'::FLOAT, '1.5'::FLOAT IS NOT DISTINCT FROM 'nan'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+146	o	SELECT '1.5'::FLOAT = -('nan'::FLOAT), '1.5'::FLOAT <> -('nan'::FLOAT), '1.5'::FLOAT < -('nan'::FLOAT), '1.5'::FLOAT > -('nan'::FLOAT), '1.5'::FLOAT <= -('nan'::FLOAT), '1.5'::FLOAT >= -('nan'::FLOAT), '1.5'::FLOAT IS DISTINCT FROM -('nan'::FLOAT), '1.5'::FLOAT IS NOT DISTINCT FROM -('nan'::FLOAT)	b0,b1,b1,b0,b1,b0,b1,b0
+147	o	SELECT '1.5'::FLOAT = 'inf'::FLOAT, '1.5'::FLOAT <> 'inf'::FLOAT, '1.5'::FLOAT < 'inf'::FLOAT, '1.5'::FLOAT > 'inf'::FLOAT, '1.5'::FLOAT <= 'inf'::FLOAT, '1.5'::FLOAT >= 'inf'::FLOAT, '1.5'::FLOAT IS DISTINCT FROM 'inf'::FLOAT, '1.5'::FLOAT IS NOT DISTINCT FROM 'inf'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+148	o	SELECT '1.5'::FLOAT = '-inf'::FLOAT, '1.5'::FLOAT <> '-inf'::FLOAT, '1.5'::FLOAT < '-inf'::FLOAT, '1.5'::FLOAT > '-inf'::FLOAT, '1.5'::FLOAT <= '-inf'::FLOAT, '1.5'::FLOAT >= '-inf'::FLOAT, '1.5'::FLOAT IS DISTINCT FROM '-inf'::FLOAT, '1.5'::FLOAT IS NOT DISTINCT FROM '-inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+149	o	SELECT '1.5'::FLOAT = '0.0'::FLOAT, '1.5'::FLOAT <> '0.0'::FLOAT, '1.5'::FLOAT < '0.0'::FLOAT, '1.5'::FLOAT > '0.0'::FLOAT, '1.5'::FLOAT <= '0.0'::FLOAT, '1.5'::FLOAT >= '0.0'::FLOAT, '1.5'::FLOAT IS DISTINCT FROM '0.0'::FLOAT, '1.5'::FLOAT IS NOT DISTINCT FROM '0.0'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+150	o	SELECT '1.5'::FLOAT = '-0.0'::FLOAT, '1.5'::FLOAT <> '-0.0'::FLOAT, '1.5'::FLOAT < '-0.0'::FLOAT, '1.5'::FLOAT > '-0.0'::FLOAT, '1.5'::FLOAT <= '-0.0'::FLOAT, '1.5'::FLOAT >= '-0.0'::FLOAT, '1.5'::FLOAT IS DISTINCT FROM '-0.0'::FLOAT, '1.5'::FLOAT IS NOT DISTINCT FROM '-0.0'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+151	o	SELECT '1.5'::FLOAT = '1.5'::FLOAT, '1.5'::FLOAT <> '1.5'::FLOAT, '1.5'::FLOAT < '1.5'::FLOAT, '1.5'::FLOAT > '1.5'::FLOAT, '1.5'::FLOAT <= '1.5'::FLOAT, '1.5'::FLOAT >= '1.5'::FLOAT, '1.5'::FLOAT IS DISTINCT FROM '1.5'::FLOAT, '1.5'::FLOAT IS NOT DISTINCT FROM '1.5'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+152	o	SELECT '1.5'::FLOAT = '-2'::FLOAT, '1.5'::FLOAT <> '-2'::FLOAT, '1.5'::FLOAT < '-2'::FLOAT, '1.5'::FLOAT > '-2'::FLOAT, '1.5'::FLOAT <= '-2'::FLOAT, '1.5'::FLOAT >= '-2'::FLOAT, '1.5'::FLOAT IS DISTINCT FROM '-2'::FLOAT, '1.5'::FLOAT IS NOT DISTINCT FROM '-2'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+153	o	SELECT '1.5'::FLOAT = NULL::FLOAT, '1.5'::FLOAT <> NULL::FLOAT, '1.5'::FLOAT < NULL::FLOAT, '1.5'::FLOAT > NULL::FLOAT, '1.5'::FLOAT <= NULL::FLOAT, '1.5'::FLOAT >= NULL::FLOAT, '1.5'::FLOAT IS DISTINCT FROM NULL::FLOAT, '1.5'::FLOAT IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b1,b0
+154	o	SELECT '-2'::FLOAT = 'nan'::FLOAT, '-2'::FLOAT <> 'nan'::FLOAT, '-2'::FLOAT < 'nan'::FLOAT, '-2'::FLOAT > 'nan'::FLOAT, '-2'::FLOAT <= 'nan'::FLOAT, '-2'::FLOAT >= 'nan'::FLOAT, '-2'::FLOAT IS DISTINCT FROM 'nan'::FLOAT, '-2'::FLOAT IS NOT DISTINCT FROM 'nan'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+155	o	SELECT '-2'::FLOAT = -('nan'::FLOAT), '-2'::FLOAT <> -('nan'::FLOAT), '-2'::FLOAT < -('nan'::FLOAT), '-2'::FLOAT > -('nan'::FLOAT), '-2'::FLOAT <= -('nan'::FLOAT), '-2'::FLOAT >= -('nan'::FLOAT), '-2'::FLOAT IS DISTINCT FROM -('nan'::FLOAT), '-2'::FLOAT IS NOT DISTINCT FROM -('nan'::FLOAT)	b0,b1,b1,b0,b1,b0,b1,b0
+156	o	SELECT '-2'::FLOAT = 'inf'::FLOAT, '-2'::FLOAT <> 'inf'::FLOAT, '-2'::FLOAT < 'inf'::FLOAT, '-2'::FLOAT > 'inf'::FLOAT, '-2'::FLOAT <= 'inf'::FLOAT, '-2'::FLOAT >= 'inf'::FLOAT, '-2'::FLOAT IS DISTINCT FROM 'inf'::FLOAT, '-2'::FLOAT IS NOT DISTINCT FROM 'inf'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+157	o	SELECT '-2'::FLOAT = '-inf'::FLOAT, '-2'::FLOAT <> '-inf'::FLOAT, '-2'::FLOAT < '-inf'::FLOAT, '-2'::FLOAT > '-inf'::FLOAT, '-2'::FLOAT <= '-inf'::FLOAT, '-2'::FLOAT >= '-inf'::FLOAT, '-2'::FLOAT IS DISTINCT FROM '-inf'::FLOAT, '-2'::FLOAT IS NOT DISTINCT FROM '-inf'::FLOAT	b0,b1,b0,b1,b0,b1,b1,b0
+158	o	SELECT '-2'::FLOAT = '0.0'::FLOAT, '-2'::FLOAT <> '0.0'::FLOAT, '-2'::FLOAT < '0.0'::FLOAT, '-2'::FLOAT > '0.0'::FLOAT, '-2'::FLOAT <= '0.0'::FLOAT, '-2'::FLOAT >= '0.0'::FLOAT, '-2'::FLOAT IS DISTINCT FROM '0.0'::FLOAT, '-2'::FLOAT IS NOT DISTINCT FROM '0.0'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+159	o	SELECT '-2'::FLOAT = '-0.0'::FLOAT, '-2'::FLOAT <> '-0.0'::FLOAT, '-2'::FLOAT < '-0.0'::FLOAT, '-2'::FLOAT > '-0.0'::FLOAT, '-2'::FLOAT <= '-0.0'::FLOAT, '-2'::FLOAT >= '-0.0'::FLOAT, '-2'::FLOAT IS DISTINCT FROM '-0.0'::FLOAT, '-2'::FLOAT IS NOT DISTINCT FROM '-0.0'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+160	o	SELECT '-2'::FLOAT = '1.5'::FLOAT, '-2'::FLOAT <> '1.5'::FLOAT, '-2'::FLOAT < '1.5'::FLOAT, '-2'::FLOAT > '1.5'::FLOAT, '-2'::FLOAT <= '1.5'::FLOAT, '-2'::FLOAT >= '1.5'::FLOAT, '-2'::FLOAT IS DISTINCT FROM '1.5'::FLOAT, '-2'::FLOAT IS NOT DISTINCT FROM '1.5'::FLOAT	b0,b1,b1,b0,b1,b0,b1,b0
+161	o	SELECT '-2'::FLOAT = '-2'::FLOAT, '-2'::FLOAT <> '-2'::FLOAT, '-2'::FLOAT < '-2'::FLOAT, '-2'::FLOAT > '-2'::FLOAT, '-2'::FLOAT <= '-2'::FLOAT, '-2'::FLOAT >= '-2'::FLOAT, '-2'::FLOAT IS DISTINCT FROM '-2'::FLOAT, '-2'::FLOAT IS NOT DISTINCT FROM '-2'::FLOAT	b1,b0,b0,b0,b1,b1,b0,b1
+162	o	SELECT '-2'::FLOAT = NULL::FLOAT, '-2'::FLOAT <> NULL::FLOAT, '-2'::FLOAT < NULL::FLOAT, '-2'::FLOAT > NULL::FLOAT, '-2'::FLOAT <= NULL::FLOAT, '-2'::FLOAT >= NULL::FLOAT, '-2'::FLOAT IS DISTINCT FROM NULL::FLOAT, '-2'::FLOAT IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b1,b0
+163	o	SELECT NULL::FLOAT = 'nan'::FLOAT, NULL::FLOAT <> 'nan'::FLOAT, NULL::FLOAT < 'nan'::FLOAT, NULL::FLOAT > 'nan'::FLOAT, NULL::FLOAT <= 'nan'::FLOAT, NULL::FLOAT >= 'nan'::FLOAT, NULL::FLOAT IS DISTINCT FROM 'nan'::FLOAT, NULL::FLOAT IS NOT DISTINCT FROM 'nan'::FLOAT	N,N,N,N,N,N,b1,b0
+164	o	SELECT NULL::FLOAT = -('nan'::FLOAT), NULL::FLOAT <> -('nan'::FLOAT), NULL::FLOAT < -('nan'::FLOAT), NULL::FLOAT > -('nan'::FLOAT), NULL::FLOAT <= -('nan'::FLOAT), NULL::FLOAT >= -('nan'::FLOAT), NULL::FLOAT IS DISTINCT FROM -('nan'::FLOAT), NULL::FLOAT IS NOT DISTINCT FROM -('nan'::FLOAT)	N,N,N,N,N,N,b1,b0
+165	o	SELECT NULL::FLOAT = 'inf'::FLOAT, NULL::FLOAT <> 'inf'::FLOAT, NULL::FLOAT < 'inf'::FLOAT, NULL::FLOAT > 'inf'::FLOAT, NULL::FLOAT <= 'inf'::FLOAT, NULL::FLOAT >= 'inf'::FLOAT, NULL::FLOAT IS DISTINCT FROM 'inf'::FLOAT, NULL::FLOAT IS NOT DISTINCT FROM 'inf'::FLOAT	N,N,N,N,N,N,b1,b0
+166	o	SELECT NULL::FLOAT = '-inf'::FLOAT, NULL::FLOAT <> '-inf'::FLOAT, NULL::FLOAT < '-inf'::FLOAT, NULL::FLOAT > '-inf'::FLOAT, NULL::FLOAT <= '-inf'::FLOAT, NULL::FLOAT >= '-inf'::FLOAT, NULL::FLOAT IS DISTINCT FROM '-inf'::FLOAT, NULL::FLOAT IS NOT DISTINCT FROM '-inf'::FLOAT	N,N,N,N,N,N,b1,b0
+167	o	SELECT NULL::FLOAT = '0.0'::FLOAT, NULL::FLOAT <> '0.0'::FLOAT, NULL::FLOAT < '0.0'::FLOAT, NULL::FLOAT > '0.0'::FLOAT, NULL::FLOAT <= '0.0'::FLOAT, NULL::FLOAT >= '0.0'::FLOAT, NULL::FLOAT IS DISTINCT FROM '0.0'::FLOAT, NULL::FLOAT IS NOT DISTINCT FROM '0.0'::FLOAT	N,N,N,N,N,N,b1,b0
+168	o	SELECT NULL::FLOAT = '-0.0'::FLOAT, NULL::FLOAT <> '-0.0'::FLOAT, NULL::FLOAT < '-0.0'::FLOAT, NULL::FLOAT > '-0.0'::FLOAT, NULL::FLOAT <= '-0.0'::FLOAT, NULL::FLOAT >= '-0.0'::FLOAT, NULL::FLOAT IS DISTINCT FROM '-0.0'::FLOAT, NULL::FLOAT IS NOT DISTINCT FROM '-0.0'::FLOAT	N,N,N,N,N,N,b1,b0
+169	o	SELECT NULL::FLOAT = '1.5'::FLOAT, NULL::FLOAT <> '1.5'::FLOAT, NULL::FLOAT < '1.5'::FLOAT, NULL::FLOAT > '1.5'::FLOAT, NULL::FLOAT <= '1.5'::FLOAT, NULL::FLOAT >= '1.5'::FLOAT, NULL::FLOAT IS DISTINCT FROM '1.5'::FLOAT, NULL::FLOAT IS NOT DISTINCT FROM '1.5'::FLOAT	N,N,N,N,N,N,b1,b0
+170	o	SELECT NULL::FLOAT = '-2'::FLOAT, NULL::FLOAT <> '-2'::FLOAT, NULL::FLOAT < '-2'::FLOAT, NULL::FLOAT > '-2'::FLOAT, NULL::FLOAT <= '-2'::FLOAT, NULL::FLOAT >= '-2'::FLOAT, NULL::FLOAT IS DISTINCT FROM '-2'::FLOAT, NULL::FLOAT IS NOT DISTINCT FROM '-2'::FLOAT	N,N,N,N,N,N,b1,b0
+171	o	SELECT NULL::FLOAT = NULL::FLOAT, NULL::FLOAT <> NULL::FLOAT, NULL::FLOAT < NULL::FLOAT, NULL::FLOAT > NULL::FLOAT, NULL::FLOAT <= NULL::FLOAT, NULL::FLOAT >= NULL::FLOAT, NULL::FLOAT IS DISTINCT FROM NULL::FLOAT, NULL::FLOAT IS NOT DISTINCT FROM NULL::FLOAT	N,N,N,N,N,N,b0,b1
+172	o	SELECT 'nan'::FLOAT = 'nan'::DOUBLE, 'nan'::FLOAT < 'nan'::DOUBLE	b1,b0
+173	o	SELECT 'nan'::FLOAT = 'inf'::DOUBLE, 'nan'::FLOAT < 'inf'::DOUBLE	b0,b0
+174	o	SELECT 'nan'::FLOAT = '0.0'::DOUBLE, 'nan'::FLOAT < '0.0'::DOUBLE	b0,b0
+175	o	SELECT 'nan'::FLOAT = '1.5'::DOUBLE, 'nan'::FLOAT < '1.5'::DOUBLE	b0,b0
+176	o	SELECT 'nan'::DOUBLE > 1, 'nan'::DOUBLE < 9223372036854775807, 2 >= 'nan'::DOUBLE	b1,b0,b0
+177	o	SELECT -('nan'::FLOAT) = 'nan'::DOUBLE, -('nan'::FLOAT) < 'nan'::DOUBLE	b1,b0
+178	o	SELECT -('nan'::FLOAT) = 'inf'::DOUBLE, -('nan'::FLOAT) < 'inf'::DOUBLE	b0,b0
+179	o	SELECT -('nan'::FLOAT) = '0.0'::DOUBLE, -('nan'::FLOAT) < '0.0'::DOUBLE	b0,b0
+180	o	SELECT -('nan'::FLOAT) = '1.5'::DOUBLE, -('nan'::FLOAT) < '1.5'::DOUBLE	b0,b0
+181	o	SELECT -('nan'::DOUBLE) > 1, -('nan'::DOUBLE) < 9223372036854775807, 2 >= -('nan'::DOUBLE)	b1,b0,b0
+182	o	SELECT 'inf'::FLOAT = 'nan'::DOUBLE, 'inf'::FLOAT < 'nan'::DOUBLE	b0,b1
+183	o	SELECT 'inf'::FLOAT = 'inf'::DOUBLE, 'inf'::FLOAT < 'inf'::DOUBLE	b1,b0
+184	o	SELECT 'inf'::FLOAT = '0.0'::DOUBLE, 'inf'::FLOAT < '0.0'::DOUBLE	b0,b0
+185	o	SELECT 'inf'::FLOAT = '1.5'::DOUBLE, 'inf'::FLOAT < '1.5'::DOUBLE	b0,b0
+186	o	SELECT 'inf'::DOUBLE > 1, 'inf'::DOUBLE < 9223372036854775807, 2 >= 'inf'::DOUBLE	b1,b0,b0
+187	o	SELECT '-inf'::FLOAT = 'nan'::DOUBLE, '-inf'::FLOAT < 'nan'::DOUBLE	b0,b1
+188	o	SELECT '-inf'::FLOAT = 'inf'::DOUBLE, '-inf'::FLOAT < 'inf'::DOUBLE	b0,b1
+189	o	SELECT '-inf'::FLOAT = '0.0'::DOUBLE, '-inf'::FLOAT < '0.0'::DOUBLE	b0,b1
+190	o	SELECT '-inf'::FLOAT = '1.5'::DOUBLE, '-inf'::FLOAT < '1.5'::DOUBLE	b0,b1
+191	o	SELECT '-inf'::DOUBLE > 1, '-inf'::DOUBLE < 9223372036854775807, 2 >= '-inf'::DOUBLE	b0,b1,b1
+192	o	SELECT '0.0'::FLOAT = 'nan'::DOUBLE, '0.0'::FLOAT < 'nan'::DOUBLE	b0,b1
+193	o	SELECT '0.0'::FLOAT = 'inf'::DOUBLE, '0.0'::FLOAT < 'inf'::DOUBLE	b0,b1
+194	o	SELECT '0.0'::FLOAT = '0.0'::DOUBLE, '0.0'::FLOAT < '0.0'::DOUBLE	b1,b0
+195	o	SELECT '0.0'::FLOAT = '1.5'::DOUBLE, '0.0'::FLOAT < '1.5'::DOUBLE	b0,b1
+196	o	SELECT '0.0'::DOUBLE > 1, '0.0'::DOUBLE < 9223372036854775807, 2 >= '0.0'::DOUBLE	b0,b1,b1
+197	o	SELECT '-0.0'::FLOAT = 'nan'::DOUBLE, '-0.0'::FLOAT < 'nan'::DOUBLE	b0,b1
+198	o	SELECT '-0.0'::FLOAT = 'inf'::DOUBLE, '-0.0'::FLOAT < 'inf'::DOUBLE	b0,b1
+199	o	SELECT '-0.0'::FLOAT = '0.0'::DOUBLE, '-0.0'::FLOAT < '0.0'::DOUBLE	b1,b0
+200	o	SELECT '-0.0'::FLOAT = '1.5'::DOUBLE, '-0.0'::FLOAT < '1.5'::DOUBLE	b0,b1
+201	o	SELECT '-0.0'::DOUBLE > 1, '-0.0'::DOUBLE < 9223372036854775807, 2 >= '-0.0'::DOUBLE	b0,b1,b1
+202	o	SELECT '1.5'::FLOAT = 'nan'::DOUBLE, '1.5'::FLOAT < 'nan'::DOUBLE	b0,b1
+203	o	SELECT '1.5'::FLOAT = 'inf'::DOUBLE, '1.5'::FLOAT < 'inf'::DOUBLE	b0,b1
+204	o	SELECT '1.5'::FLOAT = '0.0'::DOUBLE, '1.5'::FLOAT < '0.0'::DOUBLE	b0,b0
+205	o	SELECT '1.5'::FLOAT = '1.5'::DOUBLE, '1.5'::FLOAT < '1.5'::DOUBLE	b1,b0
+206	o	SELECT '1.5'::DOUBLE > 1, '1.5'::DOUBLE < 9223372036854775807, 2 >= '1.5'::DOUBLE	b1,b1,b1
+207	o	SELECT '-2'::FLOAT = 'nan'::DOUBLE, '-2'::FLOAT < 'nan'::DOUBLE	b0,b1
+208	o	SELECT '-2'::FLOAT = 'inf'::DOUBLE, '-2'::FLOAT < 'inf'::DOUBLE	b0,b1
+209	o	SELECT '-2'::FLOAT = '0.0'::DOUBLE, '-2'::FLOAT < '0.0'::DOUBLE	b0,b1
+210	o	SELECT '-2'::FLOAT = '1.5'::DOUBLE, '-2'::FLOAT < '1.5'::DOUBLE	b0,b1
+211	o	SELECT '-2'::DOUBLE > 1, '-2'::DOUBLE < 9223372036854775807, 2 >= '-2'::DOUBLE	b0,b1,b1
+212	o	SELECT NULL::FLOAT = 'nan'::DOUBLE, NULL::FLOAT < 'nan'::DOUBLE	N,N
+213	o	SELECT NULL::FLOAT = 'inf'::DOUBLE, NULL::FLOAT < 'inf'::DOUBLE	N,N
+214	o	SELECT NULL::FLOAT = '0.0'::DOUBLE, NULL::FLOAT < '0.0'::DOUBLE	N,N
+215	o	SELECT NULL::FLOAT = '1.5'::DOUBLE, NULL::FLOAT < '1.5'::DOUBLE	N,N
+216	o	SELECT NULL::DOUBLE > 1, NULL::DOUBLE < 9223372036854775807, 2 >= NULL::DOUBLE	N,N,N
+217	u	SELECT id FROM t WHERE d = 'nan'::DOUBLE	i1|i2|i10
+218	u	SELECT id FROM t WHERE d <> 'nan'::DOUBLE	i3|i4|i5|i6|i7|i8|i11|i12
+219	u	SELECT id FROM t WHERE d < 'nan'::DOUBLE	i3|i4|i5|i6|i7|i8|i11|i12
+220	u	SELECT id FROM t WHERE d > 'nan'::DOUBLE	
+221	u	SELECT id FROM t WHERE d <= 'nan'::DOUBLE	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+222	u	SELECT id FROM t WHERE d >= 'nan'::DOUBLE	i1|i2|i10
+223	u	SELECT id FROM t WHERE d = -('nan'::DOUBLE)	i1|i2|i10
+224	u	SELECT id FROM t WHERE d <> -('nan'::DOUBLE)	i3|i4|i5|i6|i7|i8|i11|i12
+225	u	SELECT id FROM t WHERE d < -('nan'::DOUBLE)	i3|i4|i5|i6|i7|i8|i11|i12
+226	u	SELECT id FROM t WHERE d > -('nan'::DOUBLE)	
+227	u	SELECT id FROM t WHERE d <= -('nan'::DOUBLE)	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+228	u	SELECT id FROM t WHERE d >= -('nan'::DOUBLE)	i1|i2|i10
+229	u	SELECT id FROM t WHERE d = 'inf'::DOUBLE	i3
+230	u	SELECT id FROM t WHERE d <> 'inf'::DOUBLE	i1|i2|i4|i5|i6|i7|i8|i10|i11|i12
+231	u	SELECT id FROM t WHERE d < 'inf'::DOUBLE	i4|i5|i6|i7|i8|i11|i12
+232	u	SELECT id FROM t WHERE d > 'inf'::DOUBLE	i1|i2|i10
+233	u	SELECT id FROM t WHERE d <= 'inf'::DOUBLE	i3|i4|i5|i6|i7|i8|i11|i12
+234	u	SELECT id FROM t WHERE d >= 'inf'::DOUBLE	i1|i2|i3|i10
+235	u	SELECT id FROM t WHERE d = '-inf'::DOUBLE	i4
+236	u	SELECT id FROM t WHERE d <> '-inf'::DOUBLE	i1|i2|i3|i5|i6|i7|i8|i10|i11|i12
+237	u	SELECT id FROM t WHERE d < '-inf'::DOUBLE	
+238	u	SELECT id FROM t WHERE d > '-inf'::DOUBLE	i1|i2|i3|i5|i6|i7|i8|i10|i11|i12
+239	u	SELECT id FROM t WHERE d <= '-inf'::DOUBLE	i4
+240	u	SELECT id FROM t WHERE d >= '-inf'::DOUBLE	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+241	u	SELECT id FROM t WHERE d = '0.0'::DOUBLE	i5|i6|i12
+242	u	SELECT id FROM t WHERE d <> '0.0'::DOUBLE	i1|i2|i3|i4|i7|i8|i10|i11
+243	u	SELECT id FROM t WHERE d < '0.0'::DOUBLE	i4|i8
+244	u	SELECT id FROM t WHERE d > '0.0'::DOUBLE	i1|i2|i3|i7|i10|i11
+245	u	SELECT id FROM t WHERE d <= '0.0'::DOUBLE	i4|i5|i6|i8|i12
+246	u	SELECT id FROM t WHERE d >= '0.0'::DOUBLE	i1|i2|i3|i5|i6|i7|i10|i11|i12
+247	u	SELECT id FROM t WHERE d = '-0.0'::DOUBLE	i5|i6|i12
+248	u	SELECT id FROM t WHERE d <> '-0.0'::DOUBLE	i1|i2|i3|i4|i7|i8|i10|i11
+249	u	SELECT id FROM t WHERE d < '-0.0'::DOUBLE	i4|i8
+250	u	SELECT id FROM t WHERE d > '-0.0'::DOUBLE	i1|i2|i3|i7|i10|i11
+251	u	SELECT id FROM t WHERE d <= '-0.0'::DOUBLE	i4|i5|i6|i8|i12
+252	u	SELECT id FROM t WHERE d >= '-0.0'::DOUBLE	i1|i2|i3|i5|i6|i7|i10|i11|i12
+253	u	SELECT id FROM t WHERE d = '1.5'::DOUBLE	i7|i11
+254	u	SELECT id FROM t WHERE d <> '1.5'::DOUBLE	i1|i2|i3|i4|i5|i6|i8|i10|i12
+255	u	SELECT id FROM t WHERE d < '1.5'::DOUBLE	i4|i5|i6|i8|i12
+256	u	SELECT id FROM t WHERE d > '1.5'::DOUBLE	i1|i2|i3|i10
+257	u	SELECT id FROM t WHERE d <= '1.5'::DOUBLE	i4|i5|i6|i7|i8|i11|i12
+258	u	SELECT id FROM t WHERE d >= '1.5'::DOUBLE	i1|i2|i3|i7|i10|i11
+259	u	SELECT id FROM t WHERE d = '-2'::DOUBLE	i8
+260	u	SELECT id FROM t WHERE d <> '-2'::DOUBLE	i1|i2|i3|i4|i5|i6|i7|i10|i11|i12
+261	u	SELECT id FROM t WHERE d < '-2'::DOUBLE	i4
+262	u	SELECT id FROM t WHERE d > '-2'::DOUBLE	i1|i2|i3|i5|i6|i7|i10|i11|i12
+263	u	SELECT id FROM t WHERE d <= '-2'::DOUBLE	i4|i8
+264	u	SELECT id FROM t WHERE d >= '-2'::DOUBLE	i1|i2|i3|i5|i6|i7|i8|i10|i11|i12
+265	u	SELECT id FROM t WHERE d = NULL::DOUBLE	
+266	u	SELECT id FROM t WHERE d <> NULL::DOUBLE	
+267	u	SELECT id FROM t WHERE d < NULL::DOUBLE	
+268	u	SELECT id FROM t WHERE d > NULL::DOUBLE	
+269	u	SELECT id FROM t WHERE d <= NULL::DOUBLE	
+270	u	SELECT id FROM t WHERE d >= NULL::DOUBLE	
+271	u	SELECT id FROM t WHERE d BETWEEN 1 AND 'inf'::DOUBLE	i3|i7|i11
+272	u	SELECT id FROM t WHERE d BETWEEN '-inf'::DOUBLE AND 'nan'::DOUBLE	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+273	u	SELECT id FROM t WHERE d NOT BETWEEN 0 AND 2	i1|i2|i3|i4|i8|i10
+274	u	SELECT id FROM t WHERE d IN ('nan'::DOUBLE, 1.5::DOUBLE)	i1|i2|i7|i10|i11
+275	u	SELECT id FROM t WHERE d IN ('-0.0'::DOUBLE)	i5|i6|i12
+276	u	SELECT id FROM t WHERE d NOT IN ('nan'::DOUBLE, 'inf'::DOUBLE)	i4|i5|i6|i7|i8|i11|i12
+277	u	SELECT id FROM t WHERE d IN (1, 2, 3)	
+278	u	SELECT id FROM t WHERE d = d	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+279	u	SELECT id FROM t WHERE d <> d	
+280	u	SELECT id FROM t WHERE f = 'nan'::FLOAT	i1|i2|i10
+281	u	SELECT id FROM t WHERE f <> 'nan'::FLOAT	i3|i4|i5|i6|i7|i8|i11|i12
+282	u	SELECT id FROM t WHERE f < 'nan'::FLOAT	i3|i4|i5|i6|i7|i8|i11|i12
+283	u	SELECT id FROM t WHERE f > 'nan'::FLOAT	
+284	u	SELECT id FROM t WHERE f <= 'nan'::FLOAT	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+285	u	SELECT id FROM t WHERE f >= 'nan'::FLOAT	i1|i2|i10
+286	u	SELECT id FROM t WHERE f = -('nan'::FLOAT)	i1|i2|i10
+287	u	SELECT id FROM t WHERE f <> -('nan'::FLOAT)	i3|i4|i5|i6|i7|i8|i11|i12
+288	u	SELECT id FROM t WHERE f < -('nan'::FLOAT)	i3|i4|i5|i6|i7|i8|i11|i12
+289	u	SELECT id FROM t WHERE f > -('nan'::FLOAT)	
+290	u	SELECT id FROM t WHERE f <= -('nan'::FLOAT)	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+291	u	SELECT id FROM t WHERE f >= -('nan'::FLOAT)	i1|i2|i10
+292	u	SELECT id FROM t WHERE f = 'inf'::FLOAT	i3
+293	u	SELECT id FROM t WHERE f <> 'inf'::FLOAT	i1|i2|i4|i5|i6|i7|i8|i10|i11|i12
+294	u	SELECT id FROM t WHERE f < 'inf'::FLOAT	i4|i5|i6|i7|i8|i11|i12
+295	u	SELECT id FROM t WHERE f > 'inf'::FLOAT	i1|i2|i10
+296	u	SELECT id FROM t WHERE f <= 'inf'::FLOAT	i3|i4|i5|i6|i7|i8|i11|i12
+297	u	SELECT id FROM t WHERE f >= 'inf'::FLOAT	i1|i2|i3|i10
+298	u	SELECT id FROM t WHERE f = '-inf'::FLOAT	i4
+299	u	SELECT id FROM t WHERE f <> '-inf'::FLOAT	i1|i2|i3|i5|i6|i7|i8|i10|i11|i12
+300	u	SELECT id FROM t WHERE f < '-inf'::FLOAT	
+301	u	SELECT id FROM t WHERE f > '-inf'::FLOAT	i1|i2|i3|i5|i6|i7|i8|i10|i11|i12
+302	u	SELECT id FROM t WHERE f <= '-inf'::FLOAT	i4
+303	u	SELECT id FROM t WHERE f >= '-inf'::FLOAT	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+304	u	SELECT id FROM t WHERE f = '0.0'::FLOAT	i5|i6|i12
+305	u	SELECT id FROM t WHERE f <> '0.0'::FLOAT	i1|i2|i3|i4|i7|i8|i10|i11
+306	u	SELECT id FROM t WHERE f < '0.0'::FLOAT	i4|i8
+307	u	SELECT id FROM t WHERE f > '0.0'::FLOAT	i1|i2|i3|i7|i10|i11
+308	u	SELECT id FROM t WHERE f <= '0.0'::FLOAT	i4|i5|i6|i8|i12
+309	u	SELECT id FROM t WHERE f >= '0.0'::FLOAT	i1|i2|i3|i5|i6|i7|i10|i11|i12
+310	u	SELECT id FROM t WHERE f = '-0.0'::FLOAT	i5|i6|i12
+311	u	SELECT id FROM t WHERE f <> '-0.0'::FLOAT	i1|i2|i3|i4|i7|i8|i10|i11
+312	u	SELECT id FROM t WHERE f < '-0.0'::FLOAT	i4|i8
+313	u	SELECT id FROM t WHERE f > '-0.0'::FLOAT	i1|i2|i3|i7|i10|i11
+314	u	SELECT id FROM t WHERE f <= '-0.0'::FLOAT	i4|i5|i6|i8|i12
+315	u	SELECT id FROM t WHERE f >= '-0.0'::FLOAT	i1|i2|i3|i5|i6|i7|i10|i11|i12
+316	u	SELECT id FROM t WHERE f = '1.5'::FLOAT	i7|i11
+317	u	SELECT id FROM t WHERE f <> '1.5'::FLOAT	i1|i2|i3|i4|i5|i6|i8|i10|i12
+318	u	SELECT id FROM t WHERE f < '1.5'::FLOAT	i4|i5|i6|i8|i12
+319	u	SELECT id FROM t WHERE f > '1.5'::FLOAT	i1|i2|i3|i10
+320	u	SELECT id FROM t WHERE f <= '1.5'::FLOAT	i4|i5|i6|i7|i8|i11|i12
+321	u	SELECT id FROM t WHERE f >= '1.5'::FLOAT	i1|i2|i3|i7|i10|i11
+322	u	SELECT id FROM t WHERE f = '-2'::FLOAT	i8
+323	u	SELECT id FROM t WHERE f <> '-2'::FLOAT	i1|i2|i3|i4|i5|i6|i7|i10|i11|i12
+324	u	SELECT id FROM t WHERE f < '-2'::FLOAT	i4
+325	u	SELECT id FROM t WHERE f > '-2'::FLOAT	i1|i2|i3|i5|i6|i7|i10|i11|i12
+326	u	SELECT id FROM t WHERE f <= '-2'::FLOAT	i4|i8
+327	u	SELECT id FROM t WHERE f >= '-2'::FLOAT	i1|i2|i3|i5|i6|i7|i8|i10|i11|i12
+328	u	SELECT id FROM t WHERE f = NULL::FLOAT	
+329	u	SELECT id FROM t WHERE f <> NULL::FLOAT	
+330	u	SELECT id FROM t WHERE f < NULL::FLOAT	
+331	u	SELECT id FROM t WHERE f > NULL::FLOAT	
+332	u	SELECT id FROM t WHERE f <= NULL::FLOAT	
+333	u	SELECT id FROM t WHERE f >= NULL::FLOAT	
+334	u	SELECT id FROM t WHERE f BETWEEN 1 AND 'inf'::FLOAT	i3|i7|i11
+335	u	SELECT id FROM t WHERE f BETWEEN '-inf'::FLOAT AND 'nan'::FLOAT	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+336	u	SELECT id FROM t WHERE f NOT BETWEEN 0 AND 2	i1|i2|i3|i4|i8|i10
+337	u	SELECT id FROM t WHERE f IN ('nan'::FLOAT, 1.5::FLOAT)	i1|i2|i7|i10|i11
+338	u	SELECT id FROM t WHERE f IN ('-0.0'::FLOAT)	i5|i6|i12
+339	u	SELECT id FROM t WHERE f NOT IN ('nan'::FLOAT, 'inf'::FLOAT)	i4|i5|i6|i7|i8|i11|i12
+340	u	SELECT id FROM t WHERE f IN (1, 2, 3)	
+341	u	SELECT id FROM t WHERE f = f	i1|i2|i3|i4|i5|i6|i7|i8|i10|i11|i12
+342	u	SELECT id FROM t WHERE f <> f	
+343	u	SELECT a.id, b.id FROM t a, u b WHERE a.d = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2
+344	u	SELECT a.id, b.id FROM t a, u b WHERE a.f = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2
+345	u	SELECT a.id, b.id FROM t a, u b WHERE a.d <> b.d	i3,i1|i4,i1|i5,i1|i6,i1|i7,i1|i8,i1|i11,i1|i12,i1|i1,i2|i2,i2|i3,i2|i4,i2|i7,i2|i8,i2|i10,i2|i11,i2|i1,i3|i2,i3|i3,i3|i4,i3|i7,i3|i8,i3|i10,i3|i11,i3|i1,i4|i2,i4|i4,i4|i5,i4|i6,i4|i7,i4|i8,i4|i10,i4|i11,i4|i12,i4|i1,i5|i2,i5|i3,i5|i4,i5|i5,i5|i6,i5|i8,i5|i10,i5|i12,i5|i3,i7|i4,i7|i5,i7|i6,i7|i7,i7|i8,i7|i11,i7|i12,i7
+346	u	SELECT a.id, b.id FROM t a, u b WHERE a.f <> b.d	i3,i1|i4,i1|i5,i1|i6,i1|i7,i1|i8,i1|i11,i1|i12,i1|i1,i2|i2,i2|i3,i2|i4,i2|i7,i2|i8,i2|i10,i2|i11,i2|i1,i3|i2,i3|i3,i3|i4,i3|i7,i3|i8,i3|i10,i3|i11,i3|i1,i4|i2,i4|i4,i4|i5,i4|i6,i4|i7,i4|i8,i4|i10,i4|i11,i4|i12,i4|i1,i5|i2,i5|i3,i5|i4,i5|i5,i5|i6,i5|i8,i5|i10,i5|i12,i5|i3,i7|i4,i7|i5,i7|i6,i7|i7,i7|i8,i7|i11,i7|i12,i7
+347	u	SELECT a.id, b.id FROM t a, u b WHERE a.d < b.d	i4,i2|i8,i2|i4,i3|i8,i3|i4,i5|i8,i5|i5,i5|i6,i5|i12,i5|i4,i4|i8,i4|i5,i4|i6,i4|i12,i4|i7,i4|i11,i4|i4,i1|i8,i1|i5,i1|i6,i1|i12,i1|i7,i1|i11,i1|i3,i1|i4,i7|i8,i7|i5,i7|i6,i7|i12,i7|i7,i7|i11,i7|i3,i7
+348	u	SELECT a.id, b.id FROM t a, u b WHERE a.f < b.d	i4,i2|i8,i2|i4,i3|i8,i3|i4,i5|i8,i5|i5,i5|i6,i5|i12,i5|i4,i4|i8,i4|i5,i4|i6,i4|i12,i4|i7,i4|i11,i4|i4,i1|i8,i1|i5,i1|i6,i1|i12,i1|i7,i1|i11,i1|i3,i1|i4,i7|i8,i7|i5,i7|i6,i7|i12,i7|i7,i7|i11,i7|i3,i7
+349	u	SELECT a.id, b.id FROM t a, u b WHERE a.d > b.d	i1,i4|i2,i4|i10,i4|i1,i5|i2,i5|i10,i5|i3,i5|i1,i2|i2,i2|i10,i2|i3,i2|i7,i2|i11,i2|i1,i3|i2,i3|i10,i3|i3,i3|i7,i3|i11,i3
+350	u	SELECT a.id, b.id FROM t a, u b WHERE a.f > b.d	i1,i4|i2,i4|i10,i4|i1,i5|i2,i5|i10,i5|i3,i5|i1,i2|i2,i2|i10,i2|i3,i2|i7,i2|i11,i2|i1,i3|i2,i3|i10,i3|i3,i3|i7,i3|i11,i3
+351	u	SELECT a.id, b.id FROM t a, u b WHERE a.d <= b.d	i4,i2|i8,i2|i5,i2|i6,i2|i12,i2|i4,i3|i8,i3|i5,i3|i6,i3|i12,i3|i4,i5|i8,i5|i5,i5|i6,i5|i12,i5|i7,i5|i11,i5|i4,i4|i8,i4|i5,i4|i6,i4|i12,i4|i7,i4|i11,i4|i3,i4|i4,i1|i8,i1|i5,i1|i6,i1|i12,i1|i7,i1|i11,i1|i3,i1|i1,i1|i2,i1|i10,i1|i4,i7|i8,i7|i5,i7|i6,i7|i12,i7|i7,i7|i11,i7|i3,i7|i1,i7|i2,i7|i10,i7
+352	u	SELECT a.id, b.id FROM t a, u b WHERE a.f <= b.d	i4,i2|i8,i2|i5,i2|i6,i2|i12,i2|i4,i3|i8,i3|i5,i3|i6,i3|i12,i3|i4,i5|i8,i5|i5,i5|i6,i5|i12,i5|i7,i5|i11,i5|i4,i4|i8,i4|i5,i4|i6,i4|i12,i4|i7,i4|i11,i4|i3,i4|i4,i1|i8,i1|i5,i1|i6,i1|i12,i1|i7,i1|i11,i1|i3,i1|i1,i1|i2,i1|i10,i1|i4,i7|i8,i7|i5,i7|i6,i7|i12,i7|i7,i7|i11,i7|i3,i7|i1,i7|i2,i7|i10,i7
+353	u	SELECT a.id, b.id FROM t a, u b WHERE a.d >= b.d	i1,i1|i2,i1|i10,i1|i1,i7|i2,i7|i10,i7|i1,i4|i2,i4|i10,i4|i3,i4|i1,i5|i2,i5|i10,i5|i3,i5|i7,i5|i11,i5|i1,i2|i2,i2|i10,i2|i3,i2|i7,i2|i11,i2|i5,i2|i6,i2|i12,i2|i1,i3|i2,i3|i10,i3|i3,i3|i7,i3|i11,i3|i5,i3|i6,i3|i12,i3
+354	u	SELECT a.id, b.id FROM t a, u b WHERE a.f >= b.d	i1,i1|i2,i1|i10,i1|i1,i7|i2,i7|i10,i7|i1,i4|i2,i4|i10,i4|i3,i4|i1,i5|i2,i5|i10,i5|i3,i5|i7,i5|i11,i5|i1,i2|i2,i2|i10,i2|i3,i2|i7,i2|i11,i2|i5,i2|i6,i2|i12,i2|i1,i3|i2,i3|i10,i3|i3,i3|i7,i3|i11,i3|i5,i3|i6,i3|i12,i3
+355	u	SELECT id FROM t WHERE isnan(d)	i1|i2|i10
+356	u	SELECT id FROM t WHERE NOT isnan(f)	i3|i4|i5|i6|i7|i8|i11|i12
+357	u	SELECT id, CASE WHEN d = 'nan'::DOUBLE THEN 'n' WHEN d > 0 THEN 'p' ELSE 'o' END FROM t	i1,sn|i2,sn|i3,sp|i4,so|i5,so|i6,so|i7,sp|i8,so|i9,so|i10,sn|i11,sp|i12,so
+358	u	SELECT id, CASE d WHEN 'nan'::DOUBLE THEN 1 WHEN 0 THEN 2 ELSE 3 END FROM t	i1,i1|i2,i1|i3,i3|i4,i3|i5,i2|i6,i2|i7,i3|i8,i3|i9,i3|i10,i1|i11,i3|i12,i2
+359	o	SELECT id, d FROM t ORDER BY d, id	i4,f-inf|i8,f-0x1.0000000000000p+1|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i3,finf|i1,fnan|i2,fnan|i10,fnan|i9,N
+360	oL	SELECT d FROM t ORDER BY d LIMIT 1	f-inf
+361	oL	SELECT d FROM t ORDER BY d LIMIT 3	f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0
+362	oL	SELECT d FROM t ORDER BY d LIMIT 5	f-inf|f-0x1.0000000000000p+1|f0x0.0p+0|f-0x0.0p+0|f-0x0.0p+0
+363	oL	SELECT d FROM t ORDER BY d LIMIT 11	f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0|f0x0.0p+0|f-0x0.0p+0|f0x1.8000000000000p+0|f0x1.8000000000000p+0|finf|fnan|fnan|fnan
+364	o	SELECT id FROM t ORDER BY d, id LIMIT 4	i4|i8|i5|i6
+365	o	SELECT id FROM t ORDER BY d, id LIMIT 3 OFFSET 2	i5|i6|i12
+366	o	SELECT id, d FROM t ORDER BY d NULLS FIRST, id	i9,N|i4,f-inf|i8,f-0x1.0000000000000p+1|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i3,finf|i1,fnan|i2,fnan|i10,fnan
+367	oL	SELECT d FROM t ORDER BY d NULLS FIRST LIMIT 1	N
+368	oL	SELECT d FROM t ORDER BY d NULLS FIRST LIMIT 3	N|f-inf|f-0x1.0000000000000p+1
+369	oL	SELECT d FROM t ORDER BY d NULLS FIRST LIMIT 5	N|f-inf|f-0x1.0000000000000p+1|f0x0.0p+0|f-0x0.0p+0
+370	oL	SELECT d FROM t ORDER BY d NULLS FIRST LIMIT 11	N|f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0|f-0x0.0p+0|f0x0.0p+0|f0x1.8000000000000p+0|f0x1.8000000000000p+0|finf|fnan|fnan
+371	o	SELECT id FROM t ORDER BY d NULLS FIRST, id LIMIT 4	i9|i4|i8|i5
+372	o	SELECT id FROM t ORDER BY d NULLS FIRST, id LIMIT 3 OFFSET 2	i8|i5|i6
+373	o	SELECT id, d FROM t ORDER BY d NULLS LAST, id	i4,f-inf|i8,f-0x1.0000000000000p+1|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i3,finf|i1,fnan|i2,fnan|i10,fnan|i9,N
+374	oL	SELECT d FROM t ORDER BY d NULLS LAST LIMIT 1	f-inf
+375	oL	SELECT d FROM t ORDER BY d NULLS LAST LIMIT 3	f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0
+376	oL	SELECT d FROM t ORDER BY d NULLS LAST LIMIT 5	f-inf|f-0x1.0000000000000p+1|f0x0.0p+0|f-0x0.0p+0|f-0x0.0p+0
+377	oL	SELECT d FROM t ORDER BY d NULLS LAST LIMIT 11	f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0|f0x0.0p+0|f-0x0.0p+0|f0x1.8000000000000p+0|f0x1.8000000000000p+0|finf|fnan|fnan|fnan
+378	o	SELECT id FROM t ORDER BY d NULLS LAST, id LIMIT 4	i4|i8|i5|i6
+379	o	SELECT id FROM t ORDER BY d NULLS LAST, id LIMIT 3 OFFSET 2	i5|i6|i12
+380	o	SELECT id, d FROM t ORDER BY d DESC, id	i1,fnan|i2,fnan|i10,fnan|i3,finf|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i8,f-0x1.0000000000000p+1|i4,f-inf|i9,N
+381	oL	SELECT d FROM t ORDER BY d DESC LIMIT 1	fnan
+382	oL	SELECT d FROM t ORDER BY d DESC LIMIT 3	fnan|fnan|fnan
+383	oL	SELECT d FROM t ORDER BY d DESC LIMIT 5	fnan|fnan|fnan|finf|f0x1.8000000000000p+0
+384	oL	SELECT d FROM t ORDER BY d DESC LIMIT 11	fnan|fnan|fnan|finf|f0x1.8000000000000p+0|f0x1.8000000000000p+0|f-0x0.0p+0|f-0x0.0p+0|f0x0.0p+0|f-0x1.0000000000000p+1|f-inf
+385	o	SELECT id FROM t ORDER BY d DESC, id LIMIT 4	i1|i2|i10|i3
+386	o	SELECT id FROM t ORDER BY d DESC, id LIMIT 3 OFFSET 2	i10|i3|i7
+387	o	SELECT id, d FROM t ORDER BY d DESC NULLS FIRST, id	i9,N|i1,fnan|i2,fnan|i10,fnan|i3,finf|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i8,f-0x1.0000000000000p+1|i4,f-inf
+388	oL	SELECT d FROM t ORDER BY d DESC NULLS FIRST LIMIT 1	N
+389	oL	SELECT d FROM t ORDER BY d DESC NULLS FIRST LIMIT 3	N|fnan|fnan
+390	oL	SELECT d FROM t ORDER BY d DESC NULLS FIRST LIMIT 5	N|fnan|fnan|fnan|finf
+391	oL	SELECT d FROM t ORDER BY d DESC NULLS FIRST LIMIT 11	N|fnan|fnan|fnan|finf|f0x1.8000000000000p+0|f0x1.8000000000000p+0|f0x0.0p+0|f-0x0.0p+0|f-0x0.0p+0|f-0x1.0000000000000p+1
+392	o	SELECT id FROM t ORDER BY d DESC NULLS FIRST, id LIMIT 4	i9|i1|i2|i10
+393	o	SELECT id FROM t ORDER BY d DESC NULLS FIRST, id LIMIT 3 OFFSET 2	i2|i10|i3
+394	o	SELECT id, d FROM t ORDER BY d DESC NULLS LAST, id	i1,fnan|i2,fnan|i10,fnan|i3,finf|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i8,f-0x1.0000000000000p+1|i4,f-inf|i9,N
+395	oL	SELECT d FROM t ORDER BY d DESC NULLS LAST LIMIT 1	fnan
+396	oL	SELECT d FROM t ORDER BY d DESC NULLS LAST LIMIT 3	fnan|fnan|fnan
+397	oL	SELECT d FROM t ORDER BY d DESC NULLS LAST LIMIT 5	fnan|fnan|fnan|finf|f0x1.8000000000000p+0
+398	oL	SELECT d FROM t ORDER BY d DESC NULLS LAST LIMIT 11	fnan|fnan|fnan|finf|f0x1.8000000000000p+0|f0x1.8000000000000p+0|f-0x0.0p+0|f-0x0.0p+0|f0x0.0p+0|f-0x1.0000000000000p+1|f-inf
+399	o	SELECT id FROM t ORDER BY d DESC NULLS LAST, id LIMIT 4	i1|i2|i10|i3
+400	o	SELECT id FROM t ORDER BY d DESC NULLS LAST, id LIMIT 3 OFFSET 2	i10|i3|i7
+401	o	SELECT id FROM t ORDER BY abs(d), id	i5|i6|i12|i7|i11|i8|i3|i4|i1|i2|i10|i9
+402	o	SELECT id FROM t ORDER BY -(d) DESC, id	i1|i2|i10|i4|i8|i5|i6|i12|i7|i11|i3|i9
+403	o	SELECT g, d FROM t ORDER BY g, d DESC, id	i1,fnan|i1,fnan|i1,f0x1.8000000000000p+0|i1,f-0x0.0p+0|i2,fnan|i2,finf|i2,f-0x1.0000000000000p+1|i2,f-inf|i3,f0x1.8000000000000p+0|i3,f0x0.0p+0|i3,f-0x0.0p+0|i3,N
+404	o	SELECT id, f FROM t ORDER BY f, id	i4,f-inf|i8,f-0x1.0000000000000p+1|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i3,finf|i1,fnan|i2,fnan|i10,fnan|i9,N
+405	oL	SELECT f FROM t ORDER BY f LIMIT 1	f-inf
+406	oL	SELECT f FROM t ORDER BY f LIMIT 3	f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0
+407	oL	SELECT f FROM t ORDER BY f LIMIT 5	f-inf|f-0x1.0000000000000p+1|f0x0.0p+0|f-0x0.0p+0|f-0x0.0p+0
+408	oL	SELECT f FROM t ORDER BY f LIMIT 11	f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0|f0x0.0p+0|f-0x0.0p+0|f0x1.8000000000000p+0|f0x1.8000000000000p+0|finf|fnan|fnan|fnan
+409	o	SELECT id FROM t ORDER BY f, id LIMIT 4	i4|i8|i5|i6
+410	o	SELECT id FROM t ORDER BY f, id LIMIT 3 OFFSET 2	i5|i6|i12
+411	o	SELECT id, f FROM t ORDER BY f NULLS FIRST, id	i9,N|i4,f-inf|i8,f-0x1.0000000000000p+1|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i3,finf|i1,fnan|i2,fnan|i10,fnan
+412	oL	SELECT f FROM t ORDER BY f NULLS FIRST LIMIT 1	N
+413	oL	SELECT f FROM t ORDER BY f NULLS FIRST LIMIT 3	N|f-inf|f-0x1.0000000000000p+1
+414	oL	SELECT f FROM t ORDER BY f NULLS FIRST LIMIT 5	N|f-inf|f-0x1.0000000000000p+1|f0x0.0p+0|f-0x0.0p+0
+415	oL	SELECT f FROM t ORDER BY f NULLS FIRST LIMIT 11	N|f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0|f-0x0.0p+0|f0x0.0p+0|f0x1.8000000000000p+0|f0x1.8000000000000p+0|finf|fnan|fnan
+416	o	SELECT id FROM t ORDER BY f NULLS FIRST, id LIMIT 4	i9|i4|i8|i5
+417	o	SELECT id FROM t ORDER BY f NULLS FIRST, id LIMIT 3 OFFSET 2	i8|i5|i6
+418	o	SELECT id, f FROM t ORDER BY f NULLS LAST, id	i4,f-inf|i8,f-0x1.0000000000000p+1|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i3,finf|i1,fnan|i2,fnan|i10,fnan|i9,N
+419	oL	SELECT f FROM t ORDER BY f NULLS LAST LIMIT 1	f-inf
+420	oL	SELECT f FROM t ORDER BY f NULLS LAST LIMIT 3	f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0
+421	oL	SELECT f FROM t ORDER BY f NULLS LAST LIMIT 5	f-inf|f-0x1.0000000000000p+1|f0x0.0p+0|f-0x0.0p+0|f-0x0.0p+0
+422	oL	SELECT f FROM t ORDER BY f NULLS LAST LIMIT 11	f-inf|f-0x1.0000000000000p+1|f-0x0.0p+0|f0x0.0p+0|f-0x0.0p+0|f0x1.8000000000000p+0|f0x1.8000000000000p+0|finf|fnan|fnan|fnan
+423	o	SELECT id FROM t ORDER BY f NULLS LAST, id LIMIT 4	i4|i8|i5|i6
+424	o	SELECT id FROM t ORDER BY f NULLS LAST, id LIMIT 3 OFFSET 2	i5|i6|i12
+425	o	SELECT id, f FROM t ORDER BY f DESC, id	i1,fnan|i2,fnan|i10,fnan|i3,finf|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i8,f-0x1.0000000000000p+1|i4,f-inf|i9,N
+426	oL	SELECT f FROM t ORDER BY f DESC LIMIT 1	fnan
+427	oL	SELECT f FROM t ORDER BY f DESC LIMIT 3	fnan|fnan|fnan
+428	oL	SELECT f FROM t ORDER BY f DESC LIMIT 5	fnan|fnan|fnan|finf|f0x1.8000000000000p+0
+429	oL	SELECT f FROM t ORDER BY f DESC LIMIT 11	fnan|fnan|fnan|finf|f0x1.8000000000000p+0|f0x1.8000000000000p+0|f-0x0.0p+0|f-0x0.0p+0|f0x0.0p+0|f-0x1.0000000000000p+1|f-inf
+430	o	SELECT id FROM t ORDER BY f DESC, id LIMIT 4	i1|i2|i10|i3
+431	o	SELECT id FROM t ORDER BY f DESC, id LIMIT 3 OFFSET 2	i10|i3|i7
+432	o	SELECT id, f FROM t ORDER BY f DESC NULLS FIRST, id	i9,N|i1,fnan|i2,fnan|i10,fnan|i3,finf|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i8,f-0x1.0000000000000p+1|i4,f-inf
+433	oL	SELECT f FROM t ORDER BY f DESC NULLS FIRST LIMIT 1	N
+434	oL	SELECT f FROM t ORDER BY f DESC NULLS FIRST LIMIT 3	N|fnan|fnan
+435	oL	SELECT f FROM t ORDER BY f DESC NULLS FIRST LIMIT 5	N|fnan|fnan|fnan|finf
+436	oL	SELECT f FROM t ORDER BY f DESC NULLS FIRST LIMIT 11	N|fnan|fnan|fnan|finf|f0x1.8000000000000p+0|f0x1.8000000000000p+0|f0x0.0p+0|f-0x0.0p+0|f-0x0.0p+0|f-0x1.0000000000000p+1
+437	o	SELECT id FROM t ORDER BY f DESC NULLS FIRST, id LIMIT 4	i9|i1|i2|i10
+438	o	SELECT id FROM t ORDER BY f DESC NULLS FIRST, id LIMIT 3 OFFSET 2	i2|i10|i3
+439	o	SELECT id, f FROM t ORDER BY f DESC NULLS LAST, id	i1,fnan|i2,fnan|i10,fnan|i3,finf|i7,f0x1.8000000000000p+0|i11,f0x1.8000000000000p+0|i5,f0x0.0p+0|i6,f-0x0.0p+0|i12,f-0x0.0p+0|i8,f-0x1.0000000000000p+1|i4,f-inf|i9,N
+440	oL	SELECT f FROM t ORDER BY f DESC NULLS LAST LIMIT 1	fnan
+441	oL	SELECT f FROM t ORDER BY f DESC NULLS LAST LIMIT 3	fnan|fnan|fnan
+442	oL	SELECT f FROM t ORDER BY f DESC NULLS LAST LIMIT 5	fnan|fnan|fnan|finf|f0x1.8000000000000p+0
+443	oL	SELECT f FROM t ORDER BY f DESC NULLS LAST LIMIT 11	fnan|fnan|fnan|finf|f0x1.8000000000000p+0|f0x1.8000000000000p+0|f-0x0.0p+0|f-0x0.0p+0|f0x0.0p+0|f-0x1.0000000000000p+1|f-inf
+444	o	SELECT id FROM t ORDER BY f DESC NULLS LAST, id LIMIT 4	i1|i2|i10|i3
+445	o	SELECT id FROM t ORDER BY f DESC NULLS LAST, id LIMIT 3 OFFSET 2	i10|i3|i7
+446	o	SELECT id FROM t ORDER BY abs(f), id	i5|i6|i12|i7|i11|i8|i3|i4|i1|i2|i10|i9
+447	o	SELECT id FROM t ORDER BY -(f) DESC, id	i1|i2|i10|i4|i8|i5|i6|i12|i7|i11|i3|i9
+448	o	SELECT g, f FROM t ORDER BY g, f DESC, id	i1,fnan|i1,fnan|i1,f0x1.8000000000000p+0|i1,f-0x0.0p+0|i2,fnan|i2,finf|i2,f-0x1.0000000000000p+1|i2,f-inf|i3,f0x1.8000000000000p+0|i3,f0x0.0p+0|i3,f-0x0.0p+0|i3,N
+449	o	SELECT id FROM big ORDER BY d, id LIMIT 7	i3|i12|i21|i30|i39|i48|i57
+450	o	SELECT id FROM big ORDER BY d DESC, id LIMIT 7	i0|i1|i9|i10|i18|i19|i27
+451	oL	SELECT d FROM big ORDER BY d DESC LIMIT 3	fnan|fnan|fnan
+452	oL	SELECT d FROM big ORDER BY d LIMIT 3	f-inf|f-inf|f-inf
+453	u	SELECT d, count(*), min(id), max(id) FROM t GROUP BY d	fnan,i3,i1,i10|finf,i1,i3,i3|f-inf,i1,i4,i4|f0x0.0p+0,i3,i5,i12|f0x1.8000000000000p+0,i2,i7,i11|f-0x1.0000000000000p+1,i1,i8,i8|N,i1,i9,i9
+454	u	SELECT d, g, count(*) FROM t GROUP BY d, g	fnan,i1,i2|finf,i2,i1|f-inf,i2,i1|f0x0.0p+0,i3,i2|f0x1.8000000000000p+0,i1,i1|f-0x1.0000000000000p+1,i2,i1|N,i3,i1|fnan,i2,i1|f0x1.8000000000000p+0,i3,i1|f-0x0.0p+0,i1,i1
+455	u	SELECT count(*) FROM t GROUP BY d	i3|i1|i1|i3|i2|i1|i1
+456	u	SELECT d, sum(id) FROM t GROUP BY d	fnan,i13|finf,i3|f-inf,i4|f0x0.0p+0,i23|f0x1.8000000000000p+0,i18|f-0x1.0000000000000p+1,i8|N,i9
+457	uL	SELECT DISTINCT d FROM t	fnan|finf|f-inf|f0x0.0p+0|f0x1.8000000000000p+0|f-0x1.0000000000000p+1|N
+458	uL	SELECT DISTINCT d, g FROM t	fnan,i1|finf,i2|f-inf,i2|f0x0.0p+0,i3|f0x1.8000000000000p+0,i1|f-0x1.0000000000000p+1,i2|N,i3|fnan,i2|f0x1.8000000000000p+0,i3|f-0x0.0p+0,i1
+459	u	SELECT count(DISTINCT d) FROM t	i6
+460	u	SELECT g, count(DISTINCT d) FROM t GROUP BY g	i1,i3|i2,i4|i3,i2
+461	u	SELECT d IS NULL, count(*) FROM t GROUP BY d IS NULL	b0,i11|b1,i1
+462	u	SELECT f, count(*), min(id), max(id) FROM t GROUP BY f	fnan,i3,i1,i10|finf,i1,i3,i3|f-inf,i1,i4,i4|f0x0.0p+0,i3,i5,i12|f0x1.8000000000000p+0,i2,i7,i11|f-0x1.0000000000000p+1,i1,i8,i8|N,i1,i9,i9
+463	u	SELECT f, g, count(*) FROM t GROUP BY f, g	fnan,i1,i2|finf,i2,i1|f-inf,i2,i1|f0x0.0p+0,i3,i2|f0x1.8000000000000p+0,i1,i1|f-0x1.0000000000000p+1,i2,i1|N,i3,i1|fnan,i2,i1|f0x1.8000000000000p+0,i3,i1|f-0x0.0p+0,i1,i1
+464	u	SELECT count(*) FROM t GROUP BY f	i3|i1|i1|i3|i2|i1|i1
+465	u	SELECT f, sum(id) FROM t GROUP BY f	fnan,i13|finf,i3|f-inf,i4|f0x0.0p+0,i23|f0x1.8000000000000p+0,i18|f-0x1.0000000000000p+1,i8|N,i9
+466	uL	SELECT DISTINCT f FROM t	fnan|finf|f-inf|f0x0.0p+0|f0x1.8000000000000p+0|f-0x1.0000000000000p+1|N
+467	uL	SELECT DISTINCT f, g FROM t	fnan,i1|finf,i2|f-inf,i2|f0x0.0p+0,i3|f0x1.8000000000000p+0,i1|f-0x1.0000000000000p+1,i2|N,i3|fnan,i2|f0x1.8000000000000p+0,i3|f-0x0.0p+0,i1
+468	u	SELECT count(DISTINCT f) FROM t	i6
+469	u	SELECT g, count(DISTINCT f) FROM t GROUP BY g	i1,i3|i2,i4|i3,i2
+470	u	SELECT f IS NULL, count(*) FROM t GROUP BY f IS NULL	b0,i11|b1,i1
+471	uL	SELECT d, count(*) FROM big GROUP BY d	fnan,i44446|finf,i22222|f-inf,i22222|f0x0.0p+0,i44889|f0x1.4000000000000p+3,i445|N,i22222|f0x1.8000000000000p+0,i22222|f0x1.0000000000000p+0,i445|f0x1.4800000000000p+5,i445|f0x1.5000000000000p+5,i445|f0x1.0000000000000p+5,i445|f0x1.0800000000000p+5,i445|f0x1.7000000000000p+4,i445|f0x1.8000000000000p+4,i445|f0x1.c000000000000p+3,i445|f0x1.e000000000000p+3,i445|f0x1.4000000000000p+2,i445|f0x1.6800000000000p+5,i445|f0x1.8000000000000p+2,i445|f0x1.7000000000000p+5,i445|f0x1.2000000000000p+5,i445|f0x1.2800000000000p+5,i445|f0x1.b000000000000p+4,i445|f0x1.c000000000000p+4,i445|f0x1.2000000000000p+4,i445|f0x1.3000000000000p+4,i445|f0x1.2000000000000p+3,i445|f0x1.4000000000000p+5,i444|f0x1.f000000000000p+4,i444|f0x1.6000000000000p+4,i444|f0x1.a000000000000p+3,i444|f0x1.0000000000000p+2,i444|f0x1.6000000000000p+5,i444|f0x1.1800000000000p+5,i444|f0x1.a000000000000p+4,i444|f0x1.1000000000000p+4,i444|f0x1.0000000000000p+3,i444|f0x1.8800000000000p+5,i444|f0x1.e000000000000p+4,i444|f0x1.5000000000000p+4,i444|f0x1.8000000000000p+3,i444|f0x1.8000000000000p+1,i444|f0x1.5800000000000p+5,i444|f0x1.1000000000000p+5,i444|f0x1.9000000000000p+4,i444|f0x1.0000000000000p+4,i444|f0x1.c000000000000p+2,i444|f0x1.8000000000000p+5,i444|f0x1.3800000000000p+5,i444|f0x1.4000000000000p+4,i444|f0x1.6000000000000p+3,i444|f0x1.0000000000000p+1,i444|f0x1.7800000000000p+5,i444|f0x1.3000000000000p+5,i444|f0x1.d000000000000p+4,i444
+472	u	SELECT g, count(DISTINCT d) FROM big GROUP BY g	i0,i52|i1,i2|i2,i3
+473	u	SELECT count(*) FROM (SELECT DISTINCT d FROM big)	i55
+474	o	SELECT count(d), sum(d), avg(d), min(d), max(d), median(d), stddev_samp(d), var_pop(d) FROM t	i11,fnan,fnan,f-inf,fnan,f0x1.8000000000000p+0,fnan,fnan
+475	u	SELECT g, count(d), sum(d), avg(d), min(d), max(d), median(d), stddev_samp(d), var_pop(d) FROM t GROUP BY g	i1,i4,fnan,fnan,f-0x0.0p+0,fnan,fnan,fnan,fnan|i2,i4,fnan,fnan,f-inf,fnan,finf,fnan,fnan|i3,i3,f0x1.8000000000000p+0,f0x1.0000000000000p-1,f-0x0.0p+0,f0x1.8000000000000p+0,f-0x0.0p+0,f0x1.bb67ae8584caap-1,f0x1.0000000000000p-1
+476	o	SELECT min(d), max(d) FROM t WHERE NOT isnan(d)	f-inf,finf
+477	o	SELECT min(d), max(d), sum(d) FROM t WHERE id IN (3, 4)	f-inf,finf,fnan
+478	o	SELECT count(f), sum(f), avg(f), min(f), max(f), median(f), stddev_samp(f), var_pop(f) FROM t	i11,fnan,fnan,f-inf,fnan,f0x1.8000000000000p+0,fnan,fnan
+479	u	SELECT g, count(f), sum(f), avg(f), min(f), max(f), median(f), stddev_samp(f), var_pop(f) FROM t GROUP BY g	i1,i4,fnan,fnan,f-0x0.0p+0,fnan,fnan,fnan,fnan|i2,i4,fnan,fnan,f-inf,fnan,finf,fnan,fnan|i3,i3,f0x1.8000000000000p+0,f0x1.0000000000000p-1,f-0x0.0p+0,f0x1.8000000000000p+0,f-0x0.0p+0,f0x1.bb67ae8584caap-1,f0x1.0000000000000p-1
+480	o	SELECT min(f), max(f) FROM t WHERE NOT isnan(f)	f-inf,finf
+481	o	SELECT min(f), max(f), sum(f) FROM t WHERE id IN (3, 4)	f-inf,finf,fnan
+482	u	SELECT g, min(d), max(d), sum(d) FROM big GROUP BY g	i0,f-inf,fnan,fnan|i1,f0x0.0p+0,fnan,fnan|i2,f-0x0.0p+0,finf,finf
+483	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'nan'::DOUBLE), (1, '1.5'::DOUBLE)) v(i, x)	i2,fnan,fnan,f0x1.8000000000000p+0,fnan,fnan,fnan,fnan
+484	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'nan'::DOUBLE), (1, '1.5'::DOUBLE)) v(i, x))	s1.5,snan
+485	u	SELECT x, count(*) FROM (VALUES (0, 'nan'::DOUBLE), (1, '1.5'::DOUBLE)) v(i, x) GROUP BY x	fnan,i1|f0x1.8000000000000p+0,i1
+486	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '1.5'::DOUBLE), (1, 'nan'::DOUBLE)) v(i, x)	i2,fnan,fnan,f0x1.8000000000000p+0,fnan,fnan,fnan,fnan
+487	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '1.5'::DOUBLE), (1, 'nan'::DOUBLE)) v(i, x))	s1.5,snan
+488	u	SELECT x, count(*) FROM (VALUES (0, '1.5'::DOUBLE), (1, 'nan'::DOUBLE)) v(i, x) GROUP BY x	f0x1.8000000000000p+0,i1|fnan,i1
+489	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'nan'::DOUBLE), (1, -('nan'::DOUBLE))) v(i, x)	i2,fnan,fnan,fnan,fnan,fnan,fnan,fnan
+490	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'nan'::DOUBLE), (1, -('nan'::DOUBLE))) v(i, x))	s-nan,s-nan
+491	u	SELECT x, count(*) FROM (VALUES (0, 'nan'::DOUBLE), (1, -('nan'::DOUBLE))) v(i, x) GROUP BY x	fnan,i2
+492	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, -('nan'::DOUBLE)), (1, 'nan'::DOUBLE)) v(i, x)	i2,fnan,fnan,fnan,fnan,fnan,fnan,fnan
+493	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, -('nan'::DOUBLE)), (1, 'nan'::DOUBLE)) v(i, x))	snan,snan
+494	u	SELECT x, count(*) FROM (VALUES (0, -('nan'::DOUBLE)), (1, 'nan'::DOUBLE)) v(i, x) GROUP BY x	fnan,i2
+495	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'inf'::DOUBLE), (1, '-inf'::DOUBLE)) v(i, x)	i2,fnan,fnan,f-inf,finf,fnan,fnan,fnan
+496	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'inf'::DOUBLE), (1, '-inf'::DOUBLE)) v(i, x))	s-inf,sinf
+497	u	SELECT x, count(*) FROM (VALUES (0, 'inf'::DOUBLE), (1, '-inf'::DOUBLE)) v(i, x) GROUP BY x	finf,i1|f-inf,i1
+498	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '0.0'::DOUBLE), (1, '-0.0'::DOUBLE)) v(i, x)	i2,f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+499	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '0.0'::DOUBLE), (1, '-0.0'::DOUBLE)) v(i, x))	s-0.0,s-0.0
+500	u	SELECT x, count(*) FROM (VALUES (0, '0.0'::DOUBLE), (1, '-0.0'::DOUBLE)) v(i, x) GROUP BY x	f0x0.0p+0,i2
+501	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '-0.0'::DOUBLE), (1, '0.0'::DOUBLE)) v(i, x)	i2,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+502	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '-0.0'::DOUBLE), (1, '0.0'::DOUBLE)) v(i, x))	s0.0,s0.0
+503	u	SELECT x, count(*) FROM (VALUES (0, '-0.0'::DOUBLE), (1, '0.0'::DOUBLE)) v(i, x) GROUP BY x	f-0x0.0p+0,i2
+504	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '0.0'::DOUBLE), (1, '-0.0'::DOUBLE), (2, '0.0'::DOUBLE)) v(i, x)	i3,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+505	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '0.0'::DOUBLE), (1, '-0.0'::DOUBLE), (2, '0.0'::DOUBLE)) v(i, x))	s0.0,s0.0
+506	u	SELECT x, count(*) FROM (VALUES (0, '0.0'::DOUBLE), (1, '-0.0'::DOUBLE), (2, '0.0'::DOUBLE)) v(i, x) GROUP BY x	f0x0.0p+0,i3
+507	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '-0.0'::DOUBLE), (1, '1.5'::DOUBLE), (2, '0.0'::DOUBLE)) v(i, x)	i3,f0x1.8000000000000p+0,f0x1.0000000000000p-1,f0x0.0p+0,f0x1.8000000000000p+0,f0x0.0p+0,f0x1.bb67ae8584caap-1,f0x1.0000000000000p-1
+508	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '-0.0'::DOUBLE), (1, '1.5'::DOUBLE), (2, '0.0'::DOUBLE)) v(i, x))	s0.0,s1.5
+509	u	SELECT x, count(*) FROM (VALUES (0, '-0.0'::DOUBLE), (1, '1.5'::DOUBLE), (2, '0.0'::DOUBLE)) v(i, x) GROUP BY x	f-0x0.0p+0,i2|f0x1.8000000000000p+0,i1
+510	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'inf'::DOUBLE), (1, 'nan'::DOUBLE), (2, '-inf'::DOUBLE)) v(i, x)	i3,fnan,fnan,f-inf,fnan,finf,fnan,fnan
+511	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'inf'::DOUBLE), (1, 'nan'::DOUBLE), (2, '-inf'::DOUBLE)) v(i, x))	s-inf,snan
+512	u	SELECT x, count(*) FROM (VALUES (0, 'inf'::DOUBLE), (1, 'nan'::DOUBLE), (2, '-inf'::DOUBLE)) v(i, x) GROUP BY x	finf,i1|fnan,i1|f-inf,i1
+513	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, NULL::DOUBLE), (1, 'nan'::DOUBLE)) v(i, x)	i1,fnan,fnan,fnan,fnan,fnan,N,f0x0.0p+0
+514	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, NULL::DOUBLE), (1, 'nan'::DOUBLE)) v(i, x))	snan,snan
+515	u	SELECT x, count(*) FROM (VALUES (0, NULL::DOUBLE), (1, 'nan'::DOUBLE)) v(i, x) GROUP BY x	N,i1|fnan,i1
+516	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, NULL::DOUBLE), (1, NULL::DOUBLE)) v(i, x)	i0,N,N,N,N,N,N,N
+517	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, NULL::DOUBLE), (1, NULL::DOUBLE)) v(i, x))	N,N
+518	u	SELECT x, count(*) FROM (VALUES (0, NULL::DOUBLE), (1, NULL::DOUBLE)) v(i, x) GROUP BY x	N,i2
+519	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '-2'::DOUBLE), (1, 'inf'::DOUBLE)) v(i, x)	i2,finf,finf,f-0x1.0000000000000p+1,finf,finf,fnan,fnan
+520	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '-2'::DOUBLE), (1, 'inf'::DOUBLE)) v(i, x))	s-2.0,sinf
+521	u	SELECT x, count(*) FROM (VALUES (0, '-2'::DOUBLE), (1, 'inf'::DOUBLE)) v(i, x) GROUP BY x	f-0x1.0000000000000p+1,i1|finf,i1
+522	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'nan'::DOUBLE), (1, 'nan'::DOUBLE), (2, '1.5'::DOUBLE)) v(i, x)	i3,fnan,fnan,f0x1.8000000000000p+0,fnan,fnan,fnan,fnan
+523	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'nan'::DOUBLE), (1, 'nan'::DOUBLE), (2, '1.5'::DOUBLE)) v(i, x))	s1.5,snan
+524	u	SELECT x, count(*) FROM (VALUES (0, 'nan'::DOUBLE), (1, 'nan'::DOUBLE), (2, '1.5'::DOUBLE)) v(i, x) GROUP BY x	fnan,i2|f0x1.8000000000000p+0,i1
+525	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '-inf'::DOUBLE), (1, '-2'::DOUBLE)) v(i, x)	i2,f-inf,f-inf,f-inf,f-0x1.0000000000000p+1,f-inf,fnan,fnan
+526	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '-inf'::DOUBLE), (1, '-2'::DOUBLE)) v(i, x))	s-inf,s-2.0
+527	u	SELECT x, count(*) FROM (VALUES (0, '-inf'::DOUBLE), (1, '-2'::DOUBLE)) v(i, x) GROUP BY x	f-inf,i1|f-0x1.0000000000000p+1,i1
+528	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'nan'::DOUBLE), (1, '0.0'::DOUBLE), (2, '-0.0'::DOUBLE)) v(i, x)	i3,fnan,fnan,f-0x0.0p+0,fnan,f-0x0.0p+0,fnan,fnan
+529	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'nan'::DOUBLE), (1, '0.0'::DOUBLE), (2, '-0.0'::DOUBLE)) v(i, x))	s-0.0,snan
+530	u	SELECT x, count(*) FROM (VALUES (0, 'nan'::DOUBLE), (1, '0.0'::DOUBLE), (2, '-0.0'::DOUBLE)) v(i, x) GROUP BY x	fnan,i1|f0x0.0p+0,i2
+531	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'nan'::FLOAT), (1, '1.5'::FLOAT)) v(i, x)	i2,fnan,fnan,f0x1.8000000000000p+0,fnan,fnan,fnan,fnan
+532	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'nan'::FLOAT), (1, '1.5'::FLOAT)) v(i, x))	s1.5,snan
+533	u	SELECT x, count(*) FROM (VALUES (0, 'nan'::FLOAT), (1, '1.5'::FLOAT)) v(i, x) GROUP BY x	fnan,i1|f0x1.8000000000000p+0,i1
+534	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '1.5'::FLOAT), (1, 'nan'::FLOAT)) v(i, x)	i2,fnan,fnan,f0x1.8000000000000p+0,fnan,fnan,fnan,fnan
+535	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '1.5'::FLOAT), (1, 'nan'::FLOAT)) v(i, x))	s1.5,snan
+536	u	SELECT x, count(*) FROM (VALUES (0, '1.5'::FLOAT), (1, 'nan'::FLOAT)) v(i, x) GROUP BY x	f0x1.8000000000000p+0,i1|fnan,i1
+537	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'nan'::FLOAT), (1, -('nan'::FLOAT))) v(i, x)	i2,fnan,fnan,fnan,fnan,fnan,fnan,fnan
+538	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'nan'::FLOAT), (1, -('nan'::FLOAT))) v(i, x))	s-nan,s-nan
+539	u	SELECT x, count(*) FROM (VALUES (0, 'nan'::FLOAT), (1, -('nan'::FLOAT))) v(i, x) GROUP BY x	fnan,i2
+540	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, -('nan'::FLOAT)), (1, 'nan'::FLOAT)) v(i, x)	i2,fnan,fnan,fnan,fnan,fnan,fnan,fnan
+541	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, -('nan'::FLOAT)), (1, 'nan'::FLOAT)) v(i, x))	snan,snan
+542	u	SELECT x, count(*) FROM (VALUES (0, -('nan'::FLOAT)), (1, 'nan'::FLOAT)) v(i, x) GROUP BY x	fnan,i2
+543	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'inf'::FLOAT), (1, '-inf'::FLOAT)) v(i, x)	i2,fnan,fnan,f-inf,finf,fnan,fnan,fnan
+544	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'inf'::FLOAT), (1, '-inf'::FLOAT)) v(i, x))	s-inf,sinf
+545	u	SELECT x, count(*) FROM (VALUES (0, 'inf'::FLOAT), (1, '-inf'::FLOAT)) v(i, x) GROUP BY x	finf,i1|f-inf,i1
+546	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '0.0'::FLOAT), (1, '-0.0'::FLOAT)) v(i, x)	i2,f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+547	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '0.0'::FLOAT), (1, '-0.0'::FLOAT)) v(i, x))	s-0.0,s-0.0
+548	u	SELECT x, count(*) FROM (VALUES (0, '0.0'::FLOAT), (1, '-0.0'::FLOAT)) v(i, x) GROUP BY x	f0x0.0p+0,i2
+549	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '-0.0'::FLOAT), (1, '0.0'::FLOAT)) v(i, x)	i2,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+550	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '-0.0'::FLOAT), (1, '0.0'::FLOAT)) v(i, x))	s0.0,s0.0
+551	u	SELECT x, count(*) FROM (VALUES (0, '-0.0'::FLOAT), (1, '0.0'::FLOAT)) v(i, x) GROUP BY x	f-0x0.0p+0,i2
+552	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '0.0'::FLOAT), (1, '-0.0'::FLOAT), (2, '0.0'::FLOAT)) v(i, x)	i3,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+553	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '0.0'::FLOAT), (1, '-0.0'::FLOAT), (2, '0.0'::FLOAT)) v(i, x))	s0.0,s0.0
+554	u	SELECT x, count(*) FROM (VALUES (0, '0.0'::FLOAT), (1, '-0.0'::FLOAT), (2, '0.0'::FLOAT)) v(i, x) GROUP BY x	f0x0.0p+0,i3
+555	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '-0.0'::FLOAT), (1, '1.5'::FLOAT), (2, '0.0'::FLOAT)) v(i, x)	i3,f0x1.8000000000000p+0,f0x1.0000000000000p-1,f0x0.0p+0,f0x1.8000000000000p+0,f0x0.0p+0,f0x1.bb67ae8584caap-1,f0x1.0000000000000p-1
+556	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '-0.0'::FLOAT), (1, '1.5'::FLOAT), (2, '0.0'::FLOAT)) v(i, x))	s0.0,s1.5
+557	u	SELECT x, count(*) FROM (VALUES (0, '-0.0'::FLOAT), (1, '1.5'::FLOAT), (2, '0.0'::FLOAT)) v(i, x) GROUP BY x	f-0x0.0p+0,i2|f0x1.8000000000000p+0,i1
+558	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'inf'::FLOAT), (1, 'nan'::FLOAT), (2, '-inf'::FLOAT)) v(i, x)	i3,fnan,fnan,f-inf,fnan,finf,fnan,fnan
+559	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'inf'::FLOAT), (1, 'nan'::FLOAT), (2, '-inf'::FLOAT)) v(i, x))	s-inf,snan
+560	u	SELECT x, count(*) FROM (VALUES (0, 'inf'::FLOAT), (1, 'nan'::FLOAT), (2, '-inf'::FLOAT)) v(i, x) GROUP BY x	finf,i1|fnan,i1|f-inf,i1
+561	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, NULL::FLOAT), (1, 'nan'::FLOAT)) v(i, x)	i1,fnan,fnan,fnan,fnan,fnan,N,f0x0.0p+0
+562	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, NULL::FLOAT), (1, 'nan'::FLOAT)) v(i, x))	snan,snan
+563	u	SELECT x, count(*) FROM (VALUES (0, NULL::FLOAT), (1, 'nan'::FLOAT)) v(i, x) GROUP BY x	N,i1|fnan,i1
+564	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, NULL::FLOAT), (1, NULL::FLOAT)) v(i, x)	i0,N,N,N,N,N,N,N
+565	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, NULL::FLOAT), (1, NULL::FLOAT)) v(i, x))	N,N
+566	u	SELECT x, count(*) FROM (VALUES (0, NULL::FLOAT), (1, NULL::FLOAT)) v(i, x) GROUP BY x	N,i2
+567	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '-2'::FLOAT), (1, 'inf'::FLOAT)) v(i, x)	i2,finf,finf,f-0x1.0000000000000p+1,finf,finf,fnan,fnan
+568	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '-2'::FLOAT), (1, 'inf'::FLOAT)) v(i, x))	s-2.0,sinf
+569	u	SELECT x, count(*) FROM (VALUES (0, '-2'::FLOAT), (1, 'inf'::FLOAT)) v(i, x) GROUP BY x	f-0x1.0000000000000p+1,i1|finf,i1
+570	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'nan'::FLOAT), (1, 'nan'::FLOAT), (2, '1.5'::FLOAT)) v(i, x)	i3,fnan,fnan,f0x1.8000000000000p+0,fnan,fnan,fnan,fnan
+571	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'nan'::FLOAT), (1, 'nan'::FLOAT), (2, '1.5'::FLOAT)) v(i, x))	s1.5,snan
+572	u	SELECT x, count(*) FROM (VALUES (0, 'nan'::FLOAT), (1, 'nan'::FLOAT), (2, '1.5'::FLOAT)) v(i, x) GROUP BY x	fnan,i2|f0x1.8000000000000p+0,i1
+573	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, '-inf'::FLOAT), (1, '-2'::FLOAT)) v(i, x)	i2,f-inf,f-inf,f-inf,f-0x1.0000000000000p+1,fnan,fnan,fnan
+574	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, '-inf'::FLOAT), (1, '-2'::FLOAT)) v(i, x))	s-inf,s-2.0
+575	u	SELECT x, count(*) FROM (VALUES (0, '-inf'::FLOAT), (1, '-2'::FLOAT)) v(i, x) GROUP BY x	f-inf,i1|f-0x1.0000000000000p+1,i1
+576	o	SELECT count(x), sum(x), avg(x), min(x), max(x), median(x), stddev_samp(x), var_pop(x) FROM (VALUES (0, 'nan'::FLOAT), (1, '0.0'::FLOAT), (2, '-0.0'::FLOAT)) v(i, x)	i3,fnan,fnan,f-0x0.0p+0,fnan,f-0x0.0p+0,fnan,fnan
+577	o	SELECT CAST(m AS VARCHAR), CAST(n AS VARCHAR) FROM (SELECT min(x) AS m, max(x) AS n FROM (VALUES (0, 'nan'::FLOAT), (1, '0.0'::FLOAT), (2, '-0.0'::FLOAT)) v(i, x))	s-0.0,snan
+578	u	SELECT x, count(*) FROM (VALUES (0, 'nan'::FLOAT), (1, '0.0'::FLOAT), (2, '-0.0'::FLOAT)) v(i, x) GROUP BY x	fnan,i1|f0x0.0p+0,i2
+579	u	SELECT a.id, b.id FROM t a JOIN u b ON a.d = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2
+580	u	SELECT a.id, b.id FROM t a LEFT JOIN u b ON a.d = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N
+581	u	SELECT a.id, b.id FROM u b RIGHT JOIN t a ON a.d = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N
+582	u	SELECT a.id, b.id FROM t a FULL JOIN u b ON a.d = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N|N,i6
+583	u	SELECT count(*), sum(a.id) FROM t a JOIN u b ON a.d = b.d	i15,i93
+584	u	SELECT b.id, count(*) FROM t a JOIN u b ON a.d = b.d GROUP BY b.id	i1,i3|i2,i3|i3,i3|i4,i1|i5,i2|i7,i3
+585	u	SELECT a.id, b.id FROM t a JOIN u b ON a.f = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2
+586	u	SELECT a.id, b.id FROM t a LEFT JOIN u b ON a.f = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N
+587	u	SELECT a.id, b.id FROM u b RIGHT JOIN t a ON a.f = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N
+588	u	SELECT a.id, b.id FROM t a FULL JOIN u b ON a.f = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N|N,i6
+589	u	SELECT count(*), sum(a.id) FROM t a JOIN u b ON a.f = b.f	i15,i93
+590	u	SELECT b.id, count(*) FROM t a JOIN u b ON a.f = b.f GROUP BY b.id	i1,i3|i2,i3|i3,i3|i4,i1|i5,i2|i7,i3
+591	u	SELECT a.id, b.id FROM t a JOIN u b ON a.d = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2
+592	u	SELECT a.id, b.id FROM t a LEFT JOIN u b ON a.d = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N
+593	u	SELECT a.id, b.id FROM u b RIGHT JOIN t a ON a.d = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N
+594	u	SELECT a.id, b.id FROM t a FULL JOIN u b ON a.d = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N|N,i6
+595	u	SELECT count(*), sum(a.id) FROM t a JOIN u b ON a.d = b.f	i15,i93
+596	u	SELECT b.id, count(*) FROM t a JOIN u b ON a.d = b.f GROUP BY b.id	i1,i3|i2,i3|i3,i3|i4,i1|i5,i2|i7,i3
+597	u	SELECT a.id, b.id FROM t a JOIN u b ON a.f = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2
+598	u	SELECT a.id, b.id FROM t a LEFT JOIN u b ON a.f = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N
+599	u	SELECT a.id, b.id FROM u b RIGHT JOIN t a ON a.f = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N
+600	u	SELECT a.id, b.id FROM t a FULL JOIN u b ON a.f = b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2|i4,N|i8,N|i9,N|N,i6
+601	u	SELECT count(*), sum(a.id) FROM t a JOIN u b ON a.f = b.d	i15,i93
+602	u	SELECT b.id, count(*) FROM t a JOIN u b ON a.f = b.d GROUP BY b.id	i1,i3|i2,i3|i3,i3|i4,i1|i5,i2|i7,i3
+603	u	SELECT a.id, b.id FROM t a JOIN u b ON a.d = b.d AND a.f = b.f	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2
+604	u	SELECT a.id, b.id FROM t a JOIN u b ON a.d = b.d AND a.id < b.id	i1,i7|i2,i7|i3,i4
+605	u	SELECT a.id, b.id FROM t a JOIN u b ON a.d IS NOT DISTINCT FROM b.d	i1,i7|i2,i7|i3,i4|i5,i3|i6,i3|i7,i5|i9,i6|i10,i7|i11,i5|i12,i3|i1,i1|i2,i1|i5,i2|i6,i2|i10,i1|i12,i2
+606	o	SELECT sum(a.d), min(a.d), max(a.f), avg(a.f) FROM t a JOIN u b ON a.id = b.id	fnan,f-inf,fnan,fnan
+607	u	SELECT b.d, count(*), max(a.d) FROM t a JOIN u b ON a.id = b.id GROUP BY b.d	fnan,i2,fnan|f0x0.0p+0,i2,fnan|finf,i1,f-inf|f0x1.8000000000000p+0,i1,f0x0.0p+0|N,i1,f-0x0.0p+0
+608	u	SELECT count(*), sum(b.id) FROM t a JOIN (SELECT id, d FROM big WHERE id < 2000) b ON a.d = b.d	i3573,i3571527
+609	u	SELECT a.id, count(*) FROM t a JOIN (SELECT id, d FROM big WHERE id < 2000) b ON a.d = b.d GROUP BY a.id	i1,i446|i2,i446|i3,i222|i4,i222|i5,i449|i6,i449|i7,i222|i10,i446|i11,i222|i12,i449
+610	u	SELECT count(*) FROM (SELECT id, d FROM big WHERE id < 2000) a JOIN u b ON a.d = b.d	i2234
+611	u	SELECT id FROM t WHERE d IN (SELECT d FROM u)	i1|i2|i3|i5|i6|i7|i10|i11|i12
+612	u	SELECT id FROM t WHERE d NOT IN (SELECT d FROM u WHERE d IS NOT NULL)	i4|i8
+613	u	SELECT id FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.d = t.d)	i1|i2|i3|i5|i6|i7|i10|i11|i12
+614	uL	SELECT d FROM t UNION SELECT d FROM u	fnan|finf|f-inf|f0x0.0p+0|f0x1.8000000000000p+0|f-0x1.0000000000000p+1|N
+615	uL	SELECT f FROM t UNION SELECT f FROM u	fnan|finf|f-inf|f0x0.0p+0|f0x1.8000000000000p+0|f-0x1.0000000000000p+1|N
+616	uL	SELECT id % 2, d FROM t UNION SELECT id % 2, d FROM u	i1,fnan|i0,fnan|i1,finf|i0,f-inf|i1,f0x0.0p+0|i0,f-0x0.0p+0|i1,f0x1.8000000000000p+0|i0,f-0x1.0000000000000p+1|i1,N|i0,finf|i0,N
+617	uL	SELECT d FROM t INTERSECT SELECT d FROM u	fnan|finf|f0x0.0p+0|f0x1.8000000000000p+0|N
+618	uL	SELECT f FROM t INTERSECT SELECT f FROM u	fnan|finf|f0x0.0p+0|f0x1.8000000000000p+0|N
+619	uL	SELECT id % 2, d FROM t INTERSECT SELECT id % 2, d FROM u	i1,fnan|i1,f0x0.0p+0|i0,f-0x0.0p+0|i1,f0x1.8000000000000p+0
+620	uL	SELECT d FROM t EXCEPT SELECT d FROM u	f-inf|f-0x1.0000000000000p+1
+621	uL	SELECT f FROM t EXCEPT SELECT f FROM u	f-inf|f-0x1.0000000000000p+1
+622	uL	SELECT id % 2, d FROM t EXCEPT SELECT id % 2, d FROM u	i0,fnan|i1,finf|i0,f-inf|i0,f-0x1.0000000000000p+1|i1,N
+623	uL	SELECT d FROM t UNION ALL SELECT d FROM u	fnan|fnan|finf|f-inf|f0x0.0p+0|f-0x0.0p+0|f0x1.8000000000000p+0|f-0x1.0000000000000p+1|N|fnan|f0x1.8000000000000p+0|f-0x0.0p+0|fnan|f0x0.0p+0|f-0x0.0p+0|finf|f0x1.8000000000000p+0|N|fnan
+624	uL	SELECT f FROM t UNION ALL SELECT f FROM u	fnan|fnan|finf|f-inf|f0x0.0p+0|f-0x0.0p+0|f0x1.8000000000000p+0|f-0x1.0000000000000p+1|N|fnan|f0x1.8000000000000p+0|f-0x0.0p+0|fnan|f0x0.0p+0|f-0x0.0p+0|finf|f0x1.8000000000000p+0|N|fnan
+625	uL	SELECT id % 2, d FROM t UNION ALL SELECT id % 2, d FROM u	i1,fnan|i0,fnan|i1,finf|i0,f-inf|i1,f0x0.0p+0|i0,f-0x0.0p+0|i1,f0x1.8000000000000p+0|i0,f-0x1.0000000000000p+1|i1,N|i0,fnan|i1,f0x1.8000000000000p+0|i0,f-0x0.0p+0|i1,fnan|i0,f0x0.0p+0|i1,f-0x0.0p+0|i0,finf|i1,f0x1.8000000000000p+0|i0,N|i1,fnan
+626	u	SELECT count(*) FROM (SELECT d FROM t UNION SELECT d FROM u)	i7
+627	u	SELECT id, rank() OVER (ORDER BY d) FROM t	i4,i1|i8,i2|i5,i3|i6,i3|i12,i3|i7,i6|i11,i6|i3,i8|i1,i9|i2,i9|i10,i9|i9,i12
+628	u	SELECT id, dense_rank() OVER (ORDER BY d DESC) FROM t	i1,i1|i2,i1|i10,i1|i3,i2|i7,i3|i11,i3|i5,i4|i6,i4|i12,i4|i8,i5|i4,i6|i9,i7
+629	u	SELECT id, row_number() OVER (ORDER BY d, id) FROM t	i4,i1|i8,i2|i5,i3|i6,i4|i12,i5|i7,i6|i11,i7|i3,i8|i1,i9|i2,i10|i10,i11|i9,i12
+630	u	SELECT id, row_number() OVER (PARTITION BY d ORDER BY id) FROM t	i1,i1|i2,i2|i10,i3|i4,i1|i9,i1|i3,i1|i8,i1|i7,i1|i11,i2|i5,i1|i6,i2|i12,i3
+631	u	SELECT id, count(*) OVER (PARTITION BY d) FROM t	i1,i3|i2,i3|i3,i1|i4,i1|i5,i3|i6,i3|i7,i2|i8,i1|i9,i1|i10,i3|i11,i2|i12,i3
+632	u	SELECT id, sum(id) OVER (PARTITION BY d) FROM t	i1,i13|i2,i13|i3,i3|i4,i4|i5,i23|i6,i23|i7,i18|i8,i8|i9,i9|i10,i13|i11,i18|i12,i23
+633	u	SELECT id, min(d) OVER (PARTITION BY g), max(d) OVER (PARTITION BY g) FROM t	i1,f-0x0.0p+0,fnan|i2,f-0x0.0p+0,fnan|i3,f-inf,fnan|i4,f-inf,fnan|i5,f-0x0.0p+0,f0x1.8000000000000p+0|i6,f-0x0.0p+0,f0x1.8000000000000p+0|i7,f-0x0.0p+0,fnan|i8,f-inf,fnan|i9,f-0x0.0p+0,f0x1.8000000000000p+0|i10,f-inf,fnan|i11,f-0x0.0p+0,f0x1.8000000000000p+0|i12,f-0x0.0p+0,fnan
+634	u	SELECT id, sum(d) OVER (PARTITION BY g ORDER BY id) FROM t	i5,f0x0.0p+0|i6,f0x0.0p+0|i9,f0x0.0p+0|i11,f0x1.8000000000000p+0|i1,fnan|i2,fnan|i7,fnan|i12,fnan|i3,finf|i4,fnan|i8,fnan|i10,fnan
+635	u	SELECT id, max(d) OVER (PARTITION BY g ORDER BY id) FROM t	i5,f0x0.0p+0|i6,f-0x0.0p+0|i9,f-0x0.0p+0|i11,f0x1.8000000000000p+0|i1,fnan|i2,fnan|i7,fnan|i12,fnan|i3,finf|i4,finf|i8,finf|i10,fnan
+636	u	SELECT id, count(*) OVER (ORDER BY d) FROM t	i4,i1|i8,i2|i5,i5|i6,i5|i12,i5|i7,i7|i11,i7|i3,i8|i1,i11|i2,i11|i10,i11|i9,i12
+637	u	SELECT id, lag(d) OVER (ORDER BY id), lead(d) OVER (ORDER BY id) FROM t	i1,N,fnan|i2,fnan,finf|i3,fnan,f-inf|i4,finf,f0x0.0p+0|i5,f-inf,f-0x0.0p+0|i6,f0x0.0p+0,f0x1.8000000000000p+0|i7,f-0x0.0p+0,f-0x1.0000000000000p+1|i8,f0x1.8000000000000p+0,N|i9,f-0x1.0000000000000p+1,fnan|i10,N,f0x1.8000000000000p+0|i11,fnan,f-0x0.0p+0|i12,f0x1.8000000000000p+0,N
+638	u	SELECT id, first_value(d) OVER (PARTITION BY g ORDER BY id) FROM t	i5,f0x0.0p+0|i6,f0x0.0p+0|i9,f0x0.0p+0|i11,f0x0.0p+0|i1,fnan|i2,fnan|i7,fnan|i12,fnan|i3,finf|i4,finf|i8,finf|i10,finf
+639	u	SELECT id FROM t QUALIFY row_number() OVER (PARTITION BY g ORDER BY d, id) = 1	i5|i12|i4
+640	u	SELECT id FROM t QUALIFY rank() OVER (ORDER BY d) <= 3	i4|i8|i5|i6|i12
+641	u	SELECT id, ntile(3) OVER (ORDER BY d, id) FROM t	i4,i1|i8,i1|i5,i1|i6,i1|i12,i2|i7,i2|i11,i2|i3,i2|i1,i3|i2,i3|i10,i3|i9,i3
+642	u	SELECT id, rank() OVER (ORDER BY f) FROM t	i4,i1|i8,i2|i5,i3|i6,i3|i12,i3|i7,i6|i11,i6|i3,i8|i1,i9|i2,i9|i10,i9|i9,i12
+643	u	SELECT id, dense_rank() OVER (ORDER BY f DESC) FROM t	i1,i1|i2,i1|i10,i1|i3,i2|i7,i3|i11,i3|i5,i4|i6,i4|i12,i4|i8,i5|i4,i6|i9,i7
+644	u	SELECT id, row_number() OVER (ORDER BY f, id) FROM t	i4,i1|i8,i2|i5,i3|i6,i4|i12,i5|i7,i6|i11,i7|i3,i8|i1,i9|i2,i10|i10,i11|i9,i12
+645	u	SELECT id, row_number() OVER (PARTITION BY f ORDER BY id) FROM t	i7,i1|i11,i2|i3,i1|i8,i1|i4,i1|i9,i1|i1,i1|i2,i2|i10,i3|i5,i1|i6,i2|i12,i3
+646	u	SELECT id, count(*) OVER (PARTITION BY f) FROM t	i1,i3|i2,i3|i3,i1|i4,i1|i5,i3|i6,i3|i7,i2|i8,i1|i9,i1|i10,i3|i11,i2|i12,i3
+647	u	SELECT id, sum(id) OVER (PARTITION BY f) FROM t	i1,i13|i2,i13|i3,i3|i4,i4|i5,i23|i6,i23|i7,i18|i8,i8|i9,i9|i10,i13|i11,i18|i12,i23
+648	u	SELECT id, min(f) OVER (PARTITION BY g), max(f) OVER (PARTITION BY g) FROM t	i1,f-0x0.0p+0,fnan|i2,f-0x0.0p+0,fnan|i3,f-inf,fnan|i4,f-inf,fnan|i5,f-0x0.0p+0,f0x1.8000000000000p+0|i6,f-0x0.0p+0,f0x1.8000000000000p+0|i7,f-0x0.0p+0,fnan|i8,f-inf,fnan|i9,f-0x0.0p+0,f0x1.8000000000000p+0|i10,f-inf,fnan|i11,f-0x0.0p+0,f0x1.8000000000000p+0|i12,f-0x0.0p+0,fnan
+649	u	SELECT id, sum(f) OVER (PARTITION BY g ORDER BY id) FROM t	i5,f0x0.0p+0|i6,f0x0.0p+0|i9,f0x0.0p+0|i11,f0x1.8000000000000p+0|i1,fnan|i2,fnan|i7,fnan|i12,fnan|i3,finf|i4,fnan|i8,fnan|i10,fnan
+650	u	SELECT id, max(f) OVER (PARTITION BY g ORDER BY id) FROM t	i5,f0x0.0p+0|i6,f-0x0.0p+0|i9,f-0x0.0p+0|i11,f0x1.8000000000000p+0|i1,fnan|i2,fnan|i7,fnan|i12,fnan|i3,finf|i4,finf|i8,finf|i10,fnan
+651	u	SELECT id, count(*) OVER (ORDER BY f) FROM t	i4,i1|i8,i2|i5,i5|i6,i5|i12,i5|i7,i7|i11,i7|i3,i8|i1,i11|i2,i11|i10,i11|i9,i12
+652	u	SELECT id, lag(f) OVER (ORDER BY id), lead(f) OVER (ORDER BY id) FROM t	i1,N,fnan|i2,fnan,finf|i3,fnan,f-inf|i4,finf,f0x0.0p+0|i5,f-inf,f-0x0.0p+0|i6,f0x0.0p+0,f0x1.8000000000000p+0|i7,f-0x0.0p+0,f-0x1.0000000000000p+1|i8,f0x1.8000000000000p+0,N|i9,f-0x1.0000000000000p+1,fnan|i10,N,f0x1.8000000000000p+0|i11,fnan,f-0x0.0p+0|i12,f0x1.8000000000000p+0,N
+653	u	SELECT id, first_value(f) OVER (PARTITION BY g ORDER BY id) FROM t	i5,f0x0.0p+0|i6,f0x0.0p+0|i9,f0x0.0p+0|i11,f0x0.0p+0|i1,fnan|i2,fnan|i7,fnan|i12,fnan|i3,finf|i4,finf|i8,finf|i10,finf
+654	u	SELECT id FROM t QUALIFY row_number() OVER (PARTITION BY g ORDER BY f, id) = 1	i5|i12|i4
+655	u	SELECT id FROM t QUALIFY rank() OVER (ORDER BY f) <= 3	i4|i8|i5|i6|i12
+656	u	SELECT id, ntile(3) OVER (ORDER BY f, id) FROM t	i4,i1|i8,i1|i5,i1|i6,i1|i12,i2|i7,i2|i11,i2|i3,i2|i1,i3|i2,i3|i10,i3|i9,i3
+657	u	SELECT g, sum(r), max(r) FROM (SELECT g, rank() OVER (PARTITION BY g ORDER BY d) AS r FROM big) GROUP BY g	i0,i1723533426,i44445|i1,i1481562963,i44446|i2,i1481518518,i44445
+658	u	SELECT g, sum(r) FROM (SELECT g, row_number() OVER (PARTITION BY g ORDER BY d, id) AS r FROM big QUALIFY r <= 10) GROUP BY g	i0,i55|i1,i55|i2,i55
+659	u	SELECT count(*) FROM (SELECT d, dense_rank() OVER (ORDER BY d) AS r FROM big) WHERE r = 1	i22222
+660	o	SELECT CAST('nan'::DOUBLE AS INTEGER)	error
+661	o	SELECT TRY_CAST('nan'::DOUBLE AS INTEGER)	N
+662	o	SELECT CAST('nan'::DOUBLE AS BIGINT)	error
+663	o	SELECT TRY_CAST('nan'::DOUBLE AS BIGINT)	N
+664	o	SELECT CAST('nan'::DOUBLE AS SMALLINT)	error
+665	o	SELECT TRY_CAST('nan'::DOUBLE AS SMALLINT)	N
+666	o	SELECT CAST('nan'::DOUBLE AS BOOLEAN)	b1
+667	o	SELECT TRY_CAST('nan'::DOUBLE AS BOOLEAN)	b1
+668	o	SELECT CAST('nan'::DOUBLE AS VARCHAR)	snan
+669	o	SELECT CAST('nan'::DOUBLE AS DOUBLE), CAST('nan'::DOUBLE AS FLOAT)	fnan,fnan
+670	o	SELECT CAST(-('nan'::DOUBLE) AS INTEGER)	error
+671	o	SELECT TRY_CAST(-('nan'::DOUBLE) AS INTEGER)	N
+672	o	SELECT CAST(-('nan'::DOUBLE) AS BIGINT)	error
+673	o	SELECT TRY_CAST(-('nan'::DOUBLE) AS BIGINT)	N
+674	o	SELECT CAST(-('nan'::DOUBLE) AS SMALLINT)	error
+675	o	SELECT TRY_CAST(-('nan'::DOUBLE) AS SMALLINT)	N
+676	o	SELECT CAST(-('nan'::DOUBLE) AS BOOLEAN)	b1
+677	o	SELECT TRY_CAST(-('nan'::DOUBLE) AS BOOLEAN)	b1
+678	o	SELECT CAST(-('nan'::DOUBLE) AS VARCHAR)	s-nan
+679	o	SELECT CAST(-('nan'::DOUBLE) AS DOUBLE), CAST(-('nan'::DOUBLE) AS FLOAT)	fnan,fnan
+680	o	SELECT CAST('inf'::DOUBLE AS INTEGER)	error
+681	o	SELECT TRY_CAST('inf'::DOUBLE AS INTEGER)	N
+682	o	SELECT CAST('inf'::DOUBLE AS BIGINT)	error
+683	o	SELECT TRY_CAST('inf'::DOUBLE AS BIGINT)	N
+684	o	SELECT CAST('inf'::DOUBLE AS SMALLINT)	error
+685	o	SELECT TRY_CAST('inf'::DOUBLE AS SMALLINT)	N
+686	o	SELECT CAST('inf'::DOUBLE AS BOOLEAN)	b1
+687	o	SELECT TRY_CAST('inf'::DOUBLE AS BOOLEAN)	b1
+688	o	SELECT CAST('inf'::DOUBLE AS VARCHAR)	sinf
+689	o	SELECT CAST('inf'::DOUBLE AS DOUBLE), CAST('inf'::DOUBLE AS FLOAT)	finf,finf
+690	o	SELECT CAST('-inf'::DOUBLE AS INTEGER)	error
+691	o	SELECT TRY_CAST('-inf'::DOUBLE AS INTEGER)	N
+692	o	SELECT CAST('-inf'::DOUBLE AS BIGINT)	error
+693	o	SELECT TRY_CAST('-inf'::DOUBLE AS BIGINT)	N
+694	o	SELECT CAST('-inf'::DOUBLE AS SMALLINT)	error
+695	o	SELECT TRY_CAST('-inf'::DOUBLE AS SMALLINT)	N
+696	o	SELECT CAST('-inf'::DOUBLE AS BOOLEAN)	b1
+697	o	SELECT TRY_CAST('-inf'::DOUBLE AS BOOLEAN)	b1
+698	o	SELECT CAST('-inf'::DOUBLE AS VARCHAR)	s-inf
+699	o	SELECT CAST('-inf'::DOUBLE AS DOUBLE), CAST('-inf'::DOUBLE AS FLOAT)	f-inf,f-inf
+700	o	SELECT CAST('0.0'::DOUBLE AS INTEGER)	i0
+701	o	SELECT TRY_CAST('0.0'::DOUBLE AS INTEGER)	i0
+702	o	SELECT CAST('0.0'::DOUBLE AS BIGINT)	i0
+703	o	SELECT TRY_CAST('0.0'::DOUBLE AS BIGINT)	i0
+704	o	SELECT CAST('0.0'::DOUBLE AS SMALLINT)	i0
+705	o	SELECT TRY_CAST('0.0'::DOUBLE AS SMALLINT)	i0
+706	o	SELECT CAST('0.0'::DOUBLE AS BOOLEAN)	b0
+707	o	SELECT TRY_CAST('0.0'::DOUBLE AS BOOLEAN)	b0
+708	o	SELECT CAST('0.0'::DOUBLE AS VARCHAR)	s0.0
+709	o	SELECT CAST('0.0'::DOUBLE AS DOUBLE), CAST('0.0'::DOUBLE AS FLOAT)	f0x0.0p+0,f0x0.0p+0
+710	o	SELECT CAST('-0.0'::DOUBLE AS INTEGER)	i0
+711	o	SELECT TRY_CAST('-0.0'::DOUBLE AS INTEGER)	i0
+712	o	SELECT CAST('-0.0'::DOUBLE AS BIGINT)	i0
+713	o	SELECT TRY_CAST('-0.0'::DOUBLE AS BIGINT)	i0
+714	o	SELECT CAST('-0.0'::DOUBLE AS SMALLINT)	i0
+715	o	SELECT TRY_CAST('-0.0'::DOUBLE AS SMALLINT)	i0
+716	o	SELECT CAST('-0.0'::DOUBLE AS BOOLEAN)	b0
+717	o	SELECT TRY_CAST('-0.0'::DOUBLE AS BOOLEAN)	b0
+718	o	SELECT CAST('-0.0'::DOUBLE AS VARCHAR)	s-0.0
+719	o	SELECT CAST('-0.0'::DOUBLE AS DOUBLE), CAST('-0.0'::DOUBLE AS FLOAT)	f-0x0.0p+0,f-0x0.0p+0
+720	o	SELECT CAST('1.5'::DOUBLE AS INTEGER)	i2
+721	o	SELECT TRY_CAST('1.5'::DOUBLE AS INTEGER)	i2
+722	o	SELECT CAST('1.5'::DOUBLE AS BIGINT)	i2
+723	o	SELECT TRY_CAST('1.5'::DOUBLE AS BIGINT)	i2
+724	o	SELECT CAST('1.5'::DOUBLE AS SMALLINT)	i2
+725	o	SELECT TRY_CAST('1.5'::DOUBLE AS SMALLINT)	i2
+726	o	SELECT CAST('1.5'::DOUBLE AS BOOLEAN)	b1
+727	o	SELECT TRY_CAST('1.5'::DOUBLE AS BOOLEAN)	b1
+728	o	SELECT CAST('1.5'::DOUBLE AS VARCHAR)	s1.5
+729	o	SELECT CAST('1.5'::DOUBLE AS DOUBLE), CAST('1.5'::DOUBLE AS FLOAT)	f0x1.8000000000000p+0,f0x1.8000000000000p+0
+730	o	SELECT CAST('-2'::DOUBLE AS INTEGER)	i-2
+731	o	SELECT TRY_CAST('-2'::DOUBLE AS INTEGER)	i-2
+732	o	SELECT CAST('-2'::DOUBLE AS BIGINT)	i-2
+733	o	SELECT TRY_CAST('-2'::DOUBLE AS BIGINT)	i-2
+734	o	SELECT CAST('-2'::DOUBLE AS SMALLINT)	i-2
+735	o	SELECT TRY_CAST('-2'::DOUBLE AS SMALLINT)	i-2
+736	o	SELECT CAST('-2'::DOUBLE AS BOOLEAN)	b1
+737	o	SELECT TRY_CAST('-2'::DOUBLE AS BOOLEAN)	b1
+738	o	SELECT CAST('-2'::DOUBLE AS VARCHAR)	s-2.0
+739	o	SELECT CAST('-2'::DOUBLE AS DOUBLE), CAST('-2'::DOUBLE AS FLOAT)	f-0x1.0000000000000p+1,f-0x1.0000000000000p+1
+740	o	SELECT CAST(NULL::DOUBLE AS INTEGER)	N
+741	o	SELECT TRY_CAST(NULL::DOUBLE AS INTEGER)	N
+742	o	SELECT CAST(NULL::DOUBLE AS BIGINT)	N
+743	o	SELECT TRY_CAST(NULL::DOUBLE AS BIGINT)	N
+744	o	SELECT CAST(NULL::DOUBLE AS SMALLINT)	N
+745	o	SELECT TRY_CAST(NULL::DOUBLE AS SMALLINT)	N
+746	o	SELECT CAST(NULL::DOUBLE AS BOOLEAN)	N
+747	o	SELECT TRY_CAST(NULL::DOUBLE AS BOOLEAN)	N
+748	o	SELECT CAST(NULL::DOUBLE AS VARCHAR)	N
+749	o	SELECT CAST(NULL::DOUBLE AS DOUBLE), CAST(NULL::DOUBLE AS FLOAT)	N,N
+750	o	SELECT CAST('nan'::FLOAT AS INTEGER)	error
+751	o	SELECT TRY_CAST('nan'::FLOAT AS INTEGER)	N
+752	o	SELECT CAST('nan'::FLOAT AS BIGINT)	error
+753	o	SELECT TRY_CAST('nan'::FLOAT AS BIGINT)	N
+754	o	SELECT CAST('nan'::FLOAT AS SMALLINT)	error
+755	o	SELECT TRY_CAST('nan'::FLOAT AS SMALLINT)	N
+756	o	SELECT CAST('nan'::FLOAT AS BOOLEAN)	b1
+757	o	SELECT TRY_CAST('nan'::FLOAT AS BOOLEAN)	b1
+758	o	SELECT CAST('nan'::FLOAT AS VARCHAR)	snan
+759	o	SELECT CAST('nan'::FLOAT AS DOUBLE), CAST('nan'::FLOAT AS FLOAT)	fnan,fnan
+760	o	SELECT CAST(-('nan'::FLOAT) AS INTEGER)	error
+761	o	SELECT TRY_CAST(-('nan'::FLOAT) AS INTEGER)	N
+762	o	SELECT CAST(-('nan'::FLOAT) AS BIGINT)	error
+763	o	SELECT TRY_CAST(-('nan'::FLOAT) AS BIGINT)	N
+764	o	SELECT CAST(-('nan'::FLOAT) AS SMALLINT)	error
+765	o	SELECT TRY_CAST(-('nan'::FLOAT) AS SMALLINT)	N
+766	o	SELECT CAST(-('nan'::FLOAT) AS BOOLEAN)	b1
+767	o	SELECT TRY_CAST(-('nan'::FLOAT) AS BOOLEAN)	b1
+768	o	SELECT CAST(-('nan'::FLOAT) AS VARCHAR)	s-nan
+769	o	SELECT CAST(-('nan'::FLOAT) AS DOUBLE), CAST(-('nan'::FLOAT) AS FLOAT)	fnan,fnan
+770	o	SELECT CAST('inf'::FLOAT AS INTEGER)	error
+771	o	SELECT TRY_CAST('inf'::FLOAT AS INTEGER)	N
+772	o	SELECT CAST('inf'::FLOAT AS BIGINT)	error
+773	o	SELECT TRY_CAST('inf'::FLOAT AS BIGINT)	N
+774	o	SELECT CAST('inf'::FLOAT AS SMALLINT)	error
+775	o	SELECT TRY_CAST('inf'::FLOAT AS SMALLINT)	N
+776	o	SELECT CAST('inf'::FLOAT AS BOOLEAN)	b1
+777	o	SELECT TRY_CAST('inf'::FLOAT AS BOOLEAN)	b1
+778	o	SELECT CAST('inf'::FLOAT AS VARCHAR)	sinf
+779	o	SELECT CAST('inf'::FLOAT AS DOUBLE), CAST('inf'::FLOAT AS FLOAT)	finf,finf
+780	o	SELECT CAST('-inf'::FLOAT AS INTEGER)	error
+781	o	SELECT TRY_CAST('-inf'::FLOAT AS INTEGER)	N
+782	o	SELECT CAST('-inf'::FLOAT AS BIGINT)	error
+783	o	SELECT TRY_CAST('-inf'::FLOAT AS BIGINT)	N
+784	o	SELECT CAST('-inf'::FLOAT AS SMALLINT)	error
+785	o	SELECT TRY_CAST('-inf'::FLOAT AS SMALLINT)	N
+786	o	SELECT CAST('-inf'::FLOAT AS BOOLEAN)	b1
+787	o	SELECT TRY_CAST('-inf'::FLOAT AS BOOLEAN)	b1
+788	o	SELECT CAST('-inf'::FLOAT AS VARCHAR)	s-inf
+789	o	SELECT CAST('-inf'::FLOAT AS DOUBLE), CAST('-inf'::FLOAT AS FLOAT)	f-inf,f-inf
+790	o	SELECT CAST('0.0'::FLOAT AS INTEGER)	i0
+791	o	SELECT TRY_CAST('0.0'::FLOAT AS INTEGER)	i0
+792	o	SELECT CAST('0.0'::FLOAT AS BIGINT)	i0
+793	o	SELECT TRY_CAST('0.0'::FLOAT AS BIGINT)	i0
+794	o	SELECT CAST('0.0'::FLOAT AS SMALLINT)	i0
+795	o	SELECT TRY_CAST('0.0'::FLOAT AS SMALLINT)	i0
+796	o	SELECT CAST('0.0'::FLOAT AS BOOLEAN)	b0
+797	o	SELECT TRY_CAST('0.0'::FLOAT AS BOOLEAN)	b0
+798	o	SELECT CAST('0.0'::FLOAT AS VARCHAR)	s0.0
+799	o	SELECT CAST('0.0'::FLOAT AS DOUBLE), CAST('0.0'::FLOAT AS FLOAT)	f0x0.0p+0,f0x0.0p+0
+800	o	SELECT CAST('-0.0'::FLOAT AS INTEGER)	i0
+801	o	SELECT TRY_CAST('-0.0'::FLOAT AS INTEGER)	i0
+802	o	SELECT CAST('-0.0'::FLOAT AS BIGINT)	i0
+803	o	SELECT TRY_CAST('-0.0'::FLOAT AS BIGINT)	i0
+804	o	SELECT CAST('-0.0'::FLOAT AS SMALLINT)	i0
+805	o	SELECT TRY_CAST('-0.0'::FLOAT AS SMALLINT)	i0
+806	o	SELECT CAST('-0.0'::FLOAT AS BOOLEAN)	b0
+807	o	SELECT TRY_CAST('-0.0'::FLOAT AS BOOLEAN)	b0
+808	o	SELECT CAST('-0.0'::FLOAT AS VARCHAR)	s-0.0
+809	o	SELECT CAST('-0.0'::FLOAT AS DOUBLE), CAST('-0.0'::FLOAT AS FLOAT)	f-0x0.0p+0,f-0x0.0p+0
+810	o	SELECT CAST('1.5'::FLOAT AS INTEGER)	i2
+811	o	SELECT TRY_CAST('1.5'::FLOAT AS INTEGER)	i2
+812	o	SELECT CAST('1.5'::FLOAT AS BIGINT)	i2
+813	o	SELECT TRY_CAST('1.5'::FLOAT AS BIGINT)	i2
+814	o	SELECT CAST('1.5'::FLOAT AS SMALLINT)	i2
+815	o	SELECT TRY_CAST('1.5'::FLOAT AS SMALLINT)	i2
+816	o	SELECT CAST('1.5'::FLOAT AS BOOLEAN)	b1
+817	o	SELECT TRY_CAST('1.5'::FLOAT AS BOOLEAN)	b1
+818	o	SELECT CAST('1.5'::FLOAT AS VARCHAR)	s1.5
+819	o	SELECT CAST('1.5'::FLOAT AS DOUBLE), CAST('1.5'::FLOAT AS FLOAT)	f0x1.8000000000000p+0,f0x1.8000000000000p+0
+820	o	SELECT CAST('-2'::FLOAT AS INTEGER)	i-2
+821	o	SELECT TRY_CAST('-2'::FLOAT AS INTEGER)	i-2
+822	o	SELECT CAST('-2'::FLOAT AS BIGINT)	i-2
+823	o	SELECT TRY_CAST('-2'::FLOAT AS BIGINT)	i-2
+824	o	SELECT CAST('-2'::FLOAT AS SMALLINT)	i-2
+825	o	SELECT TRY_CAST('-2'::FLOAT AS SMALLINT)	i-2
+826	o	SELECT CAST('-2'::FLOAT AS BOOLEAN)	b1
+827	o	SELECT TRY_CAST('-2'::FLOAT AS BOOLEAN)	b1
+828	o	SELECT CAST('-2'::FLOAT AS VARCHAR)	s-2.0
+829	o	SELECT CAST('-2'::FLOAT AS DOUBLE), CAST('-2'::FLOAT AS FLOAT)	f-0x1.0000000000000p+1,f-0x1.0000000000000p+1
+830	o	SELECT CAST(NULL::FLOAT AS INTEGER)	N
+831	o	SELECT TRY_CAST(NULL::FLOAT AS INTEGER)	N
+832	o	SELECT CAST(NULL::FLOAT AS BIGINT)	N
+833	o	SELECT TRY_CAST(NULL::FLOAT AS BIGINT)	N
+834	o	SELECT CAST(NULL::FLOAT AS SMALLINT)	N
+835	o	SELECT TRY_CAST(NULL::FLOAT AS SMALLINT)	N
+836	o	SELECT CAST(NULL::FLOAT AS BOOLEAN)	N
+837	o	SELECT TRY_CAST(NULL::FLOAT AS BOOLEAN)	N
+838	o	SELECT CAST(NULL::FLOAT AS VARCHAR)	N
+839	o	SELECT CAST(NULL::FLOAT AS DOUBLE), CAST(NULL::FLOAT AS FLOAT)	N,N
+840	u	SELECT id, CAST(d AS VARCHAR) FROM t	i1,snan|i2,s-nan|i3,sinf|i4,s-inf|i5,s0.0|i6,s-0.0|i7,s1.5|i8,s-2.0|i9,N|i10,snan|i11,s1.5|i12,s-0.0
+841	u	SELECT id, TRY_CAST(d AS INTEGER) FROM t	i1,N|i2,N|i3,N|i4,N|i5,i0|i6,i0|i7,i2|i8,i-2|i9,N|i10,N|i11,i2|i12,i0
+842	u	SELECT id, CAST(d AS BOOLEAN) FROM t	i1,b1|i2,b1|i3,b1|i4,b1|i5,b0|i6,b0|i7,b1|i8,b1|i9,N|i10,b1|i11,b1|i12,b0
+843	u	SELECT id, d || '' FROM t	i1,snan|i2,s-nan|i3,sinf|i4,s-inf|i5,s0.0|i6,s-0.0|i7,s1.5|i8,s-2.0|i9,N|i10,snan|i11,s1.5|i12,s-0.0
+844	u	SELECT id, CAST(d AS INTEGER) FROM t WHERE d = 1.5	i7,i2|i11,i2
+845	u	SELECT CAST(d AS INTEGER) FROM t	error
+846	u	SELECT id, CAST(f AS VARCHAR) FROM t	i1,snan|i2,s-nan|i3,sinf|i4,s-inf|i5,s0.0|i6,s-0.0|i7,s1.5|i8,s-2.0|i9,N|i10,snan|i11,s1.5|i12,s-0.0
+847	u	SELECT id, TRY_CAST(f AS INTEGER) FROM t	i1,N|i2,N|i3,N|i4,N|i5,i0|i6,i0|i7,i2|i8,i-2|i9,N|i10,N|i11,i2|i12,i0
+848	u	SELECT id, CAST(f AS BOOLEAN) FROM t	i1,b1|i2,b1|i3,b1|i4,b1|i5,b0|i6,b0|i7,b1|i8,b1|i9,N|i10,b1|i11,b1|i12,b0
+849	u	SELECT id, f || '' FROM t	i1,snan|i2,s-nan|i3,sinf|i4,s-inf|i5,s0.0|i6,s-0.0|i7,s1.5|i8,s-2.0|i9,N|i10,snan|i11,s1.5|i12,s-0.0
+850	u	SELECT id, CAST(f AS INTEGER) FROM t WHERE f = 1.5	i7,i2|i11,i2
+851	u	SELECT CAST(f AS INTEGER) FROM t	error
+852	o	SELECT CAST('nan' AS DOUBLE)	fnan
+853	o	SELECT TRY_CAST('nan' AS DOUBLE)	fnan
+854	o	SELECT CAST('NaN' AS DOUBLE)	fnan
+855	o	SELECT TRY_CAST('NaN' AS DOUBLE)	fnan
+856	o	SELECT CAST('NAN' AS DOUBLE)	fnan
+857	o	SELECT TRY_CAST('NAN' AS DOUBLE)	fnan
+858	o	SELECT CAST('-nan' AS DOUBLE)	fnan
+859	o	SELECT TRY_CAST('-nan' AS DOUBLE)	fnan
+860	o	SELECT CAST('+nan' AS DOUBLE)	fnan
+861	o	SELECT TRY_CAST('+nan' AS DOUBLE)	fnan
+862	o	SELECT CAST(' nan ' AS DOUBLE)	fnan
+863	o	SELECT TRY_CAST(' nan ' AS DOUBLE)	fnan
+864	o	SELECT CAST('nan(123)' AS DOUBLE)	fnan
+865	o	SELECT TRY_CAST('nan(123)' AS DOUBLE)	fnan
+866	o	SELECT CAST('nan()' AS DOUBLE)	fnan
+867	o	SELECT TRY_CAST('nan()' AS DOUBLE)	fnan
+868	o	SELECT CAST('nan(' AS DOUBLE)	error
+869	o	SELECT TRY_CAST('nan(' AS DOUBLE)	N
+870	o	SELECT CAST('nanx' AS DOUBLE)	error
+871	o	SELECT TRY_CAST('nanx' AS DOUBLE)	N
+872	o	SELECT CAST('inf' AS DOUBLE)	finf
+873	o	SELECT TRY_CAST('inf' AS DOUBLE)	finf
+874	o	SELECT CAST('-inf' AS DOUBLE)	f-inf
+875	o	SELECT TRY_CAST('-inf' AS DOUBLE)	f-inf
+876	o	SELECT CAST('+inf' AS DOUBLE)	finf
+877	o	SELECT TRY_CAST('+inf' AS DOUBLE)	finf
+878	o	SELECT CAST('infinity' AS DOUBLE)	finf
+879	o	SELECT TRY_CAST('infinity' AS DOUBLE)	finf
+880	o	SELECT CAST('-Infinity' AS DOUBLE)	f-inf
+881	o	SELECT TRY_CAST('-Infinity' AS DOUBLE)	f-inf
+882	o	SELECT CAST('INF' AS DOUBLE)	finf
+883	o	SELECT TRY_CAST('INF' AS DOUBLE)	finf
+884	o	SELECT CAST('infinit' AS DOUBLE)	error
+885	o	SELECT TRY_CAST('infinit' AS DOUBLE)	N
+886	o	SELECT CAST('1.5' AS DOUBLE)	f0x1.8000000000000p+0
+887	o	SELECT TRY_CAST('1.5' AS DOUBLE)	f0x1.8000000000000p+0
+888	o	SELECT CAST(' 2 ' AS DOUBLE)	f0x1.0000000000000p+1
+889	o	SELECT TRY_CAST(' 2 ' AS DOUBLE)	f0x1.0000000000000p+1
+890	o	SELECT CAST('-0.0' AS DOUBLE)	f-0x0.0p+0
+891	o	SELECT TRY_CAST('-0.0' AS DOUBLE)	f-0x0.0p+0
+892	o	SELECT CAST('-0' AS DOUBLE)	f-0x0.0p+0
+893	o	SELECT TRY_CAST('-0' AS DOUBLE)	f-0x0.0p+0
+894	o	SELECT CAST('0x10' AS DOUBLE)	error
+895	o	SELECT TRY_CAST('0x10' AS DOUBLE)	N
+896	o	SELECT CAST('1e' AS DOUBLE)	error
+897	o	SELECT TRY_CAST('1e' AS DOUBLE)	N
+898	o	SELECT CAST('' AS DOUBLE)	error
+899	o	SELECT TRY_CAST('' AS DOUBLE)	N
+900	o	SELECT CAST('1e400' AS DOUBLE)	finf
+901	o	SELECT TRY_CAST('1e400' AS DOUBLE)	finf
+902	o	SELECT CAST('1e-400' AS DOUBLE)	f0x0.0p+0
+903	o	SELECT TRY_CAST('1e-400' AS DOUBLE)	f0x0.0p+0
+904	o	SELECT CAST(CAST('nan' AS DOUBLE) AS VARCHAR), CAST(-CAST('nan' AS DOUBLE) AS VARCHAR)	snan,s-nan
+905	o	SELECT CAST('nan' AS FLOAT)	fnan
+906	o	SELECT TRY_CAST('nan' AS FLOAT)	fnan
+907	o	SELECT CAST('NaN' AS FLOAT)	fnan
+908	o	SELECT TRY_CAST('NaN' AS FLOAT)	fnan
+909	o	SELECT CAST('NAN' AS FLOAT)	fnan
+910	o	SELECT TRY_CAST('NAN' AS FLOAT)	fnan
+911	o	SELECT CAST('-nan' AS FLOAT)	fnan
+912	o	SELECT TRY_CAST('-nan' AS FLOAT)	fnan
+913	o	SELECT CAST('+nan' AS FLOAT)	fnan
+914	o	SELECT TRY_CAST('+nan' AS FLOAT)	fnan
+915	o	SELECT CAST(' nan ' AS FLOAT)	fnan
+916	o	SELECT TRY_CAST(' nan ' AS FLOAT)	fnan
+917	o	SELECT CAST('nan(123)' AS FLOAT)	fnan
+918	o	SELECT TRY_CAST('nan(123)' AS FLOAT)	fnan
+919	o	SELECT CAST('nan()' AS FLOAT)	fnan
+920	o	SELECT TRY_CAST('nan()' AS FLOAT)	fnan
+921	o	SELECT CAST('nan(' AS FLOAT)	error
+922	o	SELECT TRY_CAST('nan(' AS FLOAT)	N
+923	o	SELECT CAST('nanx' AS FLOAT)	error
+924	o	SELECT TRY_CAST('nanx' AS FLOAT)	N
+925	o	SELECT CAST('inf' AS FLOAT)	finf
+926	o	SELECT TRY_CAST('inf' AS FLOAT)	finf
+927	o	SELECT CAST('-inf' AS FLOAT)	f-inf
+928	o	SELECT TRY_CAST('-inf' AS FLOAT)	f-inf
+929	o	SELECT CAST('+inf' AS FLOAT)	finf
+930	o	SELECT TRY_CAST('+inf' AS FLOAT)	finf
+931	o	SELECT CAST('infinity' AS FLOAT)	finf
+932	o	SELECT TRY_CAST('infinity' AS FLOAT)	finf
+933	o	SELECT CAST('-Infinity' AS FLOAT)	f-inf
+934	o	SELECT TRY_CAST('-Infinity' AS FLOAT)	f-inf
+935	o	SELECT CAST('INF' AS FLOAT)	finf
+936	o	SELECT TRY_CAST('INF' AS FLOAT)	finf
+937	o	SELECT CAST('infinit' AS FLOAT)	error
+938	o	SELECT TRY_CAST('infinit' AS FLOAT)	N
+939	o	SELECT CAST('1.5' AS FLOAT)	f0x1.8000000000000p+0
+940	o	SELECT TRY_CAST('1.5' AS FLOAT)	f0x1.8000000000000p+0
+941	o	SELECT CAST(' 2 ' AS FLOAT)	f0x1.0000000000000p+1
+942	o	SELECT TRY_CAST(' 2 ' AS FLOAT)	f0x1.0000000000000p+1
+943	o	SELECT CAST('-0.0' AS FLOAT)	f-0x0.0p+0
+944	o	SELECT TRY_CAST('-0.0' AS FLOAT)	f-0x0.0p+0
+945	o	SELECT CAST('-0' AS FLOAT)	f-0x0.0p+0
+946	o	SELECT TRY_CAST('-0' AS FLOAT)	f-0x0.0p+0
+947	o	SELECT CAST('0x10' AS FLOAT)	error
+948	o	SELECT TRY_CAST('0x10' AS FLOAT)	N
+949	o	SELECT CAST('1e' AS FLOAT)	error
+950	o	SELECT TRY_CAST('1e' AS FLOAT)	N
+951	o	SELECT CAST('' AS FLOAT)	error
+952	o	SELECT TRY_CAST('' AS FLOAT)	N
+953	o	SELECT CAST('1e400' AS FLOAT)	finf
+954	o	SELECT TRY_CAST('1e400' AS FLOAT)	finf
+955	o	SELECT CAST('1e-400' AS FLOAT)	f0x0.0p+0
+956	o	SELECT TRY_CAST('1e-400' AS FLOAT)	f0x0.0p+0
+957	o	SELECT CAST(CAST('nan' AS FLOAT) AS VARCHAR), CAST(-CAST('nan' AS FLOAT) AS VARCHAR)	snan,s-nan
+958	o	SELECT CAST('nan' AS INTEGER)	error
+959	o	SELECT TRY_CAST('nan' AS INTEGER)	N
+960	o	SELECT CAST('-nan' AS INTEGER)	error
+961	o	SELECT TRY_CAST('-nan' AS INTEGER)	N
+962	o	SELECT CAST('inf' AS INTEGER)	error
+963	o	SELECT TRY_CAST('inf' AS INTEGER)	N
+964	o	SELECT CAST('1.5' AS INTEGER)	i2
+965	o	SELECT TRY_CAST('1.5' AS INTEGER)	i2
+966	o	SELECT CAST(1e39::DOUBLE AS FLOAT)	error
+967	o	SELECT CAST('1e39' AS FLOAT)	finf
+968	o	SELECT CAST(3.4028235e38::DOUBLE AS FLOAT)	f0x1.fffffe0000000p+127
+969	o	SELECT 'nan'::DOUBLE + 'nan'::DOUBLE, 'nan'::DOUBLE - 'nan'::DOUBLE, 'nan'::DOUBLE * 'nan'::DOUBLE, 'nan'::DOUBLE / 'nan'::DOUBLE, 'nan'::DOUBLE % 'nan'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+970	o	SELECT 'nan'::DOUBLE + -('nan'::DOUBLE), 'nan'::DOUBLE - -('nan'::DOUBLE), 'nan'::DOUBLE * -('nan'::DOUBLE), 'nan'::DOUBLE / -('nan'::DOUBLE), 'nan'::DOUBLE % -('nan'::DOUBLE)	fnan,fnan,fnan,fnan,fnan
+971	o	SELECT 'nan'::DOUBLE + 'inf'::DOUBLE, 'nan'::DOUBLE - 'inf'::DOUBLE, 'nan'::DOUBLE * 'inf'::DOUBLE, 'nan'::DOUBLE / 'inf'::DOUBLE, 'nan'::DOUBLE % 'inf'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+972	o	SELECT 'nan'::DOUBLE + '-inf'::DOUBLE, 'nan'::DOUBLE - '-inf'::DOUBLE, 'nan'::DOUBLE * '-inf'::DOUBLE, 'nan'::DOUBLE / '-inf'::DOUBLE, 'nan'::DOUBLE % '-inf'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+973	o	SELECT 'nan'::DOUBLE + '0.0'::DOUBLE, 'nan'::DOUBLE - '0.0'::DOUBLE, 'nan'::DOUBLE * '0.0'::DOUBLE, 'nan'::DOUBLE / '0.0'::DOUBLE, 'nan'::DOUBLE % '0.0'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+974	o	SELECT 'nan'::DOUBLE + '-0.0'::DOUBLE, 'nan'::DOUBLE - '-0.0'::DOUBLE, 'nan'::DOUBLE * '-0.0'::DOUBLE, 'nan'::DOUBLE / '-0.0'::DOUBLE, 'nan'::DOUBLE % '-0.0'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+975	o	SELECT 'nan'::DOUBLE + '1.5'::DOUBLE, 'nan'::DOUBLE - '1.5'::DOUBLE, 'nan'::DOUBLE * '1.5'::DOUBLE, 'nan'::DOUBLE / '1.5'::DOUBLE, 'nan'::DOUBLE % '1.5'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+976	o	SELECT 'nan'::DOUBLE + '-2'::DOUBLE, 'nan'::DOUBLE - '-2'::DOUBLE, 'nan'::DOUBLE * '-2'::DOUBLE, 'nan'::DOUBLE / '-2'::DOUBLE, 'nan'::DOUBLE % '-2'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+977	o	SELECT 'nan'::DOUBLE + NULL::DOUBLE, 'nan'::DOUBLE - NULL::DOUBLE, 'nan'::DOUBLE * NULL::DOUBLE, 'nan'::DOUBLE / NULL::DOUBLE, 'nan'::DOUBLE % NULL::DOUBLE	N,N,N,N,N
+978	o	SELECT -('nan'::DOUBLE) + 'nan'::DOUBLE, -('nan'::DOUBLE) - 'nan'::DOUBLE, -('nan'::DOUBLE) * 'nan'::DOUBLE, -('nan'::DOUBLE) / 'nan'::DOUBLE, -('nan'::DOUBLE) % 'nan'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+979	o	SELECT -('nan'::DOUBLE) + -('nan'::DOUBLE), -('nan'::DOUBLE) - -('nan'::DOUBLE), -('nan'::DOUBLE) * -('nan'::DOUBLE), -('nan'::DOUBLE) / -('nan'::DOUBLE), -('nan'::DOUBLE) % -('nan'::DOUBLE)	fnan,fnan,fnan,fnan,fnan
+980	o	SELECT -('nan'::DOUBLE) + 'inf'::DOUBLE, -('nan'::DOUBLE) - 'inf'::DOUBLE, -('nan'::DOUBLE) * 'inf'::DOUBLE, -('nan'::DOUBLE) / 'inf'::DOUBLE, -('nan'::DOUBLE) % 'inf'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+981	o	SELECT -('nan'::DOUBLE) + '-inf'::DOUBLE, -('nan'::DOUBLE) - '-inf'::DOUBLE, -('nan'::DOUBLE) * '-inf'::DOUBLE, -('nan'::DOUBLE) / '-inf'::DOUBLE, -('nan'::DOUBLE) % '-inf'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+982	o	SELECT -('nan'::DOUBLE) + '0.0'::DOUBLE, -('nan'::DOUBLE) - '0.0'::DOUBLE, -('nan'::DOUBLE) * '0.0'::DOUBLE, -('nan'::DOUBLE) / '0.0'::DOUBLE, -('nan'::DOUBLE) % '0.0'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+983	o	SELECT -('nan'::DOUBLE) + '-0.0'::DOUBLE, -('nan'::DOUBLE) - '-0.0'::DOUBLE, -('nan'::DOUBLE) * '-0.0'::DOUBLE, -('nan'::DOUBLE) / '-0.0'::DOUBLE, -('nan'::DOUBLE) % '-0.0'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+984	o	SELECT -('nan'::DOUBLE) + '1.5'::DOUBLE, -('nan'::DOUBLE) - '1.5'::DOUBLE, -('nan'::DOUBLE) * '1.5'::DOUBLE, -('nan'::DOUBLE) / '1.5'::DOUBLE, -('nan'::DOUBLE) % '1.5'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+985	o	SELECT -('nan'::DOUBLE) + '-2'::DOUBLE, -('nan'::DOUBLE) - '-2'::DOUBLE, -('nan'::DOUBLE) * '-2'::DOUBLE, -('nan'::DOUBLE) / '-2'::DOUBLE, -('nan'::DOUBLE) % '-2'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+986	o	SELECT -('nan'::DOUBLE) + NULL::DOUBLE, -('nan'::DOUBLE) - NULL::DOUBLE, -('nan'::DOUBLE) * NULL::DOUBLE, -('nan'::DOUBLE) / NULL::DOUBLE, -('nan'::DOUBLE) % NULL::DOUBLE	N,N,N,N,N
+987	o	SELECT 'inf'::DOUBLE + 'nan'::DOUBLE, 'inf'::DOUBLE - 'nan'::DOUBLE, 'inf'::DOUBLE * 'nan'::DOUBLE, 'inf'::DOUBLE / 'nan'::DOUBLE, 'inf'::DOUBLE % 'nan'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+988	o	SELECT 'inf'::DOUBLE + -('nan'::DOUBLE), 'inf'::DOUBLE - -('nan'::DOUBLE), 'inf'::DOUBLE * -('nan'::DOUBLE), 'inf'::DOUBLE / -('nan'::DOUBLE), 'inf'::DOUBLE % -('nan'::DOUBLE)	fnan,fnan,fnan,fnan,fnan
+989	o	SELECT 'inf'::DOUBLE + 'inf'::DOUBLE, 'inf'::DOUBLE - 'inf'::DOUBLE, 'inf'::DOUBLE * 'inf'::DOUBLE, 'inf'::DOUBLE / 'inf'::DOUBLE, 'inf'::DOUBLE % 'inf'::DOUBLE	finf,fnan,finf,fnan,fnan
+990	o	SELECT 'inf'::DOUBLE + '-inf'::DOUBLE, 'inf'::DOUBLE - '-inf'::DOUBLE, 'inf'::DOUBLE * '-inf'::DOUBLE, 'inf'::DOUBLE / '-inf'::DOUBLE, 'inf'::DOUBLE % '-inf'::DOUBLE	fnan,finf,f-inf,fnan,fnan
+991	o	SELECT 'inf'::DOUBLE + '0.0'::DOUBLE, 'inf'::DOUBLE - '0.0'::DOUBLE, 'inf'::DOUBLE * '0.0'::DOUBLE, 'inf'::DOUBLE / '0.0'::DOUBLE, 'inf'::DOUBLE % '0.0'::DOUBLE	finf,finf,fnan,finf,fnan
+992	o	SELECT 'inf'::DOUBLE + '-0.0'::DOUBLE, 'inf'::DOUBLE - '-0.0'::DOUBLE, 'inf'::DOUBLE * '-0.0'::DOUBLE, 'inf'::DOUBLE / '-0.0'::DOUBLE, 'inf'::DOUBLE % '-0.0'::DOUBLE	finf,finf,fnan,f-inf,fnan
+993	o	SELECT 'inf'::DOUBLE + '1.5'::DOUBLE, 'inf'::DOUBLE - '1.5'::DOUBLE, 'inf'::DOUBLE * '1.5'::DOUBLE, 'inf'::DOUBLE / '1.5'::DOUBLE, 'inf'::DOUBLE % '1.5'::DOUBLE	finf,finf,finf,finf,fnan
+994	o	SELECT 'inf'::DOUBLE + '-2'::DOUBLE, 'inf'::DOUBLE - '-2'::DOUBLE, 'inf'::DOUBLE * '-2'::DOUBLE, 'inf'::DOUBLE / '-2'::DOUBLE, 'inf'::DOUBLE % '-2'::DOUBLE	finf,finf,f-inf,f-inf,fnan
+995	o	SELECT 'inf'::DOUBLE + NULL::DOUBLE, 'inf'::DOUBLE - NULL::DOUBLE, 'inf'::DOUBLE * NULL::DOUBLE, 'inf'::DOUBLE / NULL::DOUBLE, 'inf'::DOUBLE % NULL::DOUBLE	N,N,N,N,N
+996	o	SELECT '-inf'::DOUBLE + 'nan'::DOUBLE, '-inf'::DOUBLE - 'nan'::DOUBLE, '-inf'::DOUBLE * 'nan'::DOUBLE, '-inf'::DOUBLE / 'nan'::DOUBLE, '-inf'::DOUBLE % 'nan'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+997	o	SELECT '-inf'::DOUBLE + -('nan'::DOUBLE), '-inf'::DOUBLE - -('nan'::DOUBLE), '-inf'::DOUBLE * -('nan'::DOUBLE), '-inf'::DOUBLE / -('nan'::DOUBLE), '-inf'::DOUBLE % -('nan'::DOUBLE)	fnan,fnan,fnan,fnan,fnan
+998	o	SELECT '-inf'::DOUBLE + 'inf'::DOUBLE, '-inf'::DOUBLE - 'inf'::DOUBLE, '-inf'::DOUBLE * 'inf'::DOUBLE, '-inf'::DOUBLE / 'inf'::DOUBLE, '-inf'::DOUBLE % 'inf'::DOUBLE	fnan,f-inf,f-inf,fnan,fnan
+999	o	SELECT '-inf'::DOUBLE + '-inf'::DOUBLE, '-inf'::DOUBLE - '-inf'::DOUBLE, '-inf'::DOUBLE * '-inf'::DOUBLE, '-inf'::DOUBLE / '-inf'::DOUBLE, '-inf'::DOUBLE % '-inf'::DOUBLE	f-inf,fnan,finf,fnan,fnan
+1000	o	SELECT '-inf'::DOUBLE + '0.0'::DOUBLE, '-inf'::DOUBLE - '0.0'::DOUBLE, '-inf'::DOUBLE * '0.0'::DOUBLE, '-inf'::DOUBLE / '0.0'::DOUBLE, '-inf'::DOUBLE % '0.0'::DOUBLE	f-inf,f-inf,fnan,f-inf,fnan
+1001	o	SELECT '-inf'::DOUBLE + '-0.0'::DOUBLE, '-inf'::DOUBLE - '-0.0'::DOUBLE, '-inf'::DOUBLE * '-0.0'::DOUBLE, '-inf'::DOUBLE / '-0.0'::DOUBLE, '-inf'::DOUBLE % '-0.0'::DOUBLE	f-inf,f-inf,fnan,finf,fnan
+1002	o	SELECT '-inf'::DOUBLE + '1.5'::DOUBLE, '-inf'::DOUBLE - '1.5'::DOUBLE, '-inf'::DOUBLE * '1.5'::DOUBLE, '-inf'::DOUBLE / '1.5'::DOUBLE, '-inf'::DOUBLE % '1.5'::DOUBLE	f-inf,f-inf,f-inf,f-inf,fnan
+1003	o	SELECT '-inf'::DOUBLE + '-2'::DOUBLE, '-inf'::DOUBLE - '-2'::DOUBLE, '-inf'::DOUBLE * '-2'::DOUBLE, '-inf'::DOUBLE / '-2'::DOUBLE, '-inf'::DOUBLE % '-2'::DOUBLE	f-inf,f-inf,finf,finf,fnan
+1004	o	SELECT '-inf'::DOUBLE + NULL::DOUBLE, '-inf'::DOUBLE - NULL::DOUBLE, '-inf'::DOUBLE * NULL::DOUBLE, '-inf'::DOUBLE / NULL::DOUBLE, '-inf'::DOUBLE % NULL::DOUBLE	N,N,N,N,N
+1005	o	SELECT '0.0'::DOUBLE + 'nan'::DOUBLE, '0.0'::DOUBLE - 'nan'::DOUBLE, '0.0'::DOUBLE * 'nan'::DOUBLE, '0.0'::DOUBLE / 'nan'::DOUBLE, '0.0'::DOUBLE % 'nan'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+1006	o	SELECT '0.0'::DOUBLE + -('nan'::DOUBLE), '0.0'::DOUBLE - -('nan'::DOUBLE), '0.0'::DOUBLE * -('nan'::DOUBLE), '0.0'::DOUBLE / -('nan'::DOUBLE), '0.0'::DOUBLE % -('nan'::DOUBLE)	fnan,fnan,fnan,fnan,fnan
+1007	o	SELECT '0.0'::DOUBLE + 'inf'::DOUBLE, '0.0'::DOUBLE - 'inf'::DOUBLE, '0.0'::DOUBLE * 'inf'::DOUBLE, '0.0'::DOUBLE / 'inf'::DOUBLE, '0.0'::DOUBLE % 'inf'::DOUBLE	finf,f-inf,fnan,f0x0.0p+0,f0x0.0p+0
+1008	o	SELECT '0.0'::DOUBLE + '-inf'::DOUBLE, '0.0'::DOUBLE - '-inf'::DOUBLE, '0.0'::DOUBLE * '-inf'::DOUBLE, '0.0'::DOUBLE / '-inf'::DOUBLE, '0.0'::DOUBLE % '-inf'::DOUBLE	f-inf,finf,fnan,f-0x0.0p+0,f0x0.0p+0
+1009	o	SELECT '0.0'::DOUBLE + '0.0'::DOUBLE, '0.0'::DOUBLE - '0.0'::DOUBLE, '0.0'::DOUBLE * '0.0'::DOUBLE, '0.0'::DOUBLE / '0.0'::DOUBLE, '0.0'::DOUBLE % '0.0'::DOUBLE	f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,fnan,fnan
+1010	o	SELECT '0.0'::DOUBLE + '-0.0'::DOUBLE, '0.0'::DOUBLE - '-0.0'::DOUBLE, '0.0'::DOUBLE * '-0.0'::DOUBLE, '0.0'::DOUBLE / '-0.0'::DOUBLE, '0.0'::DOUBLE % '-0.0'::DOUBLE	f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0,fnan,fnan
+1011	o	SELECT '0.0'::DOUBLE + '1.5'::DOUBLE, '0.0'::DOUBLE - '1.5'::DOUBLE, '0.0'::DOUBLE * '1.5'::DOUBLE, '0.0'::DOUBLE / '1.5'::DOUBLE, '0.0'::DOUBLE % '1.5'::DOUBLE	f0x1.8000000000000p+0,f-0x1.8000000000000p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+1012	o	SELECT '0.0'::DOUBLE + '-2'::DOUBLE, '0.0'::DOUBLE - '-2'::DOUBLE, '0.0'::DOUBLE * '-2'::DOUBLE, '0.0'::DOUBLE / '-2'::DOUBLE, '0.0'::DOUBLE % '-2'::DOUBLE	f-0x1.0000000000000p+1,f0x1.0000000000000p+1,f-0x0.0p+0,f-0x0.0p+0,f0x0.0p+0
+1013	o	SELECT '0.0'::DOUBLE + NULL::DOUBLE, '0.0'::DOUBLE - NULL::DOUBLE, '0.0'::DOUBLE * NULL::DOUBLE, '0.0'::DOUBLE / NULL::DOUBLE, '0.0'::DOUBLE % NULL::DOUBLE	N,N,N,N,N
+1014	o	SELECT '-0.0'::DOUBLE + 'nan'::DOUBLE, '-0.0'::DOUBLE - 'nan'::DOUBLE, '-0.0'::DOUBLE * 'nan'::DOUBLE, '-0.0'::DOUBLE / 'nan'::DOUBLE, '-0.0'::DOUBLE % 'nan'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+1015	o	SELECT '-0.0'::DOUBLE + -('nan'::DOUBLE), '-0.0'::DOUBLE - -('nan'::DOUBLE), '-0.0'::DOUBLE * -('nan'::DOUBLE), '-0.0'::DOUBLE / -('nan'::DOUBLE), '-0.0'::DOUBLE % -('nan'::DOUBLE)	fnan,fnan,fnan,fnan,fnan
+1016	o	SELECT '-0.0'::DOUBLE + 'inf'::DOUBLE, '-0.0'::DOUBLE - 'inf'::DOUBLE, '-0.0'::DOUBLE * 'inf'::DOUBLE, '-0.0'::DOUBLE / 'inf'::DOUBLE, '-0.0'::DOUBLE % 'inf'::DOUBLE	finf,f-inf,fnan,f-0x0.0p+0,f-0x0.0p+0
+1017	o	SELECT '-0.0'::DOUBLE + '-inf'::DOUBLE, '-0.0'::DOUBLE - '-inf'::DOUBLE, '-0.0'::DOUBLE * '-inf'::DOUBLE, '-0.0'::DOUBLE / '-inf'::DOUBLE, '-0.0'::DOUBLE % '-inf'::DOUBLE	f-inf,finf,fnan,f0x0.0p+0,f-0x0.0p+0
+1018	o	SELECT '-0.0'::DOUBLE + '0.0'::DOUBLE, '-0.0'::DOUBLE - '0.0'::DOUBLE, '-0.0'::DOUBLE * '0.0'::DOUBLE, '-0.0'::DOUBLE / '0.0'::DOUBLE, '-0.0'::DOUBLE % '0.0'::DOUBLE	f0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,fnan,fnan
+1019	o	SELECT '-0.0'::DOUBLE + '-0.0'::DOUBLE, '-0.0'::DOUBLE - '-0.0'::DOUBLE, '-0.0'::DOUBLE * '-0.0'::DOUBLE, '-0.0'::DOUBLE / '-0.0'::DOUBLE, '-0.0'::DOUBLE % '-0.0'::DOUBLE	f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0,fnan,fnan
+1020	o	SELECT '-0.0'::DOUBLE + '1.5'::DOUBLE, '-0.0'::DOUBLE - '1.5'::DOUBLE, '-0.0'::DOUBLE * '1.5'::DOUBLE, '-0.0'::DOUBLE / '1.5'::DOUBLE, '-0.0'::DOUBLE % '1.5'::DOUBLE	f0x1.8000000000000p+0,f-0x1.8000000000000p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0
+1021	o	SELECT '-0.0'::DOUBLE + '-2'::DOUBLE, '-0.0'::DOUBLE - '-2'::DOUBLE, '-0.0'::DOUBLE * '-2'::DOUBLE, '-0.0'::DOUBLE / '-2'::DOUBLE, '-0.0'::DOUBLE % '-2'::DOUBLE	f-0x1.0000000000000p+1,f0x1.0000000000000p+1,f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0
+1022	o	SELECT '-0.0'::DOUBLE + NULL::DOUBLE, '-0.0'::DOUBLE - NULL::DOUBLE, '-0.0'::DOUBLE * NULL::DOUBLE, '-0.0'::DOUBLE / NULL::DOUBLE, '-0.0'::DOUBLE % NULL::DOUBLE	N,N,N,N,N
+1023	o	SELECT '1.5'::DOUBLE + 'nan'::DOUBLE, '1.5'::DOUBLE - 'nan'::DOUBLE, '1.5'::DOUBLE * 'nan'::DOUBLE, '1.5'::DOUBLE / 'nan'::DOUBLE, '1.5'::DOUBLE % 'nan'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+1024	o	SELECT '1.5'::DOUBLE + -('nan'::DOUBLE), '1.5'::DOUBLE - -('nan'::DOUBLE), '1.5'::DOUBLE * -('nan'::DOUBLE), '1.5'::DOUBLE / -('nan'::DOUBLE), '1.5'::DOUBLE % -('nan'::DOUBLE)	fnan,fnan,fnan,fnan,fnan
+1025	o	SELECT '1.5'::DOUBLE + 'inf'::DOUBLE, '1.5'::DOUBLE - 'inf'::DOUBLE, '1.5'::DOUBLE * 'inf'::DOUBLE, '1.5'::DOUBLE / 'inf'::DOUBLE, '1.5'::DOUBLE % 'inf'::DOUBLE	finf,f-inf,finf,f0x0.0p+0,f0x1.8000000000000p+0
+1026	o	SELECT '1.5'::DOUBLE + '-inf'::DOUBLE, '1.5'::DOUBLE - '-inf'::DOUBLE, '1.5'::DOUBLE * '-inf'::DOUBLE, '1.5'::DOUBLE / '-inf'::DOUBLE, '1.5'::DOUBLE % '-inf'::DOUBLE	f-inf,finf,f-inf,f-0x0.0p+0,f0x1.8000000000000p+0
+1027	o	SELECT '1.5'::DOUBLE + '0.0'::DOUBLE, '1.5'::DOUBLE - '0.0'::DOUBLE, '1.5'::DOUBLE * '0.0'::DOUBLE, '1.5'::DOUBLE / '0.0'::DOUBLE, '1.5'::DOUBLE % '0.0'::DOUBLE	f0x1.8000000000000p+0,f0x1.8000000000000p+0,f0x0.0p+0,finf,fnan
+1028	o	SELECT '1.5'::DOUBLE + '-0.0'::DOUBLE, '1.5'::DOUBLE - '-0.0'::DOUBLE, '1.5'::DOUBLE * '-0.0'::DOUBLE, '1.5'::DOUBLE / '-0.0'::DOUBLE, '1.5'::DOUBLE % '-0.0'::DOUBLE	f0x1.8000000000000p+0,f0x1.8000000000000p+0,f-0x0.0p+0,f-inf,fnan
+1029	o	SELECT '1.5'::DOUBLE + '1.5'::DOUBLE, '1.5'::DOUBLE - '1.5'::DOUBLE, '1.5'::DOUBLE * '1.5'::DOUBLE, '1.5'::DOUBLE / '1.5'::DOUBLE, '1.5'::DOUBLE % '1.5'::DOUBLE	f0x1.8000000000000p+1,f0x0.0p+0,f0x1.2000000000000p+1,f0x1.0000000000000p+0,f0x0.0p+0
+1030	o	SELECT '1.5'::DOUBLE + '-2'::DOUBLE, '1.5'::DOUBLE - '-2'::DOUBLE, '1.5'::DOUBLE * '-2'::DOUBLE, '1.5'::DOUBLE / '-2'::DOUBLE, '1.5'::DOUBLE % '-2'::DOUBLE	f-0x1.0000000000000p-1,f0x1.c000000000000p+1,f-0x1.8000000000000p+1,f-0x1.8000000000000p-1,f0x1.8000000000000p+0
+1031	o	SELECT '1.5'::DOUBLE + NULL::DOUBLE, '1.5'::DOUBLE - NULL::DOUBLE, '1.5'::DOUBLE * NULL::DOUBLE, '1.5'::DOUBLE / NULL::DOUBLE, '1.5'::DOUBLE % NULL::DOUBLE	N,N,N,N,N
+1032	o	SELECT '-2'::DOUBLE + 'nan'::DOUBLE, '-2'::DOUBLE - 'nan'::DOUBLE, '-2'::DOUBLE * 'nan'::DOUBLE, '-2'::DOUBLE / 'nan'::DOUBLE, '-2'::DOUBLE % 'nan'::DOUBLE	fnan,fnan,fnan,fnan,fnan
+1033	o	SELECT '-2'::DOUBLE + -('nan'::DOUBLE), '-2'::DOUBLE - -('nan'::DOUBLE), '-2'::DOUBLE * -('nan'::DOUBLE), '-2'::DOUBLE / -('nan'::DOUBLE), '-2'::DOUBLE % -('nan'::DOUBLE)	fnan,fnan,fnan,fnan,fnan
+1034	o	SELECT '-2'::DOUBLE + 'inf'::DOUBLE, '-2'::DOUBLE - 'inf'::DOUBLE, '-2'::DOUBLE * 'inf'::DOUBLE, '-2'::DOUBLE / 'inf'::DOUBLE, '-2'::DOUBLE % 'inf'::DOUBLE	finf,f-inf,f-inf,f-0x0.0p+0,f-0x1.0000000000000p+1
+1035	o	SELECT '-2'::DOUBLE + '-inf'::DOUBLE, '-2'::DOUBLE - '-inf'::DOUBLE, '-2'::DOUBLE * '-inf'::DOUBLE, '-2'::DOUBLE / '-inf'::DOUBLE, '-2'::DOUBLE % '-inf'::DOUBLE	f-inf,finf,finf,f0x0.0p+0,f-0x1.0000000000000p+1
+1036	o	SELECT '-2'::DOUBLE + '0.0'::DOUBLE, '-2'::DOUBLE - '0.0'::DOUBLE, '-2'::DOUBLE * '0.0'::DOUBLE, '-2'::DOUBLE / '0.0'::DOUBLE, '-2'::DOUBLE % '0.0'::DOUBLE	f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x0.0p+0,f-inf,fnan
+1037	o	SELECT '-2'::DOUBLE + '-0.0'::DOUBLE, '-2'::DOUBLE - '-0.0'::DOUBLE, '-2'::DOUBLE * '-0.0'::DOUBLE, '-2'::DOUBLE / '-0.0'::DOUBLE, '-2'::DOUBLE % '-0.0'::DOUBLE	f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f0x0.0p+0,finf,fnan
+1038	o	SELECT '-2'::DOUBLE + '1.5'::DOUBLE, '-2'::DOUBLE - '1.5'::DOUBLE, '-2'::DOUBLE * '1.5'::DOUBLE, '-2'::DOUBLE / '1.5'::DOUBLE, '-2'::DOUBLE % '1.5'::DOUBLE	f-0x1.0000000000000p-1,f-0x1.c000000000000p+1,f-0x1.8000000000000p+1,f-0x1.5555555555555p+0,f-0x1.0000000000000p-1
+1039	o	SELECT '-2'::DOUBLE + '-2'::DOUBLE, '-2'::DOUBLE - '-2'::DOUBLE, '-2'::DOUBLE * '-2'::DOUBLE, '-2'::DOUBLE / '-2'::DOUBLE, '-2'::DOUBLE % '-2'::DOUBLE	f-0x1.0000000000000p+2,f0x0.0p+0,f0x1.0000000000000p+2,f0x1.0000000000000p+0,f-0x0.0p+0
+1040	o	SELECT '-2'::DOUBLE + NULL::DOUBLE, '-2'::DOUBLE - NULL::DOUBLE, '-2'::DOUBLE * NULL::DOUBLE, '-2'::DOUBLE / NULL::DOUBLE, '-2'::DOUBLE % NULL::DOUBLE	N,N,N,N,N
+1041	o	SELECT NULL::DOUBLE + 'nan'::DOUBLE, NULL::DOUBLE - 'nan'::DOUBLE, NULL::DOUBLE * 'nan'::DOUBLE, NULL::DOUBLE / 'nan'::DOUBLE, NULL::DOUBLE % 'nan'::DOUBLE	N,N,N,N,N
+1042	o	SELECT NULL::DOUBLE + -('nan'::DOUBLE), NULL::DOUBLE - -('nan'::DOUBLE), NULL::DOUBLE * -('nan'::DOUBLE), NULL::DOUBLE / -('nan'::DOUBLE), NULL::DOUBLE % -('nan'::DOUBLE)	N,N,N,N,N
+1043	o	SELECT NULL::DOUBLE + 'inf'::DOUBLE, NULL::DOUBLE - 'inf'::DOUBLE, NULL::DOUBLE * 'inf'::DOUBLE, NULL::DOUBLE / 'inf'::DOUBLE, NULL::DOUBLE % 'inf'::DOUBLE	N,N,N,N,N
+1044	o	SELECT NULL::DOUBLE + '-inf'::DOUBLE, NULL::DOUBLE - '-inf'::DOUBLE, NULL::DOUBLE * '-inf'::DOUBLE, NULL::DOUBLE / '-inf'::DOUBLE, NULL::DOUBLE % '-inf'::DOUBLE	N,N,N,N,N
+1045	o	SELECT NULL::DOUBLE + '0.0'::DOUBLE, NULL::DOUBLE - '0.0'::DOUBLE, NULL::DOUBLE * '0.0'::DOUBLE, NULL::DOUBLE / '0.0'::DOUBLE, NULL::DOUBLE % '0.0'::DOUBLE	N,N,N,N,N
+1046	o	SELECT NULL::DOUBLE + '-0.0'::DOUBLE, NULL::DOUBLE - '-0.0'::DOUBLE, NULL::DOUBLE * '-0.0'::DOUBLE, NULL::DOUBLE / '-0.0'::DOUBLE, NULL::DOUBLE % '-0.0'::DOUBLE	N,N,N,N,N
+1047	o	SELECT NULL::DOUBLE + '1.5'::DOUBLE, NULL::DOUBLE - '1.5'::DOUBLE, NULL::DOUBLE * '1.5'::DOUBLE, NULL::DOUBLE / '1.5'::DOUBLE, NULL::DOUBLE % '1.5'::DOUBLE	N,N,N,N,N
+1048	o	SELECT NULL::DOUBLE + '-2'::DOUBLE, NULL::DOUBLE - '-2'::DOUBLE, NULL::DOUBLE * '-2'::DOUBLE, NULL::DOUBLE / '-2'::DOUBLE, NULL::DOUBLE % '-2'::DOUBLE	N,N,N,N,N
+1049	o	SELECT NULL::DOUBLE + NULL::DOUBLE, NULL::DOUBLE - NULL::DOUBLE, NULL::DOUBLE * NULL::DOUBLE, NULL::DOUBLE / NULL::DOUBLE, NULL::DOUBLE % NULL::DOUBLE	N,N,N,N,N
+1050	o	SELECT 'nan'::FLOAT + 'nan'::FLOAT, 'nan'::FLOAT - 'nan'::FLOAT, 'nan'::FLOAT * 'nan'::FLOAT, 'nan'::FLOAT / 'nan'::FLOAT, 'nan'::FLOAT % 'nan'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1051	o	SELECT 'nan'::FLOAT + -('nan'::FLOAT), 'nan'::FLOAT - -('nan'::FLOAT), 'nan'::FLOAT * -('nan'::FLOAT), 'nan'::FLOAT / -('nan'::FLOAT), 'nan'::FLOAT % -('nan'::FLOAT)	fnan,fnan,fnan,fnan,fnan
+1052	o	SELECT 'nan'::FLOAT + 'inf'::FLOAT, 'nan'::FLOAT - 'inf'::FLOAT, 'nan'::FLOAT * 'inf'::FLOAT, 'nan'::FLOAT / 'inf'::FLOAT, 'nan'::FLOAT % 'inf'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1053	o	SELECT 'nan'::FLOAT + '-inf'::FLOAT, 'nan'::FLOAT - '-inf'::FLOAT, 'nan'::FLOAT * '-inf'::FLOAT, 'nan'::FLOAT / '-inf'::FLOAT, 'nan'::FLOAT % '-inf'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1054	o	SELECT 'nan'::FLOAT + '0.0'::FLOAT, 'nan'::FLOAT - '0.0'::FLOAT, 'nan'::FLOAT * '0.0'::FLOAT, 'nan'::FLOAT / '0.0'::FLOAT, 'nan'::FLOAT % '0.0'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1055	o	SELECT 'nan'::FLOAT + '-0.0'::FLOAT, 'nan'::FLOAT - '-0.0'::FLOAT, 'nan'::FLOAT * '-0.0'::FLOAT, 'nan'::FLOAT / '-0.0'::FLOAT, 'nan'::FLOAT % '-0.0'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1056	o	SELECT 'nan'::FLOAT + '1.5'::FLOAT, 'nan'::FLOAT - '1.5'::FLOAT, 'nan'::FLOAT * '1.5'::FLOAT, 'nan'::FLOAT / '1.5'::FLOAT, 'nan'::FLOAT % '1.5'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1057	o	SELECT 'nan'::FLOAT + '-2'::FLOAT, 'nan'::FLOAT - '-2'::FLOAT, 'nan'::FLOAT * '-2'::FLOAT, 'nan'::FLOAT / '-2'::FLOAT, 'nan'::FLOAT % '-2'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1058	o	SELECT 'nan'::FLOAT + NULL::FLOAT, 'nan'::FLOAT - NULL::FLOAT, 'nan'::FLOAT * NULL::FLOAT, 'nan'::FLOAT / NULL::FLOAT, 'nan'::FLOAT % NULL::FLOAT	N,N,N,N,N
+1059	o	SELECT -('nan'::FLOAT) + 'nan'::FLOAT, -('nan'::FLOAT) - 'nan'::FLOAT, -('nan'::FLOAT) * 'nan'::FLOAT, -('nan'::FLOAT) / 'nan'::FLOAT, -('nan'::FLOAT) % 'nan'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1060	o	SELECT -('nan'::FLOAT) + -('nan'::FLOAT), -('nan'::FLOAT) - -('nan'::FLOAT), -('nan'::FLOAT) * -('nan'::FLOAT), -('nan'::FLOAT) / -('nan'::FLOAT), -('nan'::FLOAT) % -('nan'::FLOAT)	fnan,fnan,fnan,fnan,fnan
+1061	o	SELECT -('nan'::FLOAT) + 'inf'::FLOAT, -('nan'::FLOAT) - 'inf'::FLOAT, -('nan'::FLOAT) * 'inf'::FLOAT, -('nan'::FLOAT) / 'inf'::FLOAT, -('nan'::FLOAT) % 'inf'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1062	o	SELECT -('nan'::FLOAT) + '-inf'::FLOAT, -('nan'::FLOAT) - '-inf'::FLOAT, -('nan'::FLOAT) * '-inf'::FLOAT, -('nan'::FLOAT) / '-inf'::FLOAT, -('nan'::FLOAT) % '-inf'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1063	o	SELECT -('nan'::FLOAT) + '0.0'::FLOAT, -('nan'::FLOAT) - '0.0'::FLOAT, -('nan'::FLOAT) * '0.0'::FLOAT, -('nan'::FLOAT) / '0.0'::FLOAT, -('nan'::FLOAT) % '0.0'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1064	o	SELECT -('nan'::FLOAT) + '-0.0'::FLOAT, -('nan'::FLOAT) - '-0.0'::FLOAT, -('nan'::FLOAT) * '-0.0'::FLOAT, -('nan'::FLOAT) / '-0.0'::FLOAT, -('nan'::FLOAT) % '-0.0'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1065	o	SELECT -('nan'::FLOAT) + '1.5'::FLOAT, -('nan'::FLOAT) - '1.5'::FLOAT, -('nan'::FLOAT) * '1.5'::FLOAT, -('nan'::FLOAT) / '1.5'::FLOAT, -('nan'::FLOAT) % '1.5'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1066	o	SELECT -('nan'::FLOAT) + '-2'::FLOAT, -('nan'::FLOAT) - '-2'::FLOAT, -('nan'::FLOAT) * '-2'::FLOAT, -('nan'::FLOAT) / '-2'::FLOAT, -('nan'::FLOAT) % '-2'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1067	o	SELECT -('nan'::FLOAT) + NULL::FLOAT, -('nan'::FLOAT) - NULL::FLOAT, -('nan'::FLOAT) * NULL::FLOAT, -('nan'::FLOAT) / NULL::FLOAT, -('nan'::FLOAT) % NULL::FLOAT	N,N,N,N,N
+1068	o	SELECT 'inf'::FLOAT + 'nan'::FLOAT, 'inf'::FLOAT - 'nan'::FLOAT, 'inf'::FLOAT * 'nan'::FLOAT, 'inf'::FLOAT / 'nan'::FLOAT, 'inf'::FLOAT % 'nan'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1069	o	SELECT 'inf'::FLOAT + -('nan'::FLOAT), 'inf'::FLOAT - -('nan'::FLOAT), 'inf'::FLOAT * -('nan'::FLOAT), 'inf'::FLOAT / -('nan'::FLOAT), 'inf'::FLOAT % -('nan'::FLOAT)	fnan,fnan,fnan,fnan,fnan
+1070	o	SELECT 'inf'::FLOAT + 'inf'::FLOAT, 'inf'::FLOAT - 'inf'::FLOAT, 'inf'::FLOAT * 'inf'::FLOAT, 'inf'::FLOAT / 'inf'::FLOAT, 'inf'::FLOAT % 'inf'::FLOAT	finf,fnan,finf,fnan,fnan
+1071	o	SELECT 'inf'::FLOAT + '-inf'::FLOAT, 'inf'::FLOAT - '-inf'::FLOAT, 'inf'::FLOAT * '-inf'::FLOAT, 'inf'::FLOAT / '-inf'::FLOAT, 'inf'::FLOAT % '-inf'::FLOAT	fnan,finf,f-inf,fnan,fnan
+1072	o	SELECT 'inf'::FLOAT + '0.0'::FLOAT, 'inf'::FLOAT - '0.0'::FLOAT, 'inf'::FLOAT * '0.0'::FLOAT, 'inf'::FLOAT / '0.0'::FLOAT, 'inf'::FLOAT % '0.0'::FLOAT	finf,finf,fnan,finf,fnan
+1073	o	SELECT 'inf'::FLOAT + '-0.0'::FLOAT, 'inf'::FLOAT - '-0.0'::FLOAT, 'inf'::FLOAT * '-0.0'::FLOAT, 'inf'::FLOAT / '-0.0'::FLOAT, 'inf'::FLOAT % '-0.0'::FLOAT	finf,finf,fnan,f-inf,fnan
+1074	o	SELECT 'inf'::FLOAT + '1.5'::FLOAT, 'inf'::FLOAT - '1.5'::FLOAT, 'inf'::FLOAT * '1.5'::FLOAT, 'inf'::FLOAT / '1.5'::FLOAT, 'inf'::FLOAT % '1.5'::FLOAT	finf,finf,finf,finf,fnan
+1075	o	SELECT 'inf'::FLOAT + '-2'::FLOAT, 'inf'::FLOAT - '-2'::FLOAT, 'inf'::FLOAT * '-2'::FLOAT, 'inf'::FLOAT / '-2'::FLOAT, 'inf'::FLOAT % '-2'::FLOAT	finf,finf,f-inf,f-inf,fnan
+1076	o	SELECT 'inf'::FLOAT + NULL::FLOAT, 'inf'::FLOAT - NULL::FLOAT, 'inf'::FLOAT * NULL::FLOAT, 'inf'::FLOAT / NULL::FLOAT, 'inf'::FLOAT % NULL::FLOAT	N,N,N,N,N
+1077	o	SELECT '-inf'::FLOAT + 'nan'::FLOAT, '-inf'::FLOAT - 'nan'::FLOAT, '-inf'::FLOAT * 'nan'::FLOAT, '-inf'::FLOAT / 'nan'::FLOAT, '-inf'::FLOAT % 'nan'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1078	o	SELECT '-inf'::FLOAT + -('nan'::FLOAT), '-inf'::FLOAT - -('nan'::FLOAT), '-inf'::FLOAT * -('nan'::FLOAT), '-inf'::FLOAT / -('nan'::FLOAT), '-inf'::FLOAT % -('nan'::FLOAT)	fnan,fnan,fnan,fnan,fnan
+1079	o	SELECT '-inf'::FLOAT + 'inf'::FLOAT, '-inf'::FLOAT - 'inf'::FLOAT, '-inf'::FLOAT * 'inf'::FLOAT, '-inf'::FLOAT / 'inf'::FLOAT, '-inf'::FLOAT % 'inf'::FLOAT	fnan,f-inf,f-inf,fnan,fnan
+1080	o	SELECT '-inf'::FLOAT + '-inf'::FLOAT, '-inf'::FLOAT - '-inf'::FLOAT, '-inf'::FLOAT * '-inf'::FLOAT, '-inf'::FLOAT / '-inf'::FLOAT, '-inf'::FLOAT % '-inf'::FLOAT	f-inf,fnan,finf,fnan,fnan
+1081	o	SELECT '-inf'::FLOAT + '0.0'::FLOAT, '-inf'::FLOAT - '0.0'::FLOAT, '-inf'::FLOAT * '0.0'::FLOAT, '-inf'::FLOAT / '0.0'::FLOAT, '-inf'::FLOAT % '0.0'::FLOAT	f-inf,f-inf,fnan,f-inf,fnan
+1082	o	SELECT '-inf'::FLOAT + '-0.0'::FLOAT, '-inf'::FLOAT - '-0.0'::FLOAT, '-inf'::FLOAT * '-0.0'::FLOAT, '-inf'::FLOAT / '-0.0'::FLOAT, '-inf'::FLOAT % '-0.0'::FLOAT	f-inf,f-inf,fnan,finf,fnan
+1083	o	SELECT '-inf'::FLOAT + '1.5'::FLOAT, '-inf'::FLOAT - '1.5'::FLOAT, '-inf'::FLOAT * '1.5'::FLOAT, '-inf'::FLOAT / '1.5'::FLOAT, '-inf'::FLOAT % '1.5'::FLOAT	f-inf,f-inf,f-inf,f-inf,fnan
+1084	o	SELECT '-inf'::FLOAT + '-2'::FLOAT, '-inf'::FLOAT - '-2'::FLOAT, '-inf'::FLOAT * '-2'::FLOAT, '-inf'::FLOAT / '-2'::FLOAT, '-inf'::FLOAT % '-2'::FLOAT	f-inf,f-inf,finf,finf,fnan
+1085	o	SELECT '-inf'::FLOAT + NULL::FLOAT, '-inf'::FLOAT - NULL::FLOAT, '-inf'::FLOAT * NULL::FLOAT, '-inf'::FLOAT / NULL::FLOAT, '-inf'::FLOAT % NULL::FLOAT	N,N,N,N,N
+1086	o	SELECT '0.0'::FLOAT + 'nan'::FLOAT, '0.0'::FLOAT - 'nan'::FLOAT, '0.0'::FLOAT * 'nan'::FLOAT, '0.0'::FLOAT / 'nan'::FLOAT, '0.0'::FLOAT % 'nan'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1087	o	SELECT '0.0'::FLOAT + -('nan'::FLOAT), '0.0'::FLOAT - -('nan'::FLOAT), '0.0'::FLOAT * -('nan'::FLOAT), '0.0'::FLOAT / -('nan'::FLOAT), '0.0'::FLOAT % -('nan'::FLOAT)	fnan,fnan,fnan,fnan,fnan
+1088	o	SELECT '0.0'::FLOAT + 'inf'::FLOAT, '0.0'::FLOAT - 'inf'::FLOAT, '0.0'::FLOAT * 'inf'::FLOAT, '0.0'::FLOAT / 'inf'::FLOAT, '0.0'::FLOAT % 'inf'::FLOAT	finf,f-inf,fnan,f0x0.0p+0,f0x0.0p+0
+1089	o	SELECT '0.0'::FLOAT + '-inf'::FLOAT, '0.0'::FLOAT - '-inf'::FLOAT, '0.0'::FLOAT * '-inf'::FLOAT, '0.0'::FLOAT / '-inf'::FLOAT, '0.0'::FLOAT % '-inf'::FLOAT	f-inf,finf,fnan,f-0x0.0p+0,f0x0.0p+0
+1090	o	SELECT '0.0'::FLOAT + '0.0'::FLOAT, '0.0'::FLOAT - '0.0'::FLOAT, '0.0'::FLOAT * '0.0'::FLOAT, '0.0'::FLOAT / '0.0'::FLOAT, '0.0'::FLOAT % '0.0'::FLOAT	f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,fnan,fnan
+1091	o	SELECT '0.0'::FLOAT + '-0.0'::FLOAT, '0.0'::FLOAT - '-0.0'::FLOAT, '0.0'::FLOAT * '-0.0'::FLOAT, '0.0'::FLOAT / '-0.0'::FLOAT, '0.0'::FLOAT % '-0.0'::FLOAT	f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0,fnan,fnan
+1092	o	SELECT '0.0'::FLOAT + '1.5'::FLOAT, '0.0'::FLOAT - '1.5'::FLOAT, '0.0'::FLOAT * '1.5'::FLOAT, '0.0'::FLOAT / '1.5'::FLOAT, '0.0'::FLOAT % '1.5'::FLOAT	f0x1.8000000000000p+0,f-0x1.8000000000000p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+1093	o	SELECT '0.0'::FLOAT + '-2'::FLOAT, '0.0'::FLOAT - '-2'::FLOAT, '0.0'::FLOAT * '-2'::FLOAT, '0.0'::FLOAT / '-2'::FLOAT, '0.0'::FLOAT % '-2'::FLOAT	f-0x1.0000000000000p+1,f0x1.0000000000000p+1,f-0x0.0p+0,f-0x0.0p+0,f0x0.0p+0
+1094	o	SELECT '0.0'::FLOAT + NULL::FLOAT, '0.0'::FLOAT - NULL::FLOAT, '0.0'::FLOAT * NULL::FLOAT, '0.0'::FLOAT / NULL::FLOAT, '0.0'::FLOAT % NULL::FLOAT	N,N,N,N,N
+1095	o	SELECT '-0.0'::FLOAT + 'nan'::FLOAT, '-0.0'::FLOAT - 'nan'::FLOAT, '-0.0'::FLOAT * 'nan'::FLOAT, '-0.0'::FLOAT / 'nan'::FLOAT, '-0.0'::FLOAT % 'nan'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1096	o	SELECT '-0.0'::FLOAT + -('nan'::FLOAT), '-0.0'::FLOAT - -('nan'::FLOAT), '-0.0'::FLOAT * -('nan'::FLOAT), '-0.0'::FLOAT / -('nan'::FLOAT), '-0.0'::FLOAT % -('nan'::FLOAT)	fnan,fnan,fnan,fnan,fnan
+1097	o	SELECT '-0.0'::FLOAT + 'inf'::FLOAT, '-0.0'::FLOAT - 'inf'::FLOAT, '-0.0'::FLOAT * 'inf'::FLOAT, '-0.0'::FLOAT / 'inf'::FLOAT, '-0.0'::FLOAT % 'inf'::FLOAT	finf,f-inf,fnan,f-0x0.0p+0,f-0x0.0p+0
+1098	o	SELECT '-0.0'::FLOAT + '-inf'::FLOAT, '-0.0'::FLOAT - '-inf'::FLOAT, '-0.0'::FLOAT * '-inf'::FLOAT, '-0.0'::FLOAT / '-inf'::FLOAT, '-0.0'::FLOAT % '-inf'::FLOAT	f-inf,finf,fnan,f0x0.0p+0,f-0x0.0p+0
+1099	o	SELECT '-0.0'::FLOAT + '0.0'::FLOAT, '-0.0'::FLOAT - '0.0'::FLOAT, '-0.0'::FLOAT * '0.0'::FLOAT, '-0.0'::FLOAT / '0.0'::FLOAT, '-0.0'::FLOAT % '0.0'::FLOAT	f0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,fnan,fnan
+1100	o	SELECT '-0.0'::FLOAT + '-0.0'::FLOAT, '-0.0'::FLOAT - '-0.0'::FLOAT, '-0.0'::FLOAT * '-0.0'::FLOAT, '-0.0'::FLOAT / '-0.0'::FLOAT, '-0.0'::FLOAT % '-0.0'::FLOAT	f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0,fnan,fnan
+1101	o	SELECT '-0.0'::FLOAT + '1.5'::FLOAT, '-0.0'::FLOAT - '1.5'::FLOAT, '-0.0'::FLOAT * '1.5'::FLOAT, '-0.0'::FLOAT / '1.5'::FLOAT, '-0.0'::FLOAT % '1.5'::FLOAT	f0x1.8000000000000p+0,f-0x1.8000000000000p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0
+1102	o	SELECT '-0.0'::FLOAT + '-2'::FLOAT, '-0.0'::FLOAT - '-2'::FLOAT, '-0.0'::FLOAT * '-2'::FLOAT, '-0.0'::FLOAT / '-2'::FLOAT, '-0.0'::FLOAT % '-2'::FLOAT	f-0x1.0000000000000p+1,f0x1.0000000000000p+1,f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0
+1103	o	SELECT '-0.0'::FLOAT + NULL::FLOAT, '-0.0'::FLOAT - NULL::FLOAT, '-0.0'::FLOAT * NULL::FLOAT, '-0.0'::FLOAT / NULL::FLOAT, '-0.0'::FLOAT % NULL::FLOAT	N,N,N,N,N
+1104	o	SELECT '1.5'::FLOAT + 'nan'::FLOAT, '1.5'::FLOAT - 'nan'::FLOAT, '1.5'::FLOAT * 'nan'::FLOAT, '1.5'::FLOAT / 'nan'::FLOAT, '1.5'::FLOAT % 'nan'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1105	o	SELECT '1.5'::FLOAT + -('nan'::FLOAT), '1.5'::FLOAT - -('nan'::FLOAT), '1.5'::FLOAT * -('nan'::FLOAT), '1.5'::FLOAT / -('nan'::FLOAT), '1.5'::FLOAT % -('nan'::FLOAT)	fnan,fnan,fnan,fnan,fnan
+1106	o	SELECT '1.5'::FLOAT + 'inf'::FLOAT, '1.5'::FLOAT - 'inf'::FLOAT, '1.5'::FLOAT * 'inf'::FLOAT, '1.5'::FLOAT / 'inf'::FLOAT, '1.5'::FLOAT % 'inf'::FLOAT	finf,f-inf,finf,f0x0.0p+0,f0x1.8000000000000p+0
+1107	o	SELECT '1.5'::FLOAT + '-inf'::FLOAT, '1.5'::FLOAT - '-inf'::FLOAT, '1.5'::FLOAT * '-inf'::FLOAT, '1.5'::FLOAT / '-inf'::FLOAT, '1.5'::FLOAT % '-inf'::FLOAT	f-inf,finf,f-inf,f-0x0.0p+0,f0x1.8000000000000p+0
+1108	o	SELECT '1.5'::FLOAT + '0.0'::FLOAT, '1.5'::FLOAT - '0.0'::FLOAT, '1.5'::FLOAT * '0.0'::FLOAT, '1.5'::FLOAT / '0.0'::FLOAT, '1.5'::FLOAT % '0.0'::FLOAT	f0x1.8000000000000p+0,f0x1.8000000000000p+0,f0x0.0p+0,finf,fnan
+1109	o	SELECT '1.5'::FLOAT + '-0.0'::FLOAT, '1.5'::FLOAT - '-0.0'::FLOAT, '1.5'::FLOAT * '-0.0'::FLOAT, '1.5'::FLOAT / '-0.0'::FLOAT, '1.5'::FLOAT % '-0.0'::FLOAT	f0x1.8000000000000p+0,f0x1.8000000000000p+0,f-0x0.0p+0,f-inf,fnan
+1110	o	SELECT '1.5'::FLOAT + '1.5'::FLOAT, '1.5'::FLOAT - '1.5'::FLOAT, '1.5'::FLOAT * '1.5'::FLOAT, '1.5'::FLOAT / '1.5'::FLOAT, '1.5'::FLOAT % '1.5'::FLOAT	f0x1.8000000000000p+1,f0x0.0p+0,f0x1.2000000000000p+1,f0x1.0000000000000p+0,f0x0.0p+0
+1111	o	SELECT '1.5'::FLOAT + '-2'::FLOAT, '1.5'::FLOAT - '-2'::FLOAT, '1.5'::FLOAT * '-2'::FLOAT, '1.5'::FLOAT / '-2'::FLOAT, '1.5'::FLOAT % '-2'::FLOAT	f-0x1.0000000000000p-1,f0x1.c000000000000p+1,f-0x1.8000000000000p+1,f-0x1.8000000000000p-1,f0x1.8000000000000p+0
+1112	o	SELECT '1.5'::FLOAT + NULL::FLOAT, '1.5'::FLOAT - NULL::FLOAT, '1.5'::FLOAT * NULL::FLOAT, '1.5'::FLOAT / NULL::FLOAT, '1.5'::FLOAT % NULL::FLOAT	N,N,N,N,N
+1113	o	SELECT '-2'::FLOAT + 'nan'::FLOAT, '-2'::FLOAT - 'nan'::FLOAT, '-2'::FLOAT * 'nan'::FLOAT, '-2'::FLOAT / 'nan'::FLOAT, '-2'::FLOAT % 'nan'::FLOAT	fnan,fnan,fnan,fnan,fnan
+1114	o	SELECT '-2'::FLOAT + -('nan'::FLOAT), '-2'::FLOAT - -('nan'::FLOAT), '-2'::FLOAT * -('nan'::FLOAT), '-2'::FLOAT / -('nan'::FLOAT), '-2'::FLOAT % -('nan'::FLOAT)	fnan,fnan,fnan,fnan,fnan
+1115	o	SELECT '-2'::FLOAT + 'inf'::FLOAT, '-2'::FLOAT - 'inf'::FLOAT, '-2'::FLOAT * 'inf'::FLOAT, '-2'::FLOAT / 'inf'::FLOAT, '-2'::FLOAT % 'inf'::FLOAT	finf,f-inf,f-inf,f-0x0.0p+0,f-0x1.0000000000000p+1
+1116	o	SELECT '-2'::FLOAT + '-inf'::FLOAT, '-2'::FLOAT - '-inf'::FLOAT, '-2'::FLOAT * '-inf'::FLOAT, '-2'::FLOAT / '-inf'::FLOAT, '-2'::FLOAT % '-inf'::FLOAT	f-inf,finf,finf,f0x0.0p+0,f-0x1.0000000000000p+1
+1117	o	SELECT '-2'::FLOAT + '0.0'::FLOAT, '-2'::FLOAT - '0.0'::FLOAT, '-2'::FLOAT * '0.0'::FLOAT, '-2'::FLOAT / '0.0'::FLOAT, '-2'::FLOAT % '0.0'::FLOAT	f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x0.0p+0,f-inf,fnan
+1118	o	SELECT '-2'::FLOAT + '-0.0'::FLOAT, '-2'::FLOAT - '-0.0'::FLOAT, '-2'::FLOAT * '-0.0'::FLOAT, '-2'::FLOAT / '-0.0'::FLOAT, '-2'::FLOAT % '-0.0'::FLOAT	f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f0x0.0p+0,finf,fnan
+1119	o	SELECT '-2'::FLOAT + '1.5'::FLOAT, '-2'::FLOAT - '1.5'::FLOAT, '-2'::FLOAT * '1.5'::FLOAT, '-2'::FLOAT / '1.5'::FLOAT, '-2'::FLOAT % '1.5'::FLOAT	f-0x1.0000000000000p-1,f-0x1.c000000000000p+1,f-0x1.8000000000000p+1,f-0x1.5555560000000p+0,f-0x1.0000000000000p-1
+1120	o	SELECT '-2'::FLOAT + '-2'::FLOAT, '-2'::FLOAT - '-2'::FLOAT, '-2'::FLOAT * '-2'::FLOAT, '-2'::FLOAT / '-2'::FLOAT, '-2'::FLOAT % '-2'::FLOAT	f-0x1.0000000000000p+2,f0x0.0p+0,f0x1.0000000000000p+2,f0x1.0000000000000p+0,f-0x0.0p+0
+1121	o	SELECT '-2'::FLOAT + NULL::FLOAT, '-2'::FLOAT - NULL::FLOAT, '-2'::FLOAT * NULL::FLOAT, '-2'::FLOAT / NULL::FLOAT, '-2'::FLOAT % NULL::FLOAT	N,N,N,N,N
+1122	o	SELECT NULL::FLOAT + 'nan'::FLOAT, NULL::FLOAT - 'nan'::FLOAT, NULL::FLOAT * 'nan'::FLOAT, NULL::FLOAT / 'nan'::FLOAT, NULL::FLOAT % 'nan'::FLOAT	N,N,N,N,N
+1123	o	SELECT NULL::FLOAT + -('nan'::FLOAT), NULL::FLOAT - -('nan'::FLOAT), NULL::FLOAT * -('nan'::FLOAT), NULL::FLOAT / -('nan'::FLOAT), NULL::FLOAT % -('nan'::FLOAT)	N,N,N,N,N
+1124	o	SELECT NULL::FLOAT + 'inf'::FLOAT, NULL::FLOAT - 'inf'::FLOAT, NULL::FLOAT * 'inf'::FLOAT, NULL::FLOAT / 'inf'::FLOAT, NULL::FLOAT % 'inf'::FLOAT	N,N,N,N,N
+1125	o	SELECT NULL::FLOAT + '-inf'::FLOAT, NULL::FLOAT - '-inf'::FLOAT, NULL::FLOAT * '-inf'::FLOAT, NULL::FLOAT / '-inf'::FLOAT, NULL::FLOAT % '-inf'::FLOAT	N,N,N,N,N
+1126	o	SELECT NULL::FLOAT + '0.0'::FLOAT, NULL::FLOAT - '0.0'::FLOAT, NULL::FLOAT * '0.0'::FLOAT, NULL::FLOAT / '0.0'::FLOAT, NULL::FLOAT % '0.0'::FLOAT	N,N,N,N,N
+1127	o	SELECT NULL::FLOAT + '-0.0'::FLOAT, NULL::FLOAT - '-0.0'::FLOAT, NULL::FLOAT * '-0.0'::FLOAT, NULL::FLOAT / '-0.0'::FLOAT, NULL::FLOAT % '-0.0'::FLOAT	N,N,N,N,N
+1128	o	SELECT NULL::FLOAT + '1.5'::FLOAT, NULL::FLOAT - '1.5'::FLOAT, NULL::FLOAT * '1.5'::FLOAT, NULL::FLOAT / '1.5'::FLOAT, NULL::FLOAT % '1.5'::FLOAT	N,N,N,N,N
+1129	o	SELECT NULL::FLOAT + '-2'::FLOAT, NULL::FLOAT - '-2'::FLOAT, NULL::FLOAT * '-2'::FLOAT, NULL::FLOAT / '-2'::FLOAT, NULL::FLOAT % '-2'::FLOAT	N,N,N,N,N
+1130	o	SELECT NULL::FLOAT + NULL::FLOAT, NULL::FLOAT - NULL::FLOAT, NULL::FLOAT * NULL::FLOAT, NULL::FLOAT / NULL::FLOAT, NULL::FLOAT % NULL::FLOAT	N,N,N,N,N
+1131	o	SELECT abs('nan'::DOUBLE), sign('nan'::DOUBLE), ceil('nan'::DOUBLE), floor('nan'::DOUBLE), round('nan'::DOUBLE), round('nan'::DOUBLE, 2), round('nan'::DOUBLE, -1), trunc('nan'::DOUBLE), sqrt('nan'::DOUBLE), cbrt('nan'::DOUBLE), ln('nan'::DOUBLE), log10('nan'::DOUBLE), log2('nan'::DOUBLE), log('nan'::DOUBLE), exp('nan'::DOUBLE), sin('nan'::DOUBLE), cos('nan'::DOUBLE), tan('nan'::DOUBLE), asin('nan'::DOUBLE), acos('nan'::DOUBLE), atan('nan'::DOUBLE), isnan('nan'::DOUBLE), isinf('nan'::DOUBLE), isfinite('nan'::DOUBLE), -('nan'::DOUBLE), power('nan'::DOUBLE, 2), power(2, 'nan'::DOUBLE), power('nan'::DOUBLE, 0), power(1, 'nan'::DOUBLE), atan2('nan'::DOUBLE, 1), atan2(1, 'nan'::DOUBLE), greatest('nan'::DOUBLE, 1), least('nan'::DOUBLE, 1), greatest(1, 'nan'::DOUBLE, 'nan'::DOUBLE), nullif('nan'::DOUBLE, 'nan'::DOUBLE), coalesce('nan'::DOUBLE, 7), degrees('nan'::DOUBLE), radians('nan'::DOUBLE), sinh('nan'::DOUBLE), cosh('nan'::DOUBLE), tanh('nan'::DOUBLE), asinh('nan'::DOUBLE), acosh('nan'::DOUBLE), atanh('nan'::DOUBLE)	fnan,i0,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,b1,b0,b0,fnan,fnan,fnan,f0x1.0000000000000p+0,f0x1.0000000000000p+0,fnan,fnan,fnan,f0x1.0000000000000p+0,fnan,N,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan
+1132	o	SELECT abs(-('nan'::DOUBLE)), sign(-('nan'::DOUBLE)), ceil(-('nan'::DOUBLE)), floor(-('nan'::DOUBLE)), round(-('nan'::DOUBLE)), round(-('nan'::DOUBLE), 2), round(-('nan'::DOUBLE), -1), trunc(-('nan'::DOUBLE)), sqrt(-('nan'::DOUBLE)), cbrt(-('nan'::DOUBLE)), ln(-('nan'::DOUBLE)), log10(-('nan'::DOUBLE)), log2(-('nan'::DOUBLE)), log(-('nan'::DOUBLE)), exp(-('nan'::DOUBLE)), sin(-('nan'::DOUBLE)), cos(-('nan'::DOUBLE)), tan(-('nan'::DOUBLE)), asin(-('nan'::DOUBLE)), acos(-('nan'::DOUBLE)), atan(-('nan'::DOUBLE)), isnan(-('nan'::DOUBLE)), isinf(-('nan'::DOUBLE)), isfinite(-('nan'::DOUBLE)), -(-('nan'::DOUBLE)), power(-('nan'::DOUBLE), 2), power(2, -('nan'::DOUBLE)), power(-('nan'::DOUBLE), 0), power(1, -('nan'::DOUBLE)), atan2(-('nan'::DOUBLE), 1), atan2(1, -('nan'::DOUBLE)), greatest(-('nan'::DOUBLE), 1), least(-('nan'::DOUBLE), 1), greatest(1, -('nan'::DOUBLE), 'nan'::DOUBLE), nullif(-('nan'::DOUBLE), 'nan'::DOUBLE), coalesce(-('nan'::DOUBLE), 7), degrees(-('nan'::DOUBLE)), radians(-('nan'::DOUBLE)), sinh(-('nan'::DOUBLE)), cosh(-('nan'::DOUBLE)), tanh(-('nan'::DOUBLE)), asinh(-('nan'::DOUBLE)), acosh(-('nan'::DOUBLE)), atanh(-('nan'::DOUBLE))	fnan,i0,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,b1,b0,b0,fnan,fnan,fnan,f0x1.0000000000000p+0,f0x1.0000000000000p+0,fnan,fnan,fnan,f0x1.0000000000000p+0,fnan,N,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan
+1133	o	SELECT abs('inf'::DOUBLE), sign('inf'::DOUBLE), ceil('inf'::DOUBLE), floor('inf'::DOUBLE), round('inf'::DOUBLE), round('inf'::DOUBLE, 2), round('inf'::DOUBLE, -1), trunc('inf'::DOUBLE), sqrt('inf'::DOUBLE), cbrt('inf'::DOUBLE), ln('inf'::DOUBLE), log10('inf'::DOUBLE), log2('inf'::DOUBLE), log('inf'::DOUBLE), exp('inf'::DOUBLE), sin('inf'::DOUBLE), cos('inf'::DOUBLE), tan('inf'::DOUBLE), asin('inf'::DOUBLE), acos('inf'::DOUBLE), atan('inf'::DOUBLE), isnan('inf'::DOUBLE), isinf('inf'::DOUBLE), isfinite('inf'::DOUBLE), -('inf'::DOUBLE), power('inf'::DOUBLE, 2), power(2, 'inf'::DOUBLE), power('inf'::DOUBLE, 0), power(1, 'inf'::DOUBLE), atan2('inf'::DOUBLE, 1), atan2(1, 'inf'::DOUBLE), greatest('inf'::DOUBLE, 1), least('inf'::DOUBLE, 1), greatest(1, 'inf'::DOUBLE, 'nan'::DOUBLE), nullif('inf'::DOUBLE, 'nan'::DOUBLE), coalesce('inf'::DOUBLE, 7), degrees('inf'::DOUBLE), radians('inf'::DOUBLE), sinh('inf'::DOUBLE), cosh('inf'::DOUBLE), tanh('inf'::DOUBLE), asinh('inf'::DOUBLE), acosh('inf'::DOUBLE), atanh('inf'::DOUBLE)	finf,i1,finf,finf,finf,finf,finf,finf,finf,finf,finf,finf,finf,finf,finf,fnan,fnan,fnan,fnan,fnan,f0x1.921fb54442d18p+0,b0,b1,b0,f-inf,finf,finf,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x1.921fb54442d18p+0,f0x0.0p+0,finf,f0x1.0000000000000p+0,fnan,finf,finf,finf,finf,finf,finf,f0x1.0000000000000p+0,finf,finf,fnan
+1134	o	SELECT abs('-inf'::DOUBLE), sign('-inf'::DOUBLE), ceil('-inf'::DOUBLE), floor('-inf'::DOUBLE), round('-inf'::DOUBLE), round('-inf'::DOUBLE, 2), round('-inf'::DOUBLE, -1), trunc('-inf'::DOUBLE), sqrt('-inf'::DOUBLE), cbrt('-inf'::DOUBLE), ln('-inf'::DOUBLE), log10('-inf'::DOUBLE), log2('-inf'::DOUBLE), log('-inf'::DOUBLE), exp('-inf'::DOUBLE), sin('-inf'::DOUBLE), cos('-inf'::DOUBLE), tan('-inf'::DOUBLE), asin('-inf'::DOUBLE), acos('-inf'::DOUBLE), atan('-inf'::DOUBLE), isnan('-inf'::DOUBLE), isinf('-inf'::DOUBLE), isfinite('-inf'::DOUBLE), -('-inf'::DOUBLE), power('-inf'::DOUBLE, 2), power(2, '-inf'::DOUBLE), power('-inf'::DOUBLE, 0), power(1, '-inf'::DOUBLE), atan2('-inf'::DOUBLE, 1), atan2(1, '-inf'::DOUBLE), greatest('-inf'::DOUBLE, 1), least('-inf'::DOUBLE, 1), greatest(1, '-inf'::DOUBLE, 'nan'::DOUBLE), nullif('-inf'::DOUBLE, 'nan'::DOUBLE), coalesce('-inf'::DOUBLE, 7), degrees('-inf'::DOUBLE), radians('-inf'::DOUBLE), sinh('-inf'::DOUBLE), cosh('-inf'::DOUBLE), tanh('-inf'::DOUBLE), asinh('-inf'::DOUBLE), acosh('-inf'::DOUBLE), atanh('-inf'::DOUBLE)	finf,i-1,f-inf,f-inf,f-inf,f-inf,f-inf,f-inf,fnan,f-inf,fnan,fnan,fnan,fnan,f0x0.0p+0,fnan,fnan,fnan,fnan,fnan,f-0x1.921fb54442d18p+0,b0,b1,b0,finf,finf,f0x0.0p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f-0x1.921fb54442d18p+0,f0x1.921fb54442d18p+1,f0x1.0000000000000p+0,f-inf,fnan,f-inf,f-inf,f-inf,f-inf,f-inf,finf,f-0x1.0000000000000p+0,f-inf,fnan,fnan
+1135	o	SELECT abs('0.0'::DOUBLE), sign('0.0'::DOUBLE), ceil('0.0'::DOUBLE), floor('0.0'::DOUBLE), round('0.0'::DOUBLE), round('0.0'::DOUBLE, 2), round('0.0'::DOUBLE, -1), trunc('0.0'::DOUBLE), sqrt('0.0'::DOUBLE), cbrt('0.0'::DOUBLE), ln('0.0'::DOUBLE), log10('0.0'::DOUBLE), log2('0.0'::DOUBLE), log('0.0'::DOUBLE), exp('0.0'::DOUBLE), sin('0.0'::DOUBLE), cos('0.0'::DOUBLE), tan('0.0'::DOUBLE), asin('0.0'::DOUBLE), acos('0.0'::DOUBLE), atan('0.0'::DOUBLE), isnan('0.0'::DOUBLE), isinf('0.0'::DOUBLE), isfinite('0.0'::DOUBLE), -('0.0'::DOUBLE), power('0.0'::DOUBLE, 2), power(2, '0.0'::DOUBLE), power('0.0'::DOUBLE, 0), power(1, '0.0'::DOUBLE), atan2('0.0'::DOUBLE, 1), atan2(1, '0.0'::DOUBLE), greatest('0.0'::DOUBLE, 1), least('0.0'::DOUBLE, 1), greatest(1, '0.0'::DOUBLE, 'nan'::DOUBLE), nullif('0.0'::DOUBLE, 'nan'::DOUBLE), coalesce('0.0'::DOUBLE, 7), degrees('0.0'::DOUBLE), radians('0.0'::DOUBLE), sinh('0.0'::DOUBLE), cosh('0.0'::DOUBLE), tanh('0.0'::DOUBLE), asinh('0.0'::DOUBLE), acosh('0.0'::DOUBLE), atanh('0.0'::DOUBLE)	f0x0.0p+0,i0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f-inf,f-inf,f-inf,f-inf,f0x1.0000000000000p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x0.0p+0,f0x0.0p+0,f0x1.921fb54442d18p+0,f0x0.0p+0,b0,b0,b1,f-0x0.0p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x0.0p+0,f0x1.921fb54442d18p+0,f0x1.0000000000000p+0,f0x0.0p+0,fnan,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x0.0p+0,f0x0.0p+0,fnan,f0x0.0p+0
+1136	o	SELECT abs('-0.0'::DOUBLE), sign('-0.0'::DOUBLE), ceil('-0.0'::DOUBLE), floor('-0.0'::DOUBLE), round('-0.0'::DOUBLE), round('-0.0'::DOUBLE, 2), round('-0.0'::DOUBLE, -1), trunc('-0.0'::DOUBLE), sqrt('-0.0'::DOUBLE), cbrt('-0.0'::DOUBLE), ln('-0.0'::DOUBLE), log10('-0.0'::DOUBLE), log2('-0.0'::DOUBLE), log('-0.0'::DOUBLE), exp('-0.0'::DOUBLE), sin('-0.0'::DOUBLE), cos('-0.0'::DOUBLE), tan('-0.0'::DOUBLE), asin('-0.0'::DOUBLE), acos('-0.0'::DOUBLE), atan('-0.0'::DOUBLE), isnan('-0.0'::DOUBLE), isinf('-0.0'::DOUBLE), isfinite('-0.0'::DOUBLE), -('-0.0'::DOUBLE), power('-0.0'::DOUBLE, 2), power(2, '-0.0'::DOUBLE), power('-0.0'::DOUBLE, 0), power(1, '-0.0'::DOUBLE), atan2('-0.0'::DOUBLE, 1), atan2(1, '-0.0'::DOUBLE), greatest('-0.0'::DOUBLE, 1), least('-0.0'::DOUBLE, 1), greatest(1, '-0.0'::DOUBLE, 'nan'::DOUBLE), nullif('-0.0'::DOUBLE, 'nan'::DOUBLE), coalesce('-0.0'::DOUBLE, 7), degrees('-0.0'::DOUBLE), radians('-0.0'::DOUBLE), sinh('-0.0'::DOUBLE), cosh('-0.0'::DOUBLE), tanh('-0.0'::DOUBLE), asinh('-0.0'::DOUBLE), acosh('-0.0'::DOUBLE), atanh('-0.0'::DOUBLE)	f0x0.0p+0,i0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-inf,f-inf,f-inf,f-inf,f0x1.0000000000000p+0,f-0x0.0p+0,f0x1.0000000000000p+0,f-0x0.0p+0,f-0x0.0p+0,f0x1.921fb54442d18p+0,f-0x0.0p+0,b0,b0,b1,f0x0.0p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f-0x0.0p+0,f0x1.921fb54442d18p+0,f0x1.0000000000000p+0,f-0x0.0p+0,fnan,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f0x1.0000000000000p+0,f-0x0.0p+0,f-0x0.0p+0,fnan,f-0x0.0p+0
+1137	o	SELECT abs('1.5'::DOUBLE), sign('1.5'::DOUBLE), ceil('1.5'::DOUBLE), floor('1.5'::DOUBLE), round('1.5'::DOUBLE), round('1.5'::DOUBLE, 2), round('1.5'::DOUBLE, -1), trunc('1.5'::DOUBLE), sqrt('1.5'::DOUBLE), cbrt('1.5'::DOUBLE), ln('1.5'::DOUBLE), log10('1.5'::DOUBLE), log2('1.5'::DOUBLE), log('1.5'::DOUBLE), exp('1.5'::DOUBLE), sin('1.5'::DOUBLE), cos('1.5'::DOUBLE), tan('1.5'::DOUBLE), asin('1.5'::DOUBLE), acos('1.5'::DOUBLE), atan('1.5'::DOUBLE), isnan('1.5'::DOUBLE), isinf('1.5'::DOUBLE), isfinite('1.5'::DOUBLE), -('1.5'::DOUBLE), power('1.5'::DOUBLE, 2), power(2, '1.5'::DOUBLE), power('1.5'::DOUBLE, 0), power(1, '1.5'::DOUBLE), atan2('1.5'::DOUBLE, 1), atan2(1, '1.5'::DOUBLE), greatest('1.5'::DOUBLE, 1), least('1.5'::DOUBLE, 1), greatest(1, '1.5'::DOUBLE, 'nan'::DOUBLE), nullif('1.5'::DOUBLE, 'nan'::DOUBLE), coalesce('1.5'::DOUBLE, 7), degrees('1.5'::DOUBLE), radians('1.5'::DOUBLE), sinh('1.5'::DOUBLE), cosh('1.5'::DOUBLE), tanh('1.5'::DOUBLE), asinh('1.5'::DOUBLE), acosh('1.5'::DOUBLE), atanh('1.5'::DOUBLE)	f0x1.8000000000000p+0,i1,f0x1.0000000000000p+1,f0x1.0000000000000p+0,f0x1.0000000000000p+1,f0x1.8000000000000p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x1.3988e1409212ep+0,f0x1.250bfe1b082f5p+0,f0x1.9f323ecbf984cp-2,f0x1.68a288b60b7fcp-3,f0x1.2b803473f7ad1p-1,f0x1.68a288b60b7fcp-3,f0x1.1ed3fe64fc541p+2,f0x1.feb7a9b2c6d8bp-1,f0x1.21bd54fc5f9a7p-4,f0x1.c33ed50b88778p+3,fnan,fnan,f0x1.f730bd281f69bp-1,b0,b0,b1,f-0x1.8000000000000p+0,f0x1.2000000000000p+1,f0x1.6a09e667f3bcdp+1,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x1.f730bd281f69bp-1,f0x1.2d0ead6066395p-1,f0x1.8000000000000p+0,f0x1.0000000000000p+0,fnan,f0x1.8000000000000p+0,f0x1.8000000000000p+0,f0x1.57c6513cad17ap+6,f0x1.acee9f37bebd6p-6,f0x1.108c3aabd6a60p+1,f0x1.2d1bc21e22022p+1,f0x1.cf6f9786df577p-1,f0x1.31dc0090b63d9p+0,f0x1.ecc2caec5160ap-1,fnan
+1138	o	SELECT abs('-2'::DOUBLE), sign('-2'::DOUBLE), ceil('-2'::DOUBLE), floor('-2'::DOUBLE), round('-2'::DOUBLE), round('-2'::DOUBLE, 2), round('-2'::DOUBLE, -1), trunc('-2'::DOUBLE), sqrt('-2'::DOUBLE), cbrt('-2'::DOUBLE), ln('-2'::DOUBLE), log10('-2'::DOUBLE), log2('-2'::DOUBLE), log('-2'::DOUBLE), exp('-2'::DOUBLE), sin('-2'::DOUBLE), cos('-2'::DOUBLE), tan('-2'::DOUBLE), asin('-2'::DOUBLE), acos('-2'::DOUBLE), atan('-2'::DOUBLE), isnan('-2'::DOUBLE), isinf('-2'::DOUBLE), isfinite('-2'::DOUBLE), -('-2'::DOUBLE), power('-2'::DOUBLE, 2), power(2, '-2'::DOUBLE), power('-2'::DOUBLE, 0), power(1, '-2'::DOUBLE), atan2('-2'::DOUBLE, 1), atan2(1, '-2'::DOUBLE), greatest('-2'::DOUBLE, 1), least('-2'::DOUBLE, 1), greatest(1, '-2'::DOUBLE, 'nan'::DOUBLE), nullif('-2'::DOUBLE, 'nan'::DOUBLE), coalesce('-2'::DOUBLE, 7), degrees('-2'::DOUBLE), radians('-2'::DOUBLE), sinh('-2'::DOUBLE), cosh('-2'::DOUBLE), tanh('-2'::DOUBLE), asinh('-2'::DOUBLE), acosh('-2'::DOUBLE), atanh('-2'::DOUBLE)	f0x1.0000000000000p+1,i-1,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x0.0p+0,f-0x1.0000000000000p+1,fnan,f-0x1.428a2f98d728bp+0,fnan,fnan,fnan,fnan,f0x1.152aaa3bf81ccp-3,f-0x1.d18f6ead1b446p-1,f-0x1.aa22657537205p-2,f0x1.17af62e0950f8p+1,fnan,fnan,f-0x1.1b6e192ebbe45p+0,b0,b0,b1,f0x1.0000000000000p+1,f0x1.0000000000000p+2,f0x1.0000000000000p-2,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f-0x1.1b6e192ebbe44p+0,f0x1.56c6e7397f5aep+1,f0x1.0000000000000p+0,f-0x1.0000000000000p+1,fnan,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x1.ca5dc1a63c1f8p+6,f-0x1.1df46a2529d39p-5,f-0x1.d03cf63b6e19fp+1,f0x1.e18fa0df2d9bcp+1,f-0x1.ed9505e1bc3d4p-1,f-0x1.719218313d087p+0,fnan,fnan
+1139	o	SELECT abs(NULL::DOUBLE), sign(NULL::DOUBLE), ceil(NULL::DOUBLE), floor(NULL::DOUBLE), round(NULL::DOUBLE), round(NULL::DOUBLE, 2), round(NULL::DOUBLE, -1), trunc(NULL::DOUBLE), sqrt(NULL::DOUBLE), cbrt(NULL::DOUBLE), ln(NULL::DOUBLE), log10(NULL::DOUBLE), log2(NULL::DOUBLE), log(NULL::DOUBLE), exp(NULL::DOUBLE), sin(NULL::DOUBLE), cos(NULL::DOUBLE), tan(NULL::DOUBLE), asin(NULL::DOUBLE), acos(NULL::DOUBLE), atan(NULL::DOUBLE), isnan(NULL::DOUBLE), isinf(NULL::DOUBLE), isfinite(NULL::DOUBLE), -(NULL::DOUBLE), power(NULL::DOUBLE, 2), power(2, NULL::DOUBLE), power(NULL::DOUBLE, 0), power(1, NULL::DOUBLE), atan2(NULL::DOUBLE, 1), atan2(1, NULL::DOUBLE), greatest(NULL::DOUBLE, 1), least(NULL::DOUBLE, 1), greatest(1, NULL::DOUBLE, 'nan'::DOUBLE), nullif(NULL::DOUBLE, 'nan'::DOUBLE), coalesce(NULL::DOUBLE, 7), degrees(NULL::DOUBLE), radians(NULL::DOUBLE), sinh(NULL::DOUBLE), cosh(NULL::DOUBLE), tanh(NULL::DOUBLE), asinh(NULL::DOUBLE), acosh(NULL::DOUBLE), atanh(NULL::DOUBLE)	N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,f0x1.0000000000000p+0,f0x1.0000000000000p+0,fnan,N,f0x1.c000000000000p+2,N,N,N,N,N,N,N,N
+1140	o	SELECT abs('nan'::FLOAT), sign('nan'::FLOAT), ceil('nan'::FLOAT), floor('nan'::FLOAT), round('nan'::FLOAT), round('nan'::FLOAT, 2), round('nan'::FLOAT, -1), trunc('nan'::FLOAT), sqrt('nan'::FLOAT), cbrt('nan'::FLOAT), ln('nan'::FLOAT), log10('nan'::FLOAT), log2('nan'::FLOAT), log('nan'::FLOAT), exp('nan'::FLOAT), sin('nan'::FLOAT), cos('nan'::FLOAT), tan('nan'::FLOAT), asin('nan'::FLOAT), acos('nan'::FLOAT), atan('nan'::FLOAT), isnan('nan'::FLOAT), isinf('nan'::FLOAT), isfinite('nan'::FLOAT), -('nan'::FLOAT), power('nan'::FLOAT, 2), power(2, 'nan'::FLOAT), power('nan'::FLOAT, 0), power(1, 'nan'::FLOAT), atan2('nan'::FLOAT, 1), atan2(1, 'nan'::FLOAT), greatest('nan'::FLOAT, 1), least('nan'::FLOAT, 1), greatest(1, 'nan'::FLOAT, 'nan'::DOUBLE), nullif('nan'::FLOAT, 'nan'::DOUBLE), coalesce('nan'::FLOAT, 7), degrees('nan'::FLOAT), radians('nan'::FLOAT), sinh('nan'::FLOAT), cosh('nan'::FLOAT), tanh('nan'::FLOAT), asinh('nan'::FLOAT), acosh('nan'::FLOAT), atanh('nan'::FLOAT)	fnan,i0,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,b1,b0,b0,fnan,fnan,fnan,f0x1.0000000000000p+0,f0x1.0000000000000p+0,fnan,fnan,fnan,f0x1.0000000000000p+0,fnan,N,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan
+1141	o	SELECT abs(-('nan'::FLOAT)), sign(-('nan'::FLOAT)), ceil(-('nan'::FLOAT)), floor(-('nan'::FLOAT)), round(-('nan'::FLOAT)), round(-('nan'::FLOAT), 2), round(-('nan'::FLOAT), -1), trunc(-('nan'::FLOAT)), sqrt(-('nan'::FLOAT)), cbrt(-('nan'::FLOAT)), ln(-('nan'::FLOAT)), log10(-('nan'::FLOAT)), log2(-('nan'::FLOAT)), log(-('nan'::FLOAT)), exp(-('nan'::FLOAT)), sin(-('nan'::FLOAT)), cos(-('nan'::FLOAT)), tan(-('nan'::FLOAT)), asin(-('nan'::FLOAT)), acos(-('nan'::FLOAT)), atan(-('nan'::FLOAT)), isnan(-('nan'::FLOAT)), isinf(-('nan'::FLOAT)), isfinite(-('nan'::FLOAT)), -(-('nan'::FLOAT)), power(-('nan'::FLOAT), 2), power(2, -('nan'::FLOAT)), power(-('nan'::FLOAT), 0), power(1, -('nan'::FLOAT)), atan2(-('nan'::FLOAT), 1), atan2(1, -('nan'::FLOAT)), greatest(-('nan'::FLOAT), 1), least(-('nan'::FLOAT), 1), greatest(1, -('nan'::FLOAT), 'nan'::DOUBLE), nullif(-('nan'::FLOAT), 'nan'::DOUBLE), coalesce(-('nan'::FLOAT), 7), degrees(-('nan'::FLOAT)), radians(-('nan'::FLOAT)), sinh(-('nan'::FLOAT)), cosh(-('nan'::FLOAT)), tanh(-('nan'::FLOAT)), asinh(-('nan'::FLOAT)), acosh(-('nan'::FLOAT)), atanh(-('nan'::FLOAT))	fnan,i0,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,b1,b0,b0,fnan,fnan,fnan,f0x1.0000000000000p+0,f0x1.0000000000000p+0,fnan,fnan,fnan,f0x1.0000000000000p+0,fnan,N,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan,fnan
+1142	o	SELECT abs('inf'::FLOAT), sign('inf'::FLOAT), ceil('inf'::FLOAT), floor('inf'::FLOAT), round('inf'::FLOAT), round('inf'::FLOAT, 2), round('inf'::FLOAT, -1), trunc('inf'::FLOAT), sqrt('inf'::FLOAT), cbrt('inf'::FLOAT), ln('inf'::FLOAT), log10('inf'::FLOAT), log2('inf'::FLOAT), log('inf'::FLOAT), exp('inf'::FLOAT), sin('inf'::FLOAT), cos('inf'::FLOAT), tan('inf'::FLOAT), asin('inf'::FLOAT), acos('inf'::FLOAT), atan('inf'::FLOAT), isnan('inf'::FLOAT), isinf('inf'::FLOAT), isfinite('inf'::FLOAT), -('inf'::FLOAT), power('inf'::FLOAT, 2), power(2, 'inf'::FLOAT), power('inf'::FLOAT, 0), power(1, 'inf'::FLOAT), atan2('inf'::FLOAT, 1), atan2(1, 'inf'::FLOAT), greatest('inf'::FLOAT, 1), least('inf'::FLOAT, 1), greatest(1, 'inf'::FLOAT, 'nan'::DOUBLE), nullif('inf'::FLOAT, 'nan'::DOUBLE), coalesce('inf'::FLOAT, 7), degrees('inf'::FLOAT), radians('inf'::FLOAT), sinh('inf'::FLOAT), cosh('inf'::FLOAT), tanh('inf'::FLOAT), asinh('inf'::FLOAT), acosh('inf'::FLOAT), atanh('inf'::FLOAT)	finf,i1,finf,finf,finf,finf,finf,finf,finf,finf,finf,finf,finf,finf,finf,fnan,fnan,fnan,fnan,fnan,f0x1.921fb54442d18p+0,b0,b1,b0,f-inf,finf,finf,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x1.921fb54442d18p+0,f0x0.0p+0,finf,f0x1.0000000000000p+0,fnan,finf,finf,finf,finf,finf,finf,f0x1.0000000000000p+0,finf,finf,fnan
+1143	o	SELECT abs('-inf'::FLOAT), sign('-inf'::FLOAT), ceil('-inf'::FLOAT), floor('-inf'::FLOAT), round('-inf'::FLOAT), round('-inf'::FLOAT, 2), round('-inf'::FLOAT, -1), trunc('-inf'::FLOAT), sqrt('-inf'::FLOAT), cbrt('-inf'::FLOAT), ln('-inf'::FLOAT), log10('-inf'::FLOAT), log2('-inf'::FLOAT), log('-inf'::FLOAT), exp('-inf'::FLOAT), sin('-inf'::FLOAT), cos('-inf'::FLOAT), tan('-inf'::FLOAT), asin('-inf'::FLOAT), acos('-inf'::FLOAT), atan('-inf'::FLOAT), isnan('-inf'::FLOAT), isinf('-inf'::FLOAT), isfinite('-inf'::FLOAT), -('-inf'::FLOAT), power('-inf'::FLOAT, 2), power(2, '-inf'::FLOAT), power('-inf'::FLOAT, 0), power(1, '-inf'::FLOAT), atan2('-inf'::FLOAT, 1), atan2(1, '-inf'::FLOAT), greatest('-inf'::FLOAT, 1), least('-inf'::FLOAT, 1), greatest(1, '-inf'::FLOAT, 'nan'::DOUBLE), nullif('-inf'::FLOAT, 'nan'::DOUBLE), coalesce('-inf'::FLOAT, 7), degrees('-inf'::FLOAT), radians('-inf'::FLOAT), sinh('-inf'::FLOAT), cosh('-inf'::FLOAT), tanh('-inf'::FLOAT), asinh('-inf'::FLOAT), acosh('-inf'::FLOAT), atanh('-inf'::FLOAT)	finf,i-1,f-inf,f-inf,f-inf,f-inf,f-inf,f-inf,fnan,f-inf,fnan,fnan,fnan,fnan,f0x0.0p+0,fnan,fnan,fnan,fnan,fnan,f-0x1.921fb54442d18p+0,b0,b1,b0,finf,finf,f0x0.0p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f-0x1.921fb54442d18p+0,f0x1.921fb54442d18p+1,f0x1.0000000000000p+0,f-inf,fnan,f-inf,f-inf,f-inf,f-inf,f-inf,finf,f-0x1.0000000000000p+0,f-inf,fnan,fnan
+1144	o	SELECT abs('0.0'::FLOAT), sign('0.0'::FLOAT), ceil('0.0'::FLOAT), floor('0.0'::FLOAT), round('0.0'::FLOAT), round('0.0'::FLOAT, 2), round('0.0'::FLOAT, -1), trunc('0.0'::FLOAT), sqrt('0.0'::FLOAT), cbrt('0.0'::FLOAT), ln('0.0'::FLOAT), log10('0.0'::FLOAT), log2('0.0'::FLOAT), log('0.0'::FLOAT), exp('0.0'::FLOAT), sin('0.0'::FLOAT), cos('0.0'::FLOAT), tan('0.0'::FLOAT), asin('0.0'::FLOAT), acos('0.0'::FLOAT), atan('0.0'::FLOAT), isnan('0.0'::FLOAT), isinf('0.0'::FLOAT), isfinite('0.0'::FLOAT), -('0.0'::FLOAT), power('0.0'::FLOAT, 2), power(2, '0.0'::FLOAT), power('0.0'::FLOAT, 0), power(1, '0.0'::FLOAT), atan2('0.0'::FLOAT, 1), atan2(1, '0.0'::FLOAT), greatest('0.0'::FLOAT, 1), least('0.0'::FLOAT, 1), greatest(1, '0.0'::FLOAT, 'nan'::DOUBLE), nullif('0.0'::FLOAT, 'nan'::DOUBLE), coalesce('0.0'::FLOAT, 7), degrees('0.0'::FLOAT), radians('0.0'::FLOAT), sinh('0.0'::FLOAT), cosh('0.0'::FLOAT), tanh('0.0'::FLOAT), asinh('0.0'::FLOAT), acosh('0.0'::FLOAT), atanh('0.0'::FLOAT)	f0x0.0p+0,i0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f-inf,f-inf,f-inf,f-inf,f0x1.0000000000000p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x0.0p+0,f0x0.0p+0,f0x1.921fb54442d18p+0,f0x0.0p+0,b0,b0,b1,f-0x0.0p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x0.0p+0,f0x1.921fb54442d18p+0,f0x1.0000000000000p+0,f0x0.0p+0,fnan,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x0.0p+0,f0x0.0p+0,fnan,f0x0.0p+0
+1145	o	SELECT abs('-0.0'::FLOAT), sign('-0.0'::FLOAT), ceil('-0.0'::FLOAT), floor('-0.0'::FLOAT), round('-0.0'::FLOAT), round('-0.0'::FLOAT, 2), round('-0.0'::FLOAT, -1), trunc('-0.0'::FLOAT), sqrt('-0.0'::FLOAT), cbrt('-0.0'::FLOAT), ln('-0.0'::FLOAT), log10('-0.0'::FLOAT), log2('-0.0'::FLOAT), log('-0.0'::FLOAT), exp('-0.0'::FLOAT), sin('-0.0'::FLOAT), cos('-0.0'::FLOAT), tan('-0.0'::FLOAT), asin('-0.0'::FLOAT), acos('-0.0'::FLOAT), atan('-0.0'::FLOAT), isnan('-0.0'::FLOAT), isinf('-0.0'::FLOAT), isfinite('-0.0'::FLOAT), -('-0.0'::FLOAT), power('-0.0'::FLOAT, 2), power(2, '-0.0'::FLOAT), power('-0.0'::FLOAT, 0), power(1, '-0.0'::FLOAT), atan2('-0.0'::FLOAT, 1), atan2(1, '-0.0'::FLOAT), greatest('-0.0'::FLOAT, 1), least('-0.0'::FLOAT, 1), greatest(1, '-0.0'::FLOAT, 'nan'::DOUBLE), nullif('-0.0'::FLOAT, 'nan'::DOUBLE), coalesce('-0.0'::FLOAT, 7), degrees('-0.0'::FLOAT), radians('-0.0'::FLOAT), sinh('-0.0'::FLOAT), cosh('-0.0'::FLOAT), tanh('-0.0'::FLOAT), asinh('-0.0'::FLOAT), acosh('-0.0'::FLOAT), atanh('-0.0'::FLOAT)	f0x0.0p+0,i0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-inf,f-inf,f-inf,f-inf,f0x1.0000000000000p+0,f-0x0.0p+0,f0x1.0000000000000p+0,f-0x0.0p+0,f-0x0.0p+0,f0x1.921fb54442d18p+0,f-0x0.0p+0,b0,b0,b1,f0x0.0p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f-0x0.0p+0,f0x1.921fb54442d18p+0,f0x1.0000000000000p+0,f0x0.0p+0,fnan,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0,f0x1.0000000000000p+0,f-0x0.0p+0,f-0x0.0p+0,fnan,f-0x0.0p+0
+1146	o	SELECT abs('1.5'::FLOAT), sign('1.5'::FLOAT), ceil('1.5'::FLOAT), floor('1.5'::FLOAT), round('1.5'::FLOAT), round('1.5'::FLOAT, 2), round('1.5'::FLOAT, -1), trunc('1.5'::FLOAT), sqrt('1.5'::FLOAT), cbrt('1.5'::FLOAT), ln('1.5'::FLOAT), log10('1.5'::FLOAT), log2('1.5'::FLOAT), log('1.5'::FLOAT), exp('1.5'::FLOAT), sin('1.5'::FLOAT), cos('1.5'::FLOAT), tan('1.5'::FLOAT), asin('1.5'::FLOAT), acos('1.5'::FLOAT), atan('1.5'::FLOAT), isnan('1.5'::FLOAT), isinf('1.5'::FLOAT), isfinite('1.5'::FLOAT), -('1.5'::FLOAT), power('1.5'::FLOAT, 2), power(2, '1.5'::FLOAT), power('1.5'::FLOAT, 0), power(1, '1.5'::FLOAT), atan2('1.5'::FLOAT, 1), atan2(1, '1.5'::FLOAT), greatest('1.5'::FLOAT, 1), least('1.5'::FLOAT, 1), greatest(1, '1.5'::FLOAT, 'nan'::DOUBLE), nullif('1.5'::FLOAT, 'nan'::DOUBLE), coalesce('1.5'::FLOAT, 7), degrees('1.5'::FLOAT), radians('1.5'::FLOAT), sinh('1.5'::FLOAT), cosh('1.5'::FLOAT), tanh('1.5'::FLOAT), asinh('1.5'::FLOAT), acosh('1.5'::FLOAT), atanh('1.5'::FLOAT)	f0x1.8000000000000p+0,i1,f0x1.0000000000000p+1,f0x1.0000000000000p+0,f0x1.0000000000000p+1,f0x1.8000000000000p+0,f0x0.0p+0,f0x1.0000000000000p+0,f0x1.3988e1409212ep+0,f0x1.250bfe1b082f5p+0,f0x1.9f323ecbf984cp-2,f0x1.68a288b60b7fcp-3,f0x1.2b803473f7ad1p-1,f0x1.68a288b60b7fcp-3,f0x1.1ed3fe64fc541p+2,f0x1.feb7a9b2c6d8bp-1,f0x1.21bd54fc5f9a7p-4,f0x1.c33ed50b88778p+3,fnan,fnan,f0x1.f730bd281f69bp-1,b0,b0,b1,f-0x1.8000000000000p+0,f0x1.2000000000000p+1,f0x1.6a09e667f3bcdp+1,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f0x1.f730bd281f69bp-1,f0x1.2d0ead6066395p-1,f0x1.8000000000000p+0,f0x1.0000000000000p+0,fnan,f0x1.8000000000000p+0,f0x1.8000000000000p+0,f0x1.57c6513cad17ap+6,f0x1.acee9f37bebd6p-6,f0x1.108c3aabd6a60p+1,f0x1.2d1bc21e22022p+1,f0x1.cf6f9786df577p-1,f0x1.31dc0090b63d9p+0,f0x1.ecc2caec5160ap-1,fnan
+1147	o	SELECT abs('-2'::FLOAT), sign('-2'::FLOAT), ceil('-2'::FLOAT), floor('-2'::FLOAT), round('-2'::FLOAT), round('-2'::FLOAT, 2), round('-2'::FLOAT, -1), trunc('-2'::FLOAT), sqrt('-2'::FLOAT), cbrt('-2'::FLOAT), ln('-2'::FLOAT), log10('-2'::FLOAT), log2('-2'::FLOAT), log('-2'::FLOAT), exp('-2'::FLOAT), sin('-2'::FLOAT), cos('-2'::FLOAT), tan('-2'::FLOAT), asin('-2'::FLOAT), acos('-2'::FLOAT), atan('-2'::FLOAT), isnan('-2'::FLOAT), isinf('-2'::FLOAT), isfinite('-2'::FLOAT), -('-2'::FLOAT), power('-2'::FLOAT, 2), power(2, '-2'::FLOAT), power('-2'::FLOAT, 0), power(1, '-2'::FLOAT), atan2('-2'::FLOAT, 1), atan2(1, '-2'::FLOAT), greatest('-2'::FLOAT, 1), least('-2'::FLOAT, 1), greatest(1, '-2'::FLOAT, 'nan'::DOUBLE), nullif('-2'::FLOAT, 'nan'::DOUBLE), coalesce('-2'::FLOAT, 7), degrees('-2'::FLOAT), radians('-2'::FLOAT), sinh('-2'::FLOAT), cosh('-2'::FLOAT), tanh('-2'::FLOAT), asinh('-2'::FLOAT), acosh('-2'::FLOAT), atanh('-2'::FLOAT)	f0x1.0000000000000p+1,i-1,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x0.0p+0,f-0x1.0000000000000p+1,fnan,f-0x1.428a2f98d728bp+0,fnan,fnan,fnan,fnan,f0x1.152aaa3bf81ccp-3,f-0x1.d18f6ead1b446p-1,f-0x1.aa22657537205p-2,f0x1.17af62e0950f8p+1,fnan,fnan,f-0x1.1b6e192ebbe45p+0,b0,b0,b1,f0x1.0000000000000p+1,f0x1.0000000000000p+2,f0x1.0000000000000p-2,f0x1.0000000000000p+0,f0x1.0000000000000p+0,f-0x1.1b6e192ebbe44p+0,f0x1.56c6e7397f5aep+1,f0x1.0000000000000p+0,f-0x1.0000000000000p+1,fnan,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1,f-0x1.ca5dc1a63c1f8p+6,f-0x1.1df46a2529d39p-5,f-0x1.d03cf63b6e19fp+1,f0x1.e18fa0df2d9bcp+1,f-0x1.ed9505e1bc3d4p-1,f-0x1.719218313d087p+0,fnan,fnan
+1148	o	SELECT abs(NULL::FLOAT), sign(NULL::FLOAT), ceil(NULL::FLOAT), floor(NULL::FLOAT), round(NULL::FLOAT), round(NULL::FLOAT, 2), round(NULL::FLOAT, -1), trunc(NULL::FLOAT), sqrt(NULL::FLOAT), cbrt(NULL::FLOAT), ln(NULL::FLOAT), log10(NULL::FLOAT), log2(NULL::FLOAT), log(NULL::FLOAT), exp(NULL::FLOAT), sin(NULL::FLOAT), cos(NULL::FLOAT), tan(NULL::FLOAT), asin(NULL::FLOAT), acos(NULL::FLOAT), atan(NULL::FLOAT), isnan(NULL::FLOAT), isinf(NULL::FLOAT), isfinite(NULL::FLOAT), -(NULL::FLOAT), power(NULL::FLOAT, 2), power(2, NULL::FLOAT), power(NULL::FLOAT, 0), power(1, NULL::FLOAT), atan2(NULL::FLOAT, 1), atan2(1, NULL::FLOAT), greatest(NULL::FLOAT, 1), least(NULL::FLOAT, 1), greatest(1, NULL::FLOAT, 'nan'::DOUBLE), nullif(NULL::FLOAT, 'nan'::DOUBLE), coalesce(NULL::FLOAT, 7), degrees(NULL::FLOAT), radians(NULL::FLOAT), sinh(NULL::FLOAT), cosh(NULL::FLOAT), tanh(NULL::FLOAT), asinh(NULL::FLOAT), acosh(NULL::FLOAT), atanh(NULL::FLOAT)	N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,N,f0x1.0000000000000p+0,f0x1.0000000000000p+0,fnan,N,f0x1.c000000000000p+2,N,N,N,N,N,N,N,N
+1149	o	SELECT CAST(abs('nan'::DOUBLE) AS VARCHAR), CAST(-('nan'::DOUBLE) AS VARCHAR), CAST(greatest('nan'::DOUBLE, 1) AS VARCHAR)	snan,s-nan,snan
+1150	o	SELECT CAST(abs(-('nan'::DOUBLE)) AS VARCHAR), CAST(-(-('nan'::DOUBLE)) AS VARCHAR), CAST(greatest(-('nan'::DOUBLE), 1) AS VARCHAR)	snan,snan,s-nan
+1151	o	SELECT CAST(abs('inf'::DOUBLE) AS VARCHAR), CAST(-('inf'::DOUBLE) AS VARCHAR), CAST(greatest('inf'::DOUBLE, 1) AS VARCHAR)	sinf,s-inf,sinf
+1152	o	SELECT CAST(abs('-inf'::DOUBLE) AS VARCHAR), CAST(-('-inf'::DOUBLE) AS VARCHAR), CAST(greatest('-inf'::DOUBLE, 1) AS VARCHAR)	sinf,sinf,s1.0
+1153	o	SELECT CAST(abs('0.0'::DOUBLE) AS VARCHAR), CAST(-('0.0'::DOUBLE) AS VARCHAR), CAST(greatest('0.0'::DOUBLE, 1) AS VARCHAR)	s0.0,s-0.0,s1.0
+1154	o	SELECT CAST(abs('-0.0'::DOUBLE) AS VARCHAR), CAST(-('-0.0'::DOUBLE) AS VARCHAR), CAST(greatest('-0.0'::DOUBLE, 1) AS VARCHAR)	s0.0,s0.0,s1.0
+1155	o	SELECT CAST(abs('1.5'::DOUBLE) AS VARCHAR), CAST(-('1.5'::DOUBLE) AS VARCHAR), CAST(greatest('1.5'::DOUBLE, 1) AS VARCHAR)	s1.5,s-1.5,s1.5
+1156	u	SELECT id, d + 1, d * 0, d / 0, d % 2, -(d), abs(d) FROM t	i1,fnan,fnan,fnan,fnan,fnan,fnan|i2,fnan,fnan,fnan,fnan,fnan,fnan|i3,finf,fnan,finf,fnan,f-inf,finf|i4,f-inf,fnan,f-inf,fnan,finf,finf|i5,f0x1.0000000000000p+0,f0x0.0p+0,fnan,f0x0.0p+0,f-0x0.0p+0,f0x0.0p+0|i6,f0x1.0000000000000p+0,f-0x0.0p+0,fnan,f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0|i7,f0x1.4000000000000p+1,f0x0.0p+0,finf,f0x1.8000000000000p+0,f-0x1.8000000000000p+0,f0x1.8000000000000p+0|i8,f-0x1.0000000000000p+0,f-0x0.0p+0,f-inf,f-0x0.0p+0,f0x1.0000000000000p+1,f0x1.0000000000000p+1|i9,N,N,N,N,N,N|i10,fnan,fnan,fnan,fnan,fnan,fnan|i11,f0x1.4000000000000p+1,f0x0.0p+0,finf,f0x1.8000000000000p+0,f-0x1.8000000000000p+0,f0x1.8000000000000p+0|i12,f0x1.0000000000000p+0,f-0x0.0p+0,fnan,f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+1157	u	SELECT id, sqrt(d), ln(d), exp(d), sign(d), round(d, 1) FROM t	i1,fnan,fnan,fnan,i0,fnan|i2,fnan,fnan,fnan,i0,fnan|i3,finf,finf,finf,i1,finf|i4,fnan,fnan,f0x0.0p+0,i-1,f-inf|i5,f0x0.0p+0,f-inf,f0x1.0000000000000p+0,i0,f0x0.0p+0|i6,f-0x0.0p+0,f-inf,f0x1.0000000000000p+0,i0,f-0x0.0p+0|i7,f0x1.3988e1409212ep+0,f0x1.9f323ecbf984cp-2,f0x1.1ed3fe64fc541p+2,i1,f0x1.8000000000000p+0|i8,fnan,fnan,f0x1.152aaa3bf81ccp-3,i-1,f-0x1.0000000000000p+1|i9,N,N,N,N,N|i10,fnan,fnan,fnan,i0,fnan|i11,f0x1.3988e1409212ep+0,f0x1.9f323ecbf984cp-2,f0x1.1ed3fe64fc541p+2,i1,f0x1.8000000000000p+0|i12,f-0x0.0p+0,f-inf,f0x1.0000000000000p+0,i0,f-0x0.0p+0
+1158	u	SELECT id, greatest(d, 0), least(d, 0), nullif(d, 'nan'::DOUBLE) FROM t	i1,fnan,f0x0.0p+0,N|i2,fnan,f0x0.0p+0,N|i3,finf,f0x0.0p+0,finf|i4,f0x0.0p+0,f-inf,f-inf|i5,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0|i6,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0|i7,f0x1.8000000000000p+0,f0x0.0p+0,f0x1.8000000000000p+0|i8,f0x0.0p+0,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1|i9,f0x0.0p+0,f0x0.0p+0,N|i10,fnan,f0x0.0p+0,N|i11,f0x1.8000000000000p+0,f0x0.0p+0,f0x1.8000000000000p+0|i12,f-0x0.0p+0,f-0x0.0p+0,f-0x0.0p+0
+1159	u	SELECT id, f + 1, f * 0, f / 0, f % 2, -(f), abs(f) FROM t	i1,fnan,fnan,fnan,fnan,fnan,fnan|i2,fnan,fnan,fnan,fnan,fnan,fnan|i3,finf,fnan,finf,fnan,f-inf,finf|i4,f-inf,fnan,f-inf,fnan,finf,finf|i5,f0x1.0000000000000p+0,f0x0.0p+0,fnan,f0x0.0p+0,f-0x0.0p+0,f0x0.0p+0|i6,f0x1.0000000000000p+0,f-0x0.0p+0,fnan,f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0|i7,f0x1.4000000000000p+1,f0x0.0p+0,finf,f0x1.8000000000000p+0,f-0x1.8000000000000p+0,f0x1.8000000000000p+0|i8,f-0x1.0000000000000p+0,f-0x0.0p+0,f-inf,f-0x0.0p+0,f0x1.0000000000000p+1,f0x1.0000000000000p+1|i9,N,N,N,N,N,N|i10,fnan,fnan,fnan,fnan,fnan,fnan|i11,f0x1.4000000000000p+1,f0x0.0p+0,finf,f0x1.8000000000000p+0,f-0x1.8000000000000p+0,f0x1.8000000000000p+0|i12,f0x1.0000000000000p+0,f-0x0.0p+0,fnan,f-0x0.0p+0,f0x0.0p+0,f0x0.0p+0
+1160	u	SELECT id, sqrt(f), ln(f), exp(f), sign(f), round(f, 1) FROM t	i1,fnan,fnan,fnan,i0,fnan|i2,fnan,fnan,fnan,i0,fnan|i3,finf,finf,finf,i1,finf|i4,fnan,fnan,f0x0.0p+0,i-1,f-inf|i5,f0x0.0p+0,f-inf,f0x1.0000000000000p+0,i0,f0x0.0p+0|i6,f-0x0.0p+0,f-inf,f0x1.0000000000000p+0,i0,f-0x0.0p+0|i7,f0x1.3988e1409212ep+0,f0x1.9f323ecbf984cp-2,f0x1.1ed3fe64fc541p+2,i1,f0x1.8000000000000p+0|i8,fnan,fnan,f0x1.152aaa3bf81ccp-3,i-1,f-0x1.0000000000000p+1|i9,N,N,N,N,N|i10,fnan,fnan,fnan,i0,fnan|i11,f0x1.3988e1409212ep+0,f0x1.9f323ecbf984cp-2,f0x1.1ed3fe64fc541p+2,i1,f0x1.8000000000000p+0|i12,f-0x0.0p+0,f-inf,f0x1.0000000000000p+0,i0,f-0x0.0p+0
+1161	u	SELECT id, greatest(f, 0), least(f, 0), nullif(f, 'nan'::DOUBLE) FROM t	i1,fnan,f0x0.0p+0,N|i2,fnan,f0x0.0p+0,N|i3,finf,f0x0.0p+0,finf|i4,f0x0.0p+0,f-inf,f-inf|i5,f0x0.0p+0,f0x0.0p+0,f0x0.0p+0|i6,f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0|i7,f0x1.8000000000000p+0,f0x0.0p+0,f0x1.8000000000000p+0|i8,f0x0.0p+0,f-0x1.0000000000000p+1,f-0x1.0000000000000p+1|i9,f0x0.0p+0,f0x0.0p+0,N|i10,fnan,f0x0.0p+0,N|i11,f0x1.8000000000000p+0,f0x0.0p+0,f0x1.8000000000000p+0|i12,f0x0.0p+0,f0x0.0p+0,f-0x0.0p+0
+1162	o	SELECT 0.0 / 0.0, 1.0 / 0.0, -1.0 / 0.0	fnan,finf,f-inf
+1163	o	SELECT 10.0 % 0.0	error
+1164	o	SELECT 10 % 0.0	error
+1165	o	SELECT mod(10.0, 0.0)	error
+1166	o	SELECT 'inf'::DOUBLE % 0.0	fnan
+1167	o	SELECT 1.0 / -0.0, -0.0 * 1	finf,f0x0.0p+0

@@ -1,82 +1,73 @@
 #include "slothdb/common/types/value.hpp"
 #include "slothdb/common/types/blob.hpp"
 #include "slothdb/common/exception.hpp"
+#include "slothdb/common/types/float_order.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 
 namespace zugodb {
 
-// Shortest decimal string that parses back to the original value, used
-// to render FLOAT / DOUBLE. A portable stand-in for std::to_chars on
-// floating point: GCC < 11's libstdc++ (used for the manylinux wheels)
-// rejects that call as ambiguous, and libc++ marks it unavailable below
-// macOS 13.3 (the baseline-macOS wheels).
+// DuckDB's text for a FLOAT or DOUBLE, its cast to VARCHAR (fmt 6's "{}"
+// in string_cast.cpp): the shortest digits that read back as the value; a
+// plain decimal with at least one fractional digit ("1.0", "0.001") when
+// the decimal exponent is in [-4, 16), d[.ddd]e±XX otherwise ("1e+20",
+// "1.5e-05"); "-0.0"; "inf", "-inf"; and "nan" or "-nan" by the sign bit
+// (#42). It gave "1" for 1.0 and "100" for 100.0, and a NaN as the C
+// library prints it, "nan(ind)" under MinGW's UCRT.
 //
-// Previously this used %.*g at increasing precision, which prefers
-// scientific notation for small-magnitude integer-valued doubles
-// (10 -> "1e+01", 1000000 -> "1e+06"). Postgres/DuckDB output plain
-// decimal in the [1e-4, 1e16) range. Now we choose the shortest of
-// the %g form and a fixed-decimal form (with trailing zeros stripped)
-// that round-trips, preferring the fixed form for ties.
+// The digits come from %.*e at increasing precision, not std::to_chars:
+// GCC < 11's libstdc++ rejects that call as ambiguous, and libc++ marks
+// it unavailable below macOS 13.3. %.*e rounds correctly, so the first
+// precision that reads back is the shortest, and the nearest at it.
 template <typename T>
 static std::string ShortestFloatString(T value) {
-    const int max_digits = sizeof(T) == 4 ? 9 : 17;
+    if (IsNaN(value)) return SignBit(value) ? "-nan" : "nan";
+    bool negative = SignBit(value);
+    if (value == std::numeric_limits<T>::infinity()) return "inf";
+    if (value == -std::numeric_limits<T>::infinity()) return "-inf";
+    if (value == static_cast<T>(0)) return negative ? "-0.0" : "0.0";
+    T mag = negative ? -value : value;
+    const int max_precision = sizeof(T) == 4 ? 8 : 16;
     char buf[64];
-    if (!std::isfinite(static_cast<double>(value))) {
-        std::snprintf(buf, sizeof(buf), "%g", static_cast<double>(value));
-        return buf;
+    for (int prec = 0; prec <= max_precision; ++prec) {
+        std::snprintf(buf, sizeof(buf), "%.*e", prec, static_cast<double>(mag));
+        if (prec == max_precision || static_cast<T>(std::strtod(buf, nullptr)) == mag) break;
     }
-    if (value == static_cast<T>(0)) {
-        // Preserve sign for -0 (matches existing %g output).
-        return std::signbit(static_cast<double>(value)) ? "-0" : "0";
+    // buf is d[.ddd]e[+-]X...
+    std::string sci(buf);
+    size_t epos = sci.find('e');
+    int exp10 = std::atoi(sci.c_str() + epos + 1);
+    std::string digits;
+    for (size_t i = 0; i < epos; i++) {
+        if (sci[i] != '.') digits += sci[i];
     }
+    while (digits.size() > 1 && digits.back() == '0') digits.pop_back();
 
-    // (a) Shortest %g representation that round-trips.
-    std::string g_form;
-    for (int prec = 1; prec <= max_digits; ++prec) {
-        std::snprintf(buf, sizeof(buf), "%.*g", prec,
-                      static_cast<double>(value));
-        if (static_cast<T>(std::strtod(buf, nullptr)) == value) {
-            g_form = buf;
-            break;
-        }
+    std::string out = negative ? "-" : "";
+    int n = static_cast<int>(digits.size());
+    if (!(exp10 >= -4 && exp10 < 16)) {
+        out += digits[0];
+        if (n > 1) out += "." + digits.substr(1);
+        out += exp10 < 0 ? "e-" : "e+";
+        int e = exp10 < 0 ? -exp10 : exp10;
+        std::snprintf(buf, sizeof(buf), "%02d", e);
+        out += buf;
+        return out;
     }
-    if (g_form.empty()) {
-        std::snprintf(buf, sizeof(buf), "%.*g", max_digits,
-                      static_cast<double>(value));
-        g_form = buf;
+    int whole = exp10 + 1;  // digits before the decimal point
+    if (n <= whole) {
+        out += digits + std::string(static_cast<size_t>(whole - n), '0') + ".0";
+    } else if (whole > 0) {
+        out += digits.substr(0, static_cast<size_t>(whole)) + "." +
+               digits.substr(static_cast<size_t>(whole));
+    } else {
+        out += "0." + std::string(static_cast<size_t>(-whole), '0') + digits;
     }
-
-    // (b) Fixed-decimal form in the conventional range [1e-4, 1e16).
-    // Outside that range, %g already wins.
-    double absd = std::fabs(static_cast<double>(value));
-    if (absd >= 1e-4 && absd < 1e16) {
-        for (int dp = 0; dp <= max_digits; ++dp) {
-            std::snprintf(buf, sizeof(buf), "%.*f", dp,
-                          static_cast<double>(value));
-            if (static_cast<T>(std::strtod(buf, nullptr)) == value) {
-                std::string f_form = buf;
-                // Strip trailing zeros after the decimal point.
-                if (f_form.find('.') != std::string::npos) {
-                    size_t end = f_form.size();
-                    while (end > 0 && f_form[end - 1] == '0') end--;
-                    if (end > 0 && f_form[end - 1] == '.') end--;
-                    f_form.resize(end);
-                }
-                // Prefer the fixed form when it's no longer than %g
-                // (matches Postgres/DuckDB display).
-                if (f_form.size() <= g_form.size() ||
-                    g_form.find('e') != std::string::npos) {
-                    return f_form;
-                }
-                break;
-            }
-        }
-    }
-    return g_form;
+    return out;
 }
 
 // Convert days-since-1970-01-01 to (Y, M, D) using Howard Hinnant's
@@ -697,8 +688,9 @@ bool Value::operator==(const Value &other) const {
     case LogicalTypeId::USMALLINT: return usmallint_ == other.usmallint_;
     case LogicalTypeId::UINTEGER: return uinteger_ == other.uinteger_;
     case LogicalTypeId::UBIGINT: return ubigint_ == other.ubigint_;
-    case LogicalTypeId::FLOAT: return float_ == other.float_;
-    case LogicalTypeId::DOUBLE: return double_ == other.double_;
+    // DuckDB's order: NaN equals NaN, -0.0 equals 0.0 (#42).
+    case LogicalTypeId::FLOAT: return SqlEq(float_, other.float_);
+    case LogicalTypeId::DOUBLE: return SqlEq(double_, other.double_);
     case LogicalTypeId::HUGEINT: return hugeint_ == other.hugeint_;
     case LogicalTypeId::VARCHAR:
     case LogicalTypeId::BLOB: return str_value_ == other.str_value_;
@@ -727,8 +719,9 @@ bool Value::operator<(const Value &other) const {
     case LogicalTypeId::USMALLINT: return usmallint_ < other.usmallint_;
     case LogicalTypeId::UINTEGER: return uinteger_ < other.uinteger_;
     case LogicalTypeId::UBIGINT: return ubigint_ < other.ubigint_;
-    case LogicalTypeId::FLOAT: return float_ < other.float_;
-    case LogicalTypeId::DOUBLE: return double_ < other.double_;
+    // NaN above every other value, +inf included (#42).
+    case LogicalTypeId::FLOAT: return SqlLess(float_, other.float_);
+    case LogicalTypeId::DOUBLE: return SqlLess(double_, other.double_);
     case LogicalTypeId::HUGEINT: return hugeint_ < other.hugeint_;
     case LogicalTypeId::VARCHAR:
     case LogicalTypeId::BLOB: return str_value_ < other.str_value_;

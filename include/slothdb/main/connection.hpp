@@ -127,7 +127,7 @@ public:
     Catalog &GetCatalog() { return db_.GetCatalog(); }
 
 private:
-    // Query's statements; Query then refuses a result holding a NaN.
+    // Query's statements, once Query has fixed the providers.
     QueryResult RunStatements(const std::string &sql);
 
     Database &db_;
