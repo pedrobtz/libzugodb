@@ -28,6 +28,47 @@ static std::mt19937_64 &SlothRng() {
     return rng;
 }
 
+// libzugodb Stage 7 (#11): a scalar function reads its k-th argument
+// through Arg, so a call with too few arguments is an error and not a read
+// past the end of the argument vector. The binder checks the arity of the
+// functions it lists (Binder::BindFunction); this catches the rest.
+template <class E>
+static const BoundExprPtr &Arg(const E &expr, idx_t k) {
+    if (k >= expr.arguments.size()) {
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            "function called with too few arguments: " +
+            std::to_string(expr.arguments.size()) + " given, at least " +
+            std::to_string(k + 1) + " needed");
+    }
+    return expr.arguments[k];
+}
+
+// An integer argument's value as int64_t, whatever its integer type. A
+// Value keeps each type in its own union member, so GetValue<int32_t> of a
+// BIGINT reads the wrong member; anything else than an integer is refused.
+static int64_t IntegerArg(const Value &v, const char *fn) {
+    switch (v.type().id()) {
+    case LogicalTypeId::TINYINT:   return v.GetValue<int8_t>();
+    case LogicalTypeId::SMALLINT:  return v.GetValue<int16_t>();
+    case LogicalTypeId::INTEGER:   return v.GetValue<int32_t>();
+    case LogicalTypeId::BIGINT:    return v.GetValue<int64_t>();
+    case LogicalTypeId::UTINYINT:  return v.GetValue<uint8_t>();
+    case LogicalTypeId::USMALLINT: return v.GetValue<uint16_t>();
+    case LogicalTypeId::UINTEGER:  return v.GetValue<uint32_t>();
+    case LogicalTypeId::UBIGINT: {
+        auto u = v.GetValue<uint64_t>();
+        if (u > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+            throw OutOfRangeException(std::string(fn) + ": argument " +
+                                      std::to_string(u) + " is out of range");
+        }
+        return static_cast<int64_t>(u);
+    }
+    default:
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            std::string(fn) + " expects an integer argument, got " + v.type().ToString());
+    }
+}
+
 static bool LikeMatch(const std::string &str, const std::string &pattern);
 
 // Self-contained SHA-512 (FIPS 180-4) over arbitrary-length bytes.
@@ -617,9 +658,25 @@ Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
 
 void ExpressionExecutor::ExecuteColumnRef(const BoundColumnRef &expr, DataChunk &input,
                                            Vector &result, idx_t count) {
+    // libzugodb Stage 7 (#11): a column the input does not have is an
+    // error. ExecuteScalar runs an expression over an empty chunk, and a
+    // function argument that is a column (date_trunc's part) read past it.
+    if (expr.column_index >= input.ColumnCount()) {
+        throw BinderException(ErrorCode::COLUMN_NOT_FOUND,
+            "column '" + expr.column_name + "' is not available here; "
+            "the expression must be a constant");
+    }
     auto &src = input.GetVector(expr.column_index);
     auto physical = src.GetType().GetInternalType();
     idx_t type_size = GetTypeIdSize(physical);
+    // A type with no storage (SQLNULL, a GROUP BY NULL key) still carries
+    // its NULLs, in its validity; copy them as for the other types.
+    if (physical != PhysicalType::VARCHAR && type_size == 0) {
+        for (idx_t i = 0; i < count; i++) {
+            if (!src.GetValidity().RowIsValid(i)) result.GetValidity().SetInvalid(i);
+        }
+        return;
+    }
 
     if (physical == PhysicalType::VARCHAR) {
         // Vectorized memcpy of string_t entries (16 bytes each) plus aux
@@ -1737,12 +1794,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     if (name == "BETWEEN") {
         auto *out = result.GetData<bool>();
         for (idx_t i = 0; i < count; i++) {
-            Vector val_vec(expr.arguments[0]->GetReturnType(), count);
-            Vector low_vec(expr.arguments[1]->GetReturnType(), count);
-            Vector high_vec(expr.arguments[2]->GetReturnType(), count);
-            Execute(*expr.arguments[0], input, val_vec, count);
-            Execute(*expr.arguments[1], input, low_vec, count);
-            Execute(*expr.arguments[2], input, high_vec, count);
+            Vector val_vec(Arg(expr, 0)->GetReturnType(), count);
+            Vector low_vec(Arg(expr, 1)->GetReturnType(), count);
+            Vector high_vec(Arg(expr, 2)->GetReturnType(), count);
+            Execute(*Arg(expr, 0), input, val_vec, count);
+            Execute(*Arg(expr, 1), input, low_vec, count);
+            Execute(*Arg(expr, 2), input, high_vec, count);
             auto v = val_vec.GetValue(i);
             auto lo = low_vec.GetValue(i);
             auto hi = high_vec.GetValue(i);
@@ -1771,8 +1828,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // Pre-evaluate the LHS and list args once for the chunk; the
         // previous code re-ran Execute inside the per-row loop, which
         // was both slow and produced wrong validity for chained args.
-        Vector val_vec(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, val_vec, count);
+        Vector val_vec(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, val_vec, count);
         std::vector<Vector> list_vecs;
         list_vecs.reserve(expr.arguments.size() - 1);
         for (size_t a = 1; a < expr.arguments.size(); a++) {
@@ -1822,8 +1879,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // when a high byte is present. Keeps ASCII (e.g. ClickBench URLs)
         // at strlen speed.
         auto *out = result.GetData<int32_t>();
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             if (!arg.GetValidity().RowIsValid(i)) {
                 result.GetValidity().SetInvalid(i);
@@ -1866,8 +1923,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // MD5(s) — RFC-1321 message digest. Returns 32 lowercase hex chars.
     // NULL input -> NULL.
     if (name == "MD5") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -1879,8 +1936,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // SHA1 / SHA_1 — FIPS-180-4 message digest. Returns 40 lowercase
     // hex chars. NULL input -> NULL. Same NULL pattern as MD5/SHA256.
     if (name == "SHA1" || name == "SHA_1") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -1892,8 +1949,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // SHA256 / SHA2_256 — FIPS-180-4 message digest. Returns 64
     // lowercase hex chars. NULL input -> NULL.
     if (name == "SHA256" || name == "SHA2_256") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -1905,8 +1962,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // SHA512 / SHA2_512 — FIPS-180-4 message digest. Returns 128
     // lowercase hex chars. NULL input -> NULL.
     if (name == "SHA512" || name == "SHA2_512") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -1920,8 +1977,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     if (name == "BASE64_ENCODE" || name == "TO_BASE64") {
         static const char *alphabet =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -1956,8 +2013,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // Strict: length must be a multiple of 4, all chars in alphabet or
     // padding. Invalid input -> NULL (row-level), not engine error.
     if (name == "BASE64_DECODE" || name == "FROM_BASE64") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         auto decode_char = [](char c) -> int {
             if (c >= 'A' && c <= 'Z') return c - 'A';
             if (c >= 'a' && c <= 'z') return c - 'a' + 26;
@@ -2018,9 +2075,9 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // string (case-insensitive); odd length / non-hex chars produce
     // NULL. NULL operand always returns NULL.
     if (name == "HEX" || name == "TO_HEX" || name == "UNHEX") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
-        auto arg_id = expr.arguments[0]->GetReturnType().id();
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
+        auto arg_id = Arg(expr, 0)->GetReturnType().id();
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -2108,8 +2165,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // is byte-oriented). BIT_LENGTH(s) returns byte_count * 8.
     if (name == "OCTET_LENGTH" || name == "BIT_LENGTH") {
         auto *out = result.GetData<int32_t>();
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         bool mult8 = (name == "BIT_LENGTH");
         for (idx_t i = 0; i < count; i++) {
             if (!arg.GetValidity().RowIsValid(i)) {
@@ -2135,8 +2192,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // Return the Unicode CODEPOINT of the first character (DuckDB/PG),
         // not the first byte. ascii('é')=233, ascii('💯')=128175.
         auto *out = result.GetData<int32_t>();
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -2163,8 +2220,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // CHR(n) — UTF-8 character for Unicode codepoint n (DuckDB/PG).
     // chr(128175)='💯'; chr(0) is a single NUL byte. NULL -> NULL.
     if (name == "CHR") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -2191,8 +2248,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "UPPER" || name == "LOWER") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             if (!arg.GetValidity().RowIsValid(i)) {
                 result.GetValidity().SetInvalid(i);
@@ -2209,13 +2266,16 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "SUBSTRING" || name == "SUBSTR") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector start_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, start_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector start_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, start_vec, count);
         bool has_len = expr.arguments.size() > 2;
-        Vector len_vec(LogicalType::INTEGER(), count);
-        if (has_len) Execute(*expr.arguments[2], input, len_vec, count);
+        // The length is evaluated into a vector of its own type: an
+        // INTEGER vector took a BIGINT column's 8-byte values and
+        // overflowed (libzugodb Stage 7, #11).
+        Vector len_vec(has_len ? Arg(expr, 2)->GetReturnType() : LogicalType::INTEGER(), count);
+        if (has_len) Execute(*Arg(expr, 2), input, len_vec, count);
 
         for (idx_t i = 0; i < count; i++) {
             // NULL propagation: if string OR start OR len is NULL the
@@ -2234,7 +2294,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 continue;
             }
             auto s = sv.GetValue<std::string>();
-            int32_t start_raw = start_vec.GetValue(i).GetValue<int32_t>();
+            int64_t start_raw = IntegerArg(start_vec.GetValue(i), "substring");
             // SQL standard: positions are 1-based; positions <1 are
             // clipped but the "missing" characters STILL count against
             // len in the 3-arg form. SUBSTRING('hello', -2, 5) covers
@@ -2246,16 +2306,20 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             // added to start, so SUBSTRING('hello', -2) clipped to
             // 'he' instead of returning 'hello'.
             int64_t s_size_i = static_cast<int64_t>(s.size());
-            int64_t effective_start = std::max<int32_t>(1, start_raw);
+            int64_t effective_start = std::max<int64_t>(1, start_raw);
             int64_t effective_end;
             if (has_len) {
-                int32_t len_raw = len_vec.GetValue(i).GetValue<int32_t>();
+                int64_t len_raw = IntegerArg(len_vec.GetValue(i), "substring");
                 if (len_raw <= 0) {
                     result.SetValue(i, Value::VARCHAR(""));
                     continue;
                 }
-                effective_end =
-                    static_cast<int64_t>(start_raw) + static_cast<int64_t>(len_raw);
+                // start + len overflows only upwards (len > 0); past the
+                // end of any string is the same as INT64_MAX.
+                effective_end = start_raw > 0 &&
+                                len_raw > std::numeric_limits<int64_t>::max() - start_raw
+                    ? std::numeric_limits<int64_t>::max()
+                    : start_raw + len_raw;
             } else {
                 effective_end = s_size_i + 1;
             }
@@ -2279,12 +2343,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "REPLACE") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector from_vec(expr.arguments[1]->GetReturnType(), count);
-        Vector to_vec(expr.arguments[2]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, from_vec, count);
-        Execute(*expr.arguments[2], input, to_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector from_vec(Arg(expr, 1)->GetReturnType(), count);
+        Vector to_vec(Arg(expr, 2)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, from_vec, count);
+        Execute(*Arg(expr, 2), input, to_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto fv = from_vec.GetValue(i);
@@ -2338,8 +2402,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             }
             return;
         }
-        Vector sep_vec(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, sep_vec, count);
+        Vector sep_vec(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, sep_vec, count);
         // Pre-evaluate value args once.
         std::vector<Vector> val_vecs;
         val_vecs.reserve(expr.arguments.size() - 1);
@@ -2373,12 +2437,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // Previously the second argument was silently ignored, so
         // TRIM('xxhixx','x') returned 'xxhixx' unchanged — a textbook
         // silent-wrong-result bug.
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         Vector chars_vec(LogicalType::VARCHAR(), count);
         bool has_chars = expr.arguments.size() >= 2;
         if (has_chars) {
-            Execute(*expr.arguments[1], input, chars_vec, count);
+            Execute(*Arg(expr, 1), input, chars_vec, count);
         }
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
@@ -2414,8 +2478,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // ---- Scalar math functions ----
 
     if (name == "ABS") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         auto physical = arg.GetType().GetInternalType();
         for (idx_t i = 0; i < count; i++) {
             if (!arg.GetValidity().RowIsValid(i)) {
@@ -2480,15 +2544,15 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "CEIL" || name == "CEILING" || name == "FLOOR" || name == "ROUND") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         // ROUND can take an optional second arg `precision`: positive
         // values control fractional digits, negative round to powers
         // of 10, zero is integer-round. Previously the second arg was
         // silently dropped — ROUND(2.345, 2) returned 2 instead of 2.35.
         bool has_precision = (name == "ROUND" && expr.arguments.size() >= 2);
         Vector prec_vec(LogicalType::INTEGER(), count);
-        if (has_precision) Execute(*expr.arguments[1], input, prec_vec, count);
+        if (has_precision) Execute(*Arg(expr, 1), input, prec_vec, count);
         for (idx_t i = 0; i < count; i++) {
             if (!arg.GetValidity().RowIsValid(i)) {
                 result.GetValidity().SetInvalid(i);
@@ -2528,8 +2592,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
     if (name == "SQRT" || name == "CBRT" || name == "POWER" || name == "MOD" ||
         name == "POW") {
-        Vector arg1(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg1, count);
+        Vector arg1(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg1, count);
         if (name == "CBRT") {
             // Real-valued cube root: total over the reals (handles
             // negatives correctly — distinguishes it from SQRT).
@@ -2569,8 +2633,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 result.GetData<double>()[i] = std::sqrt(d);
             }
         } else {
-            Vector arg2(expr.arguments[1]->GetReturnType(), count);
-            Execute(*expr.arguments[1], input, arg2, count);
+            Vector arg2(Arg(expr, 1)->GetReturnType(), count);
+            Execute(*Arg(expr, 1), input, arg2, count);
             for (idx_t i = 0; i < count; i++) {
                 auto v1 = arg1.GetValue(i), v2 = arg2.GetValue(i);
                 if (v1.IsNull() || v2.IsNull()) {
@@ -2624,10 +2688,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // ---- Additional string functions ----
 
     if (name == "POSITION" || name == "STRPOS") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector sub_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, sub_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector sub_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, sub_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto subv = sub_vec.GetValue(i);
@@ -2644,10 +2708,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "LEFT" || name == "RIGHT") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector n_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, n_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector n_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, n_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto nv = n_vec.GetValue(i);
@@ -2681,12 +2745,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "LPAD" || name == "RPAD") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector len_vec(expr.arguments[1]->GetReturnType(), count);
-        Vector pad_vec(expr.arguments[2]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, len_vec, count);
-        Execute(*expr.arguments[2], input, pad_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector len_vec(Arg(expr, 1)->GetReturnType(), count);
+        Vector pad_vec(Arg(expr, 2)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, len_vec, count);
+        Execute(*Arg(expr, 2), input, pad_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto nv = len_vec.GetValue(i);
@@ -2695,21 +2759,72 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 result.GetValidity().SetInvalid(i);
                 continue;
             }
+            // libzugodb Stage 7 (#11), as DuckDB: the length counts
+            // characters; a string that is long enough is cut to its first
+            // `n` characters (LPAD as RPAD); otherwise it is padded with
+            // `pad` repeated, which must not be empty. A negative length
+            // was cast to a huge size_t and the loop never ended.
             auto s = sv.GetValue<std::string>();
-            auto target_len = static_cast<size_t>(nv.GetValue<int32_t>());
-            auto pad = pv.GetValue<std::string>();
-            while (s.size() < target_len && !pad.empty()) {
-                if (name == "LPAD") s = pad + s; else s = s + pad;
+            int64_t n = IntegerArg(nv, name == "LPAD" ? "lpad" : "rpad");
+            if (pv.type().id() != LogicalTypeId::VARCHAR) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    StringUtil::Lower(name) + " expects the padding as a VARCHAR, got " +
+                    pv.type().ToString());
             }
-            if (s.size() > target_len) s = s.substr(name == "LPAD" ? s.size() - target_len : 0, target_len);
-            result.SetValue(i, Value::VARCHAR(s));
+            auto pad = pv.GetValue<std::string>();
+            if (n <= 0) { result.SetValue(i, Value::VARCHAR("")); continue; }
+            auto is_lead = [](char c) { return (static_cast<unsigned char>(c) & 0xC0) != 0x80; };
+            // Byte offset after the first `k` characters of `t`, and the
+            // number of characters of `t` when it has fewer than `k`.
+            auto prefix = [&](const std::string &t, int64_t k, int64_t &chars) -> size_t {
+                chars = 0;
+                for (size_t b = 0; b < t.size(); b++) {
+                    if (is_lead(t[b])) {
+                        if (chars == k) return b;
+                        chars++;
+                    }
+                }
+                return t.size();
+            };
+            int64_t s_chars = 0;
+            size_t s_cut = prefix(s, n, s_chars);
+            if (s_chars >= n) {
+                result.SetValue(i, Value::VARCHAR(s.substr(0, s_cut)));
+                continue;
+            }
+            if (pad.empty()) {
+                throw InvalidInputException("Insufficient padding in " + name);
+            }
+            int64_t pad_chars = 0;
+            prefix(pad, std::numeric_limits<int64_t>::max(), pad_chars);
+            if (pad_chars == 0) {
+                throw InvalidInputException("Insufficient padding in " + name);
+            }
+            int64_t need = n - s_chars;
+            int64_t full = need / pad_chars;
+            int64_t rest = need % pad_chars;
+            int64_t rest_chars = 0;
+            size_t rest_bytes = prefix(pad, rest, rest_chars);
+            // A string_t holds at most UINT32_MAX bytes; check before
+            // allocating anything.
+            const uint64_t max_bytes = std::numeric_limits<uint32_t>::max();
+            uint64_t avail = max_bytes - std::min<uint64_t>(max_bytes, s.size() + rest_bytes);
+            if (static_cast<uint64_t>(full) > avail / pad.size() ||
+                s.size() + rest_bytes > max_bytes) {
+                throw OutOfRangeException(name + " result exceeds the maximum supported string size");
+            }
+            std::string padding;
+            padding.reserve(static_cast<size_t>(full) * pad.size() + rest_bytes);
+            for (int64_t r = 0; r < full; r++) padding += pad;
+            padding.append(pad, 0, rest_bytes);
+            result.SetValue(i, Value::VARCHAR(name == "LPAD" ? padding + s : s + padding));
         }
         return;
     }
 
     if (name == "REVERSE") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) {
@@ -2724,10 +2839,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "REPEAT") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector n_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, n_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector n_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, n_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto nv = n_vec.GetValue(i);
@@ -2750,10 +2865,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // 1-based position of first occurrence, 0 if not found. NULL on
     // either side propagates.
     if (name == "INSTR") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector sub_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, sub_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector sub_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, sub_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto subv = sub_vec.GetValue(i);
@@ -2771,10 +2886,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "STARTS_WITH" || name == "PREFIX") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector pre_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, pre_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector pre_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, pre_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto pv = pre_vec.GetValue(i);
@@ -2790,10 +2905,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "ENDS_WITH" || name == "SUFFIX") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector suf_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, suf_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector suf_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, suf_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto sufv = suf_vec.GetValue(i);
@@ -2810,10 +2925,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "CONTAINS") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector sub_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, sub_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector sub_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, sub_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto subv = sub_vec.GetValue(i);
@@ -2829,12 +2944,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "SPLIT_PART") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector delim_vec(expr.arguments[1]->GetReturnType(), count);
-        Vector idx_vec(expr.arguments[2]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, delim_vec, count);
-        Execute(*expr.arguments[2], input, idx_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector delim_vec(Arg(expr, 1)->GetReturnType(), count);
+        Vector idx_vec(Arg(expr, 2)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, delim_vec, count);
+        Execute(*Arg(expr, 2), input, idx_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto dv = delim_vec.GetValue(i);
@@ -2893,12 +3008,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // `from`-position has no `to` counterpart are deleted. Byte-wise
     // (matches DuckDB for ASCII). NULL in any arg -> NULL.
     if (name == "TRANSLATE") {
-        Vector s_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector f_vec(expr.arguments[1]->GetReturnType(), count);
-        Vector t_vec(expr.arguments[2]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, s_vec, count);
-        Execute(*expr.arguments[1], input, f_vec, count);
-        Execute(*expr.arguments[2], input, t_vec, count);
+        Vector s_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector f_vec(Arg(expr, 1)->GetReturnType(), count);
+        Vector t_vec(Arg(expr, 2)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, s_vec, count);
+        Execute(*Arg(expr, 1), input, f_vec, count);
+        Execute(*Arg(expr, 2), input, t_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = s_vec.GetValue(i), fv = f_vec.GetValue(i), tv = t_vec.GetValue(i);
             if (sv.IsNull() || fv.IsNull() || tv.IsNull()) {
@@ -2923,10 +3038,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     // GCD(a,b) / LCM(a,b): integer greatest-common-divisor / least-
     // common-multiple. FACTORIAL(n): n!. NULL -> NULL.
     if (name == "GCD" || name == "LCM") {
-        Vector a_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector b_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, a_vec, count);
-        Execute(*expr.arguments[1], input, b_vec, count);
+        Vector a_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector b_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, a_vec, count);
+        Execute(*Arg(expr, 1), input, b_vec, count);
         auto as_i64 = [](const Value &v) -> int64_t {
             return v.type().id() == LogicalTypeId::INTEGER ? v.GetValue<int32_t>()
                  : v.type().id() == LogicalTypeId::BIGINT  ? v.GetValue<int64_t>()
@@ -2948,8 +3063,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         return;
     }
     if (name == "FACTORIAL") {
-        Vector a_vec(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, a_vec, count);
+        Vector a_vec(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, a_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto av = a_vec.GetValue(i);
             if (av.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -2970,11 +3085,11 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // of `value`, previously silently dropped the second arg.
         // Domain errors (non-positive arg, base==1) return NULL.
         bool two_arg = (name == "LOG" && expr.arguments.size() >= 2);
-        Vector arg0(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg0, count);
-        Vector arg1(two_arg ? expr.arguments[1]->GetReturnType()
+        Vector arg0(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg0, count);
+        Vector arg1(two_arg ? Arg(expr, 1)->GetReturnType()
                             : LogicalType::DOUBLE(), count);
-        if (two_arg) Execute(*expr.arguments[1], input, arg1, count);
+        if (two_arg) Execute(*Arg(expr, 1), input, arg1, count);
         auto val_to_dbl = [](const Value &v) -> double {
             return v.type().id() == LogicalTypeId::INTEGER
                 ? v.GetValue<int32_t>() : v.GetValue<double>();
@@ -3017,8 +3132,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "LOG2") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3030,8 +3145,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "LOG10") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3043,8 +3158,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "EXP") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3060,8 +3175,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "SIGN") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         // Previously only INTEGER and DOUBLE branches existed; TINYINT,
         // SMALLINT, BIGINT, FLOAT all fell into the `v.GetValue<double>()`
         // path which threw / returned garbage. Result was silently wrong:
@@ -3173,8 +3288,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "INITCAP") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) {
@@ -3201,8 +3316,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         name == "ASIN" || name == "ACOS" || name == "ATAN" ||
         name == "SINH" || name == "COSH" || name == "TANH" ||
         name == "ASINH" || name == "ACOSH" || name == "ATANH") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3246,8 +3361,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "ISNAN" || name == "ISINF" || name == "ISFINITE") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3262,10 +3377,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "ATAN2") {
-        Vector a1(expr.arguments[0]->GetReturnType(), count);
-        Vector a2(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, a1, count);
-        Execute(*expr.arguments[1], input, a2, count);
+        Vector a1(Arg(expr, 0)->GetReturnType(), count);
+        Vector a2(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, a1, count);
+        Execute(*Arg(expr, 1), input, a2, count);
         for (idx_t i = 0; i < count; i++) {
             auto v1 = a1.GetValue(i), v2 = a2.GetValue(i);
             if (v1.IsNull() || v2.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3277,8 +3392,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "DEGREES") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3289,8 +3404,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "RADIANS") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3301,13 +3416,13 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "TRUNC" || name == "TRUNCATE") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         // Optional second arg controls fractional digits, same shape
         // as ROUND. Previously the second arg was silently dropped.
         bool has_precision = expr.arguments.size() >= 2;
         Vector prec_vec(LogicalType::INTEGER(), count);
-        if (has_precision) Execute(*expr.arguments[1], input, prec_vec, count);
+        if (has_precision) Execute(*Arg(expr, 1), input, prec_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3393,10 +3508,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         if (expr.arguments.size() != 2) {
             throw NotImplementedException("AGE requires 2 arguments");
         }
-        Vector a(expr.arguments[0]->GetReturnType(), count);
-        Vector b(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, a, count);
-        Execute(*expr.arguments[1], input, b, count);
+        Vector a(Arg(expr, 0)->GetReturnType(), count);
+        Vector b(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, a, count);
+        Execute(*Arg(expr, 1), input, b, count);
         auto age_to_micros = [](const Value &v) -> int64_t {
             auto tid = v.type().id();
             if (tid == LogicalTypeId::DATE) {
@@ -3431,10 +3546,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // Previously the 2-arg form hit "Expression executor for type"
         // by reading a non-existent unit/third argument.
         if (expr.arguments.size() == 2) {
-            Vector a1(expr.arguments[0]->GetReturnType(), count);
-            Vector a2(expr.arguments[1]->GetReturnType(), count);
-            Execute(*expr.arguments[0], input, a1, count);
-            Execute(*expr.arguments[1], input, a2, count);
+            Vector a1(Arg(expr, 0)->GetReturnType(), count);
+            Vector a2(Arg(expr, 1)->GetReturnType(), count);
+            Execute(*Arg(expr, 0), input, a1, count);
+            Execute(*Arg(expr, 1), input, a2, count);
             for (idx_t i = 0; i < count; i++) {
                 auto v1 = a1.GetValue(i), v2 = a2.GetValue(i);
                 if (v1.IsNull() || v2.IsNull()) {
@@ -3447,11 +3562,11 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             return;
         }
         auto part = StringUtil::Upper(
-            ExpressionExecutor::ExecuteScalar(*expr.arguments[0]).GetValue<std::string>());
-        Vector ts1(expr.arguments[1]->GetReturnType(), count);
-        Vector ts2(expr.arguments[2]->GetReturnType(), count);
-        Execute(*expr.arguments[1], input, ts1, count);
-        Execute(*expr.arguments[2], input, ts2, count);
+            ExpressionExecutor::ExecuteScalar(*Arg(expr, 0)).GetValue<std::string>());
+        Vector ts1(Arg(expr, 1)->GetReturnType(), count);
+        Vector ts2(Arg(expr, 2)->GetReturnType(), count);
+        Execute(*Arg(expr, 1), input, ts1, count);
+        Execute(*Arg(expr, 2), input, ts2, count);
         for (idx_t i = 0; i < count; i++) {
             auto v1 = ts1.GetValue(i), v2 = ts2.GetValue(i);
             if (v1.IsNull() || v2.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3511,15 +3626,15 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // failed with "unit ''".
         bool negate = (name == "DATE_SUB" || name == "SUBDATE");
         idx_t unit_idx = 0, ts_idx = 2;
-        if (expr.arguments[2]->GetReturnType().id() == LogicalTypeId::VARCHAR &&
-            expr.arguments[0]->GetReturnType().id() != LogicalTypeId::VARCHAR) {
+        if (Arg(expr, 2)->GetReturnType().id() == LogicalTypeId::VARCHAR &&
+            Arg(expr, 0)->GetReturnType().id() != LogicalTypeId::VARCHAR) {
             unit_idx = 2; ts_idx = 0;
         }
         auto part = StringUtil::Upper(
             ExpressionExecutor::ExecuteScalar(*expr.arguments[unit_idx]).GetValue<std::string>());
-        Vector n_vec(expr.arguments[1]->GetReturnType(), count);
+        Vector n_vec(Arg(expr, 1)->GetReturnType(), count);
         Vector ts_vec(expr.arguments[ts_idx]->GetReturnType(), count);
-        Execute(*expr.arguments[1], input, n_vec, count);
+        Execute(*Arg(expr, 1), input, n_vec, count);
         Execute(*expr.arguments[ts_idx], input, ts_vec, count);
         auto ts_type = expr.arguments[ts_idx]->GetReturnType().id();
         bool day_grain = (part == "DAY" || part == "DAYS" ||
@@ -3616,10 +3731,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         if (expr.arguments.size() != 2) {
             throw NotImplementedException(name + " requires 2 arguments");
         }
-        bool fmt_first = (expr.arguments[0]->GetReturnType().id() ==
+        bool fmt_first = (Arg(expr, 0)->GetReturnType().id() ==
                           LogicalTypeId::VARCHAR);
-        auto &ts_expr = fmt_first ? *expr.arguments[1] : *expr.arguments[0];
-        auto &fmt_expr = fmt_first ? *expr.arguments[0] : *expr.arguments[1];
+        auto &ts_expr = fmt_first ? *Arg(expr, 1) : *Arg(expr, 0);
+        auto &fmt_expr = fmt_first ? *Arg(expr, 0) : *Arg(expr, 1);
         Vector ts_vec(ts_expr.GetReturnType(), count);
         Vector fmt_vec(fmt_expr.GetReturnType(), count);
         Execute(ts_expr, input, ts_vec, count);
@@ -3687,10 +3802,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "NULLIF") {
-        Vector arg1(expr.arguments[0]->GetReturnType(), count);
-        Vector arg2(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg1, count);
-        Execute(*expr.arguments[1], input, arg2, count);
+        Vector arg1(Arg(expr, 0)->GetReturnType(), count);
+        Vector arg2(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg1, count);
+        Execute(*Arg(expr, 1), input, arg2, count);
         for (idx_t i = 0; i < count; i++) {
             auto v1 = arg1.GetValue(i), v2 = arg2.GetValue(i);
             if (v1 == v2) result.GetValidity().SetInvalid(i);
@@ -3703,10 +3818,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
 
     if (name == "REGEXP_MATCHES" || name == "REGEXP_MATCH" ||
         name == "REGEXP" || name == "REGEXP_LIKE") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector pat_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, pat_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector pat_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, pat_vec, count);
         auto *out = result.GetData<bool>();
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
@@ -3728,12 +3843,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "REGEXP_REPLACE") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector pat_vec(expr.arguments[1]->GetReturnType(), count);
-        Vector rep_vec(expr.arguments[2]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, pat_vec, count);
-        Execute(*expr.arguments[2], input, rep_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector pat_vec(Arg(expr, 1)->GetReturnType(), count);
+        Vector rep_vec(Arg(expr, 2)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, pat_vec, count);
+        Execute(*Arg(expr, 2), input, rep_vec, count);
         // Translate SQL-style replacement (\1..\9 backrefs, \\ literal) into
         // std::regex_replace ECMAScript form ($1..$9, $$ literal $). Bare $
         // in the input must be escaped to $$ so it isn't reinterpreted.
@@ -3800,10 +3915,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "REGEXP_EXTRACT") {
-        Vector str_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector pat_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, str_vec, count);
-        Execute(*expr.arguments[1], input, pat_vec, count);
+        Vector str_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector pat_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, str_vec, count);
+        Execute(*Arg(expr, 1), input, pat_vec, count);
         for (idx_t i = 0; i < count; i++) {
             auto sv = str_vec.GetValue(i);
             auto pv = pat_vec.GetValue(i);
@@ -3904,8 +4019,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             }
             return;
         }
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -3932,8 +4047,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
     if (name == "FROM_UNIXTIME") {
         // Epoch seconds (or micros, auto-detected) -> TIMESTAMP.
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -4028,7 +4143,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             part_str = (name == "DAYOFMONTH") ? std::string("DAY") : name;
             ts_arg_idx = 0;
         } else {
-            part_str = ExpressionExecutor::ExecuteScalar(*expr.arguments[0])
+            part_str = ExpressionExecutor::ExecuteScalar(*Arg(expr, 0))
                             .GetValue<std::string>();
             ts_arg_idx = 1;
         }
@@ -4263,14 +4378,22 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "DATE_TRUNC") {
-        auto part = StringUtil::Upper(
-            ExpressionExecutor::ExecuteScalar(*expr.arguments[0]).GetValue<std::string>());
-        Vector ts_vec(expr.arguments[1]->GetReturnType(), count);
-        Execute(*expr.arguments[1], input, ts_vec, count);
+        // The part is read per row (libzugodb Stage 7, #11): it may be a
+        // column, and a NULL part gives NULL.
+        Vector part_vec(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, part_vec, count);
+        Vector ts_vec(Arg(expr, 1)->GetReturnType(), count);
+        Execute(*Arg(expr, 1), input, ts_vec, count);
 
         for (idx_t i = 0; i < count; i++) {
+            auto part_val = part_vec.GetValue(i);
             auto ts_val = ts_vec.GetValue(i);
-            if (ts_val.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
+            if (part_val.IsNull() || ts_val.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
+            if (part_val.type().id() != LogicalTypeId::VARCHAR) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "date_trunc expects the part as a VARCHAR, got " + part_val.type().ToString());
+            }
+            const auto part = StringUtil::Upper(part_val.GetValue<std::string>());
             // Auto-detect input scale (matches DATE_PART/EXTRACT logic):
             //   |raw| >= 1e13  -> microseconds since epoch (NOW/TO_TIMESTAMP)
             //   otherwise      -> seconds since epoch (common BIGINT epoch-second timestamps)
@@ -4352,6 +4475,11 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 tm_buf.tm_year = (year - (year % 1000)) - 1900;
                 tm_buf.tm_mon = 0; tm_buf.tm_mday = 1; tm_buf.tm_hour = 0; tm_buf.tm_min = 0; tm_buf.tm_sec = 0;
             }
+            else {
+                // An unknown part (ISOYEAR, a typo) kept the value truncated
+                // to the second, a wrong answer with no error.
+                throw NotImplementedException("date_trunc part '" + part + "' not supported");
+            }
 
             int64_t trunc_secs = static_cast<int64_t>(
 #ifdef _WIN32
@@ -4371,8 +4499,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
 
     if (name == "TO_TIMESTAMP") {
         // Convert epoch seconds to timestamp (microseconds).
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto val = arg.GetValue(i);
             if (val.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -4463,8 +4591,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     if (name == "EPOCH_MS") {
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto val = arg.GetValue(i);
             if (val.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -4483,8 +4611,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             "Sunday", "Monday", "Tuesday", "Wednesday",
             "Thursday", "Friday", "Saturday"
         };
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         for (idx_t i = 0; i < count; i++) {
             auto val = arg.GetValue(i);
             if (val.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
@@ -4515,8 +4643,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // or TIMESTAMP input. Previously read everything as int64
         // micros, which gave nonsense (the same number for every
         // input) for DATE inputs.
-        Vector arg(expr.arguments[0]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, arg, count);
+        Vector arg(Arg(expr, 0)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, arg, count);
         auto last_day_of = [](int y, unsigned m) -> unsigned {
             static const unsigned dim[] = {31,28,31,30,31,30,31,31,30,31,30,31};
             if (m == 2) {
@@ -4575,12 +4703,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         if (expr.arguments.size() != 3) {
             throw NotImplementedException("MAKE_DATE requires 3 arguments: year, month, day");
         }
-        Vector y_vec(expr.arguments[0]->GetReturnType(), count);
-        Vector m_vec(expr.arguments[1]->GetReturnType(), count);
-        Vector d_vec(expr.arguments[2]->GetReturnType(), count);
-        Execute(*expr.arguments[0], input, y_vec, count);
-        Execute(*expr.arguments[1], input, m_vec, count);
-        Execute(*expr.arguments[2], input, d_vec, count);
+        Vector y_vec(Arg(expr, 0)->GetReturnType(), count);
+        Vector m_vec(Arg(expr, 1)->GetReturnType(), count);
+        Vector d_vec(Arg(expr, 2)->GetReturnType(), count);
+        Execute(*Arg(expr, 0), input, y_vec, count);
+        Execute(*Arg(expr, 1), input, m_vec, count);
+        Execute(*Arg(expr, 2), input, d_vec, count);
         auto last_day_of = [](int y, unsigned m) -> unsigned {
             static const unsigned dim[] = {31,28,31,30,31,30,31,31,30,31,30,31};
             if (m == 2) {

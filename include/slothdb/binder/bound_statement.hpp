@@ -38,6 +38,10 @@ struct BoundOrderBy {
     // from the parser's OrderByItem, applying the direction default
     // when the user didn't say.
     bool nulls_first = false;
+    // The select-list position this item names, when it is an ordinal
+    // (`ORDER BY 2`) or an output name (`ORDER BY r`), else INVALID_INDEX.
+    // A window query sorts its own output by it (libzugodb Stage 7, #11).
+    idx_t select_index = INVALID_INDEX;
 };
 
 class BoundSelectStatement : public BoundStatement {

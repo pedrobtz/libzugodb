@@ -295,10 +295,12 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                 }
             }
         }
-        // Alias: GROUP BY <result-name>
+        // Alias: GROUP BY <result-name>. A name that is also a column of
+        // the FROM clause is the column, as in DuckDB (having_alias.test:
+        // `SELECT a+1 AS a FROM t1 GROUP BY a` groups by column a).
         if (!resolved && expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
             auto &col_ref = static_cast<ColumnRefExpression &>(*expr);
-            if (col_ref.table_name.empty()) {
+            if (col_ref.table_name.empty() && !context.columns.count(col_ref.column_name)) {
                 auto ref_upper = StringUtil::Upper(col_ref.column_name);
                 for (idx_t i = 0; i < result->result_names.size(); i++) {
                     if (StringUtil::Upper(result->result_names[i]) == ref_upper) {
@@ -368,6 +370,18 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
             if (stmt.select_list[i]->GetExpressionType() == ExpressionType::STAR) continue;
             if (stmt.select_list[i]->GetExpressionType() == ExpressionType::COLUMN_REF) continue;
             auto key = StringUtil::Upper(result->result_names[i]);
+            // A name that is both a grouped column and an alias binds to
+            // the group, as in DuckDB (having_alias.test): `SELECT a+1 AS
+            // a ... GROUP BY a HAVING a=42` compares the column.
+            bool is_group_column = false;
+            for (auto &g : result->group_by) {
+                if (g && g->GetExpressionType() == BoundExpressionType::COLUMN_REF &&
+                    StringUtil::Upper(static_cast<const BoundColumnRef &>(*g).column_name) == key) {
+                    is_group_column = true;
+                    break;
+                }
+            }
+            if (is_group_column) continue;
             // First-wins: a later select-list entry with the same alias
             // would shadow the first; SQL doesn't define HAVING in that
             // case so we just keep the first.
@@ -454,6 +468,7 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                                 != ExpressionType::STAR) {
                             bound_item.expression = BindExpression(
                                 *stmt.select_list[sl_idx], context);
+                            bound_item.select_index = sl_idx;
                             resolved = true;
                         } else if (sl_idx < result->result_names.size()) {
                             // Star-expanded column: re-resolve by name.
@@ -461,6 +476,7 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                                 result->result_names[sl_idx]);
                             try {
                                 bound_item.expression = BindExpression(*col, context);
+                                bound_item.select_index = sl_idx;
                                 resolved = true;
                             } catch (...) {
                                 // Fall through to alias path.
@@ -502,6 +518,7 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                         }
                         // Re-bind the original select-list expression.
                         bound_item.expression = BindExpression(*stmt.select_list[sl_idx], context);
+                        bound_item.select_index = i;
                         resolved = true;
                         break;
                     }
@@ -972,7 +989,19 @@ BoundExprPtr Binder::BindColumnRef(const ColumnRefExpression &expr, BindContext 
     if (expr.table_name.empty() && !context.select_list_aliases.empty()) {
         auto it = context.select_list_aliases.find(StringUtil::Upper(expr.column_name));
         if (it != context.select_list_aliases.end() && it->second) {
-            return BindExpression(*it->second, context);
+            // The aliased expression's own names are columns, not aliases:
+            // `sum(a) AS a ... HAVING a > 0` reads column a inside sum. With
+            // the map in place, binding it recursed without end (libzugodb
+            // Stage 7, #11).
+            const auto *target = it->second;
+            auto aliases = std::move(context.select_list_aliases);
+            context.select_list_aliases.clear();
+            struct Restore {
+                BindContext &ctx;
+                decltype(aliases) &saved;
+                ~Restore() { ctx.select_list_aliases = std::move(saved); }
+            } restore{context, aliases};
+            return BindExpression(*target, context);
         }
     }
     auto [table, combined_idx] = context.ResolveColumn(expr.column_name, expr.table_name);
@@ -1348,6 +1377,37 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
                    name == "STDDEV_POP" || name == "VARIANCE" ||
                    name == "VAR_SAMP" || name == "VAR_POP") {
             need(1, 1);
+        }
+    }
+
+    // Scalar arity, as DuckDB's signatures (libzugodb Stage 7, #11). A
+    // call with too few arguments read past the end of the executor's
+    // argument vector; too many were ignored. The executor also checks
+    // each argument it reads (Arg in expression_executor.cpp), for the
+    // functions not listed here.
+    if (!is_agg) {
+        struct ScalarArity { const char *name; size_t lo, hi; };
+        static const ScalarArity kScalarArity[] = {
+            {"ASCII", 1, 1},       {"BIT_LENGTH", 1, 1},   {"OCTET_LENGTH", 1, 1},
+            {"LENGTH", 1, 1},      {"STRLEN", 1, 1},       {"REVERSE", 1, 1},
+            {"UPPER", 1, 1},       {"LOWER", 1, 1},        {"MD5", 1, 1},
+            {"SHA1", 1, 1},        {"SHA256", 1, 1},       {"REPEAT", 2, 2},
+            {"REPLACE", 3, 3},     {"TRANSLATE", 3, 3},    {"SPLIT_PART", 3, 3},
+            {"LPAD", 3, 3},        {"RPAD", 3, 3},         {"LEFT", 2, 2},
+            {"RIGHT", 2, 2},       {"TRIM", 1, 2},         {"LTRIM", 1, 2},
+            {"RTRIM", 1, 2},
+        };
+        for (const auto &a : kScalarArity) {
+            if (name != a.name) continue;
+            size_t n = args.size();
+            if (n < a.lo || n > a.hi) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "No function matches " + StringUtil::Lower(name) + "() with " +
+                    std::to_string(n) + " argument(s); it takes " +
+                    (a.lo == a.hi ? std::to_string(a.lo)
+                                  : std::to_string(a.lo) + " to " + std::to_string(a.hi)));
+            }
+            break;
         }
     }
 
