@@ -35,7 +35,7 @@ issue closed. zugodb then moves its pin.
 | 5 | [ThreadSanitizer in CI](#stage-5--threadsanitizer-in-ci) | 0.2.0 | + `linux-tsan` | [#7](https://github.com/pedrobtz/libzugodb/issues/7) | [#27](https://github.com/pedrobtz/libzugodb/pull/27) | 2026-11-20 |
 | 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | [#28](https://github.com/pedrobtz/libzugodb/pull/28) | 2026-11-20 |
 | 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | [#29](https://github.com/pedrobtz/libzugodb/pull/29) | 2026-11-20 |
-| 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | [#30](https://github.com/pedrobtz/libzugodb/pull/30) | |
+| 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | [#30](https://github.com/pedrobtz/libzugodb/pull/30), [#41](https://github.com/pedrobtz/libzugodb/pull/41) | 2026-11-20 |
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | | |
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | | |
 | 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | | |
@@ -498,11 +498,41 @@ subset is DuckDB's.
   results. The other eight causes, 86 cases (61 wrong, 25 accepted on the
   macOS x86_64 ASan run), are sub-issues of
   [v0.3.0](https://github.com/pedrobtz/libzugodb/issues/9): #31 to #38;
-  #39 is the Unicode case table that would lift a refusal of L22. Stage
-  8's exit criteria hold once those close, before v0.3.0 is tagged.
+  #39 is the Unicode case table that would lift a refusal of L22. PR
+  #41 closes #31 to #38 and the exit criteria hold: wrong 0 and
+  accepted 0 on both platforms, at thread caps 1 and 2. #39 stays open
+  and is not Stage 8's (a refusal, not a wrong answer).
+- PR #41 also fixed wrong answers the subset did not count, found
+  while fixing those it did: `ORDER BY` of `DATE`, `TIME` and
+  `TIMESTAMP` values, NULLs after `DESC` (DuckDB's `nulls_last`) and
+  under `LIMIT`, `ORDER BY` of two keys under `LIMIT`, recursive CTEs,
+  `/` of integers (a double division in DuckDB), `^` (`POWER`), integer
+  overflow (an error; #43 tracks `TINYINT` and `SMALLINT` arithmetic,
+  which still widens where DuckDB overflows), and a `GROUP BY` of a join
+  key. Decided with an advisor: the engine holds no NaN, and `CREATE
+  TABLE` returns DuckDB's `Count` (L23; #42 tracks DuckDB's NaN
+  semantics). Decided by the maintainer, over an advisor's
+  recommendation of a Pike VM, which was built and dropped: every
+  regular expression is refused until a host's RE2 provider (#40)
+  supplies them (L24). #32 closes by refusal.
+- Cases that passed and are now refused, 69 on the macOS run: 35 that
+  use a regular expression (L24; they passed under `std::regex`), 24
+  that make or read a NaN (L23), 7 `ORDER BY` shapes (a constant, which
+  DuckDB refuses but the corpus also runs under
+  `order_by_non_integer_literal`, a setting the engine refuses; a
+  set-operation key that is neither an output name nor position, which
+  passed only because the rows came sorted), a `LIKE` pattern ending in its escape where DuckDB
+  stops before reaching it, a `BLOB || VARCHAR`, and `mod(42, 0)` under
+  `error_on_division_by_zero=false`, a setting the engine refuses. Four
+  cases moved from passed or refused to unreliable, each after a setup
+  statement the engine refuses: `SET ieee_floating_point_ops=false` in
+  `types/null/test_null.test` (the engine now gives DuckDB's default
+  answer, an infinity, where the file expects the setting's NULL), and an
+  `INSERT` of NaN in `types/float/nan_functions.test`.
 - `EXPLAIN` queries are left out by the runner, not listed as
-  differences (L20). No listed difference was needed, so
-  `test/conformance/differences.tsv` and its test are not added yet.
+  differences (L20). No listed difference was needed, in PR #30 or
+  #41, so `test/conformance/differences.tsv` and its test are not
+  added: the Tests line on listed differences holds vacuously.
 - Many cases that passed are now refused: those that used `DECIMAL` (143
   on one run), `ILIKE` and `UPPER`/`LOWER` of non-ASCII text, and a
   correlated subquery in a join condition, which passed only because the

@@ -75,3 +75,24 @@ TEST_CASE("Stage 8: a BIGINT SUM past 2^53 is refused, not rounded") {
     CHECK_THROWS(conn.Query("SELECT sum(i) FROM generate_series(9007199254738944, 9007199254740991) t(i)"));
     CHECK(Run(conn, "SELECT SUM(x) FROM b WHERE g = 2") == Rows{{"5"}});
 }
+
+// ---------------------------------------------------------------------------
+// aggregate/aggregates/test_simple_filter.test (#36): SUM of a FLOAT was
+// typed FLOAT, and the aggregate's double sum written into that slot read
+// back 0, with or without FILTER. DuckDB's SUM of a FLOAT is a DOUBLE.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: SUM of a FLOAT, with FILTER and over a window") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE issue3105(gender VARCHAR, pay FLOAT, s SMALLINT)");
+    conn.Query("INSERT INTO issue3105 VALUES ('male', 100, 30000), ('male', 200, 30000), "
+               "('male', 300, 1), ('female', 150, 1), ('female', 250, 1)");
+    CHECK(Run(conn, "SELECT SUM(pay) FILTER (WHERE gender = 'male'), "
+                    "SUM(pay) FILTER (WHERE gender = 'female'), SUM(pay) FROM issue3105") ==
+          Rows{{"600", "400", "1000"}});
+    CHECK(Run(conn, "SELECT SUM(pay) FROM issue3105 WHERE gender = 'female'") == Rows{{"400"}});
+    // Over a window too, and a SMALLINT's sum is a BIGINT there.
+    CHECK(Run(conn, "SELECT SUM(pay) OVER (), SUM(s) OVER () FROM issue3105 LIMIT 1") ==
+          Rows{{"1000", "60003"}});
+}

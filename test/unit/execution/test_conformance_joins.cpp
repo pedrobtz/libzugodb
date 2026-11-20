@@ -88,3 +88,98 @@ TEST_CASE("Stage 8: NATURAL JOIN and a join without ON are refused") {
     CHECK_THROWS(conn.Query("SELECT * FROM integers LEFT JOIN integers2"));
     CHECK(Run(conn, "SELECT count(*) FROM integers CROSS JOIN integers2") == Rows{{"6"}});
 }
+
+// ---------------------------------------------------------------------------
+// join/left_outer/test_left_outer.test:176 (#38): ORDER BY a position of
+// SELECT * bound the column by its name, so after a join ORDER BY 1 was
+// the other table's column of that name.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: ORDER BY a position of SELECT * over a join") {
+    Database db;
+    Connection conn(db);
+    CHECK(Run(conn, "select * from (values(1), (2)) t1(i) left join (values (2), (3)) t2(i) "
+                    "on t1.i=t2.i AND t1.i+t2.i=4 ORDER BY 1, 2") ==
+          Rows{{"1", "NULL"}, {"2", "2"}});
+    conn.Query("CREATE TABLE a(i INT, j INT)");
+    conn.Query("INSERT INTO a VALUES (1, 20), (2, 10)");
+    CHECK(Run(conn, "SELECT i, * FROM a ORDER BY 3") == Rows{{"2", "2", "10"}, {"1", "1", "20"}});
+}
+
+// ---------------------------------------------------------------------------
+// subquery/scalar/test_scalar_subquery.test:86 (#38): more column aliases
+// than the subquery has columns were ignored; beside a * they were lost.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: a column alias list longer than the subquery is an error") {
+    Database db;
+    Connection conn(db);
+    CHECK_THROWS(conn.Query("SELECT * FROM (SELECT 42, 41 AS x) v1(a, b, c)"));
+    CHECK_THROWS(conn.Query("SELECT * FROM (VALUES (1, 2)) v(a, b, c)"));
+    conn.Query("CREATE TABLE a(i INT, j INT)");
+    CHECK_THROWS(conn.Query("SELECT * FROM (SELECT * FROM a) v(x, y)"));
+    auto r = conn.Query("SELECT * FROM (SELECT 42, 41 AS x) v1(a)");
+    CHECK(r.column_names == std::vector<std::string>{"a", "x"});
+}
+
+// ---------------------------------------------------------------------------
+// window/test_streaming_window.test:578 (#38): each step of a recursive
+// CTE read the whole table so far rather than the step before's rows, so
+// rows multiplied and a window in the step saw them all.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: a recursive CTE's step reads the step before's rows") {
+    Database db;
+    Connection conn(db);
+    CHECK(Run(conn, "WITH RECURSIVE rte AS (SELECT 1 l, 1::BIGINT r UNION ALL "
+                    "SELECT l+1, row_number() OVER() FROM rte WHERE l < 3) SELECT * FROM rte") ==
+          Rows{{"1", "1"}, {"2", "1"}, {"3", "1"}});
+    CHECK(Run(conn, "WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM t WHERE n < 5) "
+                    "SELECT sum(n), count(*) FROM t") == Rows{{"15", "5"}});
+    CHECK(Run(conn, "WITH RECURSIVE t AS (SELECT 1 AS n UNION SELECT n % 3 + 1 FROM t) "
+                    "SELECT n FROM t ORDER BY n") == Rows{{"1"}, {"2"}, {"3"}});
+    // No end: an error, not the rows so far.
+    CHECK_THROWS(conn.Query("WITH RECURSIVE t AS (SELECT 1 AS n UNION ALL SELECT n+1 FROM t) "
+                            "SELECT count(*) FROM t"));
+}
+
+// ---------------------------------------------------------------------------
+// function/string/null_byte.test:20, join/semianti/antijoin.test:60,
+// semijoin.test:60 (#38): DuckDB's CREATE TABLE returns a Count column,
+// with the rows made by CREATE TABLE AS and none for a plain CREATE.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: CREATE TABLE returns DuckDB's Count") {
+    Database db;
+    Connection conn(db);
+    auto r = conn.Query("CREATE TABLE other (a INTEGER, b INTEGER)");
+    CHECK(r.column_names == std::vector<std::string>{"Count"});
+    CHECK(r.RowCount() == 0);
+    CHECK(r.is_count);
+    r = conn.Query("CREATE TABLE null_byte AS SELECT concat('goo', chr(0), 'se') AS v");
+    CHECK(r.column_names == std::vector<std::string>{"Count"});
+    CHECK(Collect(r) == Rows{{"1"}});
+    CHECK(r.is_count);
+    CHECK(conn.Query("INSERT INTO other VALUES (1, 2)").is_count);
+    CHECK_FALSE(conn.Query("SELECT 1").is_count);
+}
+
+// ---------------------------------------------------------------------------
+// The fused join and aggregate (#38, beside types/blob/
+// test_blob_operator.test:50): its groups were seeded from every build
+// row, and a key no probe row joined came out as a group with COUNT(*) 0.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: GROUP BY a join key has no group the join did not make") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE v (b INT, g INTEGER)");
+    conn.Query("INSERT INTO v VALUES (1, 0), (NULL, 0)");
+    conn.Query("CREATE TABLE w (b INT, g INTEGER)");
+    conn.Query("INSERT INTO w VALUES (1, 0), (2, 0)");
+    CHECK(Run(conn, "SELECT L.b, COUNT(*) FROM v L JOIN w R ON L.b=R.b GROUP BY L.b") ==
+          Rows{{"1", "1"}});
+    CHECK(Run(conn, "SELECT L.b, COUNT(*) FROM w L JOIN v R ON L.b=R.b GROUP BY L.b") ==
+          Rows{{"1", "1"}});
+    CHECK(Run(conn, "SELECT COUNT(*) FROM w L JOIN v R ON L.b=R.b WHERE L.b > 5") == Rows{{"0"}});
+}

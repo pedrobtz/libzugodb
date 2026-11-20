@@ -74,9 +74,67 @@
     error, and so is a `BIGINT` `SUM` past 2^53, which was rounded;
   - a `TINYINT` or `SMALLINT` operand of floating-point arithmetic was
     read as a double's bytes (`1::TINYINT + 1::REAL` was 1).
+- No wrong answer is left on the pinned subset (#31 to #38, closing
+  #12). Each cause was fixed, or its shape is now an error:
+  - `BLOB` (#31): text to `BLOB` reads `\xHH` as one byte and refuses any
+    other escape or non-ASCII byte (NULL under `TRY_CAST`); a `BLOB`
+    prints as DuckDB's text and stays a `BLOB` in a `Value`. A cast to
+    `BLOB` from anything but text, `||` or a comparison of a `BLOB` with
+    a non-`BLOB` other than a string literal, and any function of a
+    `BLOB` but `COUNT`, `MIN`, `MAX`, `OCTET_LENGTH`, `MD5`, `SHA1` and
+    `SHA256` are errors; `MIN` and `MAX` compare its bytes;
+  - regular expressions (#32): every regular expression function and
+    operator (`regexp_matches`, `regexp_replace`, `regexp_extract`,
+    `regexp_full_match`, `regexp_extract_all`, `regexp_split_to_array`,
+    `SIMILAR TO`, `~`, ...) is refused, with an error naming #40, until a
+    host-supplied RE2 provider supplies them (design L24); `std::regex`
+    gave ECMAScript's answers over bytes, and is no longer used;
+  - floating point (#33): `/` divides as doubles, as DuckDB's (`7 / 2`
+    is 3.5), and by zero gives an infinity, not NULL; `^` is `POWER`, not
+    the bitwise exclusive or; `POWER`, `SQRT`, `CBRT` and `ROUND` follow
+    IEEE and DuckDB. The engine holds no NaN (design L23, until #42): a NaN is an
+    error wherever it would be made, stored, read from a database file or
+    returned, since DuckDB orders NaN above every number and the engine's
+    comparisons are IEEE's. `SUM` of a `FLOAT` is a `DOUBLE` (it was 0,
+    #36);
+  - arguments DuckDB refuses (#34): an integer `%` or `MOD` by zero and
+    an integer overflow are errors, not NULL; arithmetic takes numbers
+    only (`1::TINYINT + 1::VARCHAR` was 1); a `BIGINT` past 2^53 in
+    floating-point arithmetic is refused; `FACTORIAL` of a negative or
+    past 20!, `GCD`, `LCM` and `FACTORIAL` of a non-integer, `CHR` of a
+    code point outside Unicode, `CONCAT_WS` of fewer than two arguments,
+    `CONTAINS(NULL, NULL)`, a `LIKE` pattern ending in its escape
+    character, a parameter on a type that takes none and `FLOAT(p)`
+    outside 1 to 53 are errors; `FLOAT(25)` to `FLOAT(53)` is a `DOUBLE`;
+  - `ORDER BY` (#35): a non-integer literal is DuckDB's error; over a
+    set operation a key other than an output name or position, which was
+    skipped, is refused; a negative `LIMIT` or `OFFSET` is an error.
+    NULLs sort last after `DESC` too, DuckDB's `default_null_order`; a
+    window's `ORDER BY` placed a NULL key by its bytes, `ORDER BY x LIMIT
+    k` dropped the rows whose key is NULL, and with two keys it chose
+    among the first key's ties as they came;
+  - `EXTRACT(WEEK)` is the ISO week near the start of a year (#37);
+  - shapes (#38): `DATE`, `TIME` and `TIMESTAMP` values compared as
+    neither equal nor less, so sorts and `UNION` through values left them
+    as they came; `ORDER BY` a position of `SELECT *` over a join was the
+    other table's column of that name; a recursive CTE's step read the
+    whole table so far, not the step before's rows (a count to 3 made
+    500,501 rows); `GROUP BY` a join key made a group with `COUNT(*)` 0
+    for a key nothing joined; more column aliases than a subquery's
+    columns are an error.
+- `CREATE TABLE` returns DuckDB's result, a `Count` column, with the rows
+  made by `CREATE TABLE AS` and none for a plain `CREATE TABLE`; it
+  returned no column. `QueryResult::is_count` marks the result of
+  `INSERT`, `UPDATE`, `DELETE` and `CREATE TABLE`, so a caller reads rows
+  affected from it rather than from the column's name. zugodb's
+  `EngineSend` treats a non-DML `Count` result as a query today, and
+  adapts at its next pin. For `tools/vendor.yaml`, two files are new:
+  `include/slothdb/common/types/blob.hpp` and
+  `include/slothdb/common/types/nan_guard.hpp`.
 
   The conformance runner leaves out a query whose expected result is a
-  regex in any column (an `EXPLAIN` plan; design L20).
+  regex in any column (an `EXPLAIN` plan; design L20), and splits a
+  recorded row as DuckDB's runner does, dropping empty pieces.
 - Remove `bench/correctness/`, SlothDB's Python harness, which ran
   SlothDB's published wheel rather than this tree.
 

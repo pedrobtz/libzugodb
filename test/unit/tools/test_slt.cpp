@@ -118,6 +118,10 @@ TEST_CASE("slt: a planted wrong value, type and row order are wrong, and pass wh
           Outcome::Wrong);  // rowsort sorts the result, not the recorded values
     CHECK(run("query I rowsort\nSELECT * FROM (VALUES (2), (1)) v(x) ORDER BY x DESC\n----\n1\n2\n") ==
           Outcome::Passed);
+    // A recorded row splits as DuckDB's StringUtil::Split does, dropping
+    // empty pieces (aggregate/qualify/test_qualify.test:108, #38).
+    CHECK(run("query TI\nSELECT 'Boston', 2\n----\nBoston\t\t2\n") == Outcome::Passed);
+    CHECK(run("query TI\nSELECT 'Boston', 2\n----\nBoston\t\t3\n") == Outcome::Wrong);
 }
 
 TEST_CASE("slt: values are formatted as DuckDB's runner records them") {

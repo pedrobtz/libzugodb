@@ -82,3 +82,106 @@ TEST_CASE("Stage 8: case mapping and grapheme clusters the engine cannot do are 
                     "REVERSE('🦆ab')") ==
           Rows{{"MOTORHEAD", "true", "daeHrötoM", "ba🦆"}});
 }
+
+// ---------------------------------------------------------------------------
+// Arguments DuckDB refuses (#34; function/numeric/test_mod.test,
+// decimal_mod.test, test_factorial.test, test_gcd_lcm.test,
+// test_type_resolution.test, function/string/test_ascii.test,
+// test_concat_ws.test, test_contains.test, test_like_escape.test,
+// types/decimal/test_decimal.test, types/numeric/float_precision.test).
+// Each was accepted and gave a value: NULL, 1, the other argument, a
+// byte sequence that is not UTF-8, or a type with its parameter dropped.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: functions and operators refuse the arguments DuckDB refuses") {
+    Database db;
+    Connection conn(db);
+    const char *queries[] = {
+        "select mod(42, 0)",
+        "SELECT 42 % 0",
+        "SELECT 10.0 % 0.0",
+        "SELECT 2147483647::INTEGER + 1::INTEGER",
+        "SELECT 12345678901111111 % 2.0",
+        "SELECT factorial(-1)",
+        "SELECT factorial(21)",
+        "SELECT gcd(42, 'abcd')",
+        "SELECT 1::TINYINT + 1::VARCHAR",
+        "SELECT CHR(-10)",
+        "SELECT CHR(1073741824)",
+        "select CONCAT_WS()",
+        "select CONCAT_WS(',')",
+        "SELECT contains(NULL, NULL)",
+        "SELECT '%' LIKE '*' ESCAPE '*'",
+        "SELECT '1'::INTEGER(1000)",
+        "SELECT CAST(NULL AS FLOAT(0))",
+        "SELECT CAST(NULL AS FLOAT(54))",
+    };
+    for (auto *q : queries) {
+        CAPTURE(q);
+        CHECK_THROWS(conn.Query(q));
+    }
+    CHECK(Run(conn, "SELECT mod(42, 5), 42 % 5, factorial(10), gcd(42, 12), lcm(120, 25), "
+                    "gcd((-9223372036854775807 - 1)::BIGINT, 1::BIGINT), CHR(937), "
+                    "CONCAT_WS(',', 'hello'), '%++' LIKE '*%++' ESCAPE '*'") ==
+          Rows{{"2", "2", "3628800", "6", "600", "1", "Ω", "hello", "true"}});
+    auto r = conn.Query("SELECT CAST(1 AS FLOAT(24)), CAST(1 AS FLOAT(25))");
+    CHECK(r.column_types[0].id() == LogicalTypeId::FLOAT);
+    CHECK(r.column_types[1].id() == LogicalTypeId::DOUBLE);
+}
+
+// ---------------------------------------------------------------------------
+// Regular expressions (#32; function/string/regex_extract.test,
+// regex_replace.test, regex_single_byte.test, regexp_unicode_literal.test,
+// test_regex_match_positions.test). std::regex gave ECMAScript's answers
+// over bytes, the wrong default group, every match replaced, and false,
+// NULL or the input for an invalid pattern. Every regular expression is
+// refused until a host's RE2 provider supplies them (#40, design L24).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: every regular expression function and operator is refused") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE test(v VARCHAR)");
+    conn.Query("INSERT INTO test VALUES ('hello'), ('HELLO')");
+    const char *queries[] = {
+        "SELECT regexp_extract('foobarbaz', 'B..')",
+        "SELECT regexp_extract('foobarbaz', 'B..', 0, 'i')",
+        "SELECT regexp_extract('foobarbaz', 'b..', 1)",
+        "SELECT regexp_extract('foobarbaz', '(b..)(b..)')",
+        "SELECT regexp_extract('foobarbaz', '(b..)(b..)', 2)",
+        "SELECT regexp_extract('foobarbaz', '(b..)(b..)', -1)",
+        "SELECT regexp_replace('foobarbaz', 'b..', 'X')",
+        "SELECT regexp_replace('ANA ana', 'ana', 'banana', 'gi')",
+        "SELECT regexp_replace('ANA', 'ana', 'banana', 'i')",
+        "SELECT regexp_replace('as^/$df', '^/$', '', 'l')",
+        "SELECT regexp_replace('hello\nworld', '.*', 'x', 'sg')",
+        "SELECT regexp_replace(v, 'h.*', 'world', 'i') FROM test ORDER BY v",
+        "SELECT regexp_replace(v, 'h.*', 'world', v) FROM test ORDER BY v",
+        "SELECT regexp_replace('ä', '\\C', 'x')",
+        "SELECT regexp_matches('00001', '^00\\x{FFFFFFFF}001$')",
+        "SELECT regexp_extract('abc', p) FROM (VALUES ('(a')) t(p)",
+        "SELECT regexp_matches('asdf', 'sd')",
+        "SELECT regexp_full_match('asdf', '.sd.')",
+        "SELECT regexp_extract_all('abab', 'a')",
+        "SELECT regexp_split_to_array('a,b', ',')",
+        "SELECT string_split_regex('a,b', ',')",
+        "SELECT regexp('a', 'a')",
+        "SELECT regexp_like('a', 'a')",
+        "SELECT regexp_match('a', 'a')",
+        "SELECT 'abc' SIMILAR TO 'a.*'",
+        "SELECT 'abc' NOT SIMILAR TO 'a.*'",
+        "SELECT 'abc' ~ 'a.*'",
+        "SELECT 'abc' !~ 'a.*'",
+    };
+    for (auto *q : queries) {
+        CAPTURE(q);
+        try {
+            conn.Query(q);
+            FAIL("accepted");
+        } catch (const std::exception &e) {
+            CHECK(std::string(e.what()).find("libzugodb#40") != std::string::npos);
+        }
+    }
+    // LIKE is not a regular expression and stays.
+    CHECK(Run(conn, "SELECT 'abc' LIKE 'a%', 'similar' AS similar") == Rows{{"true", "similar"}});
+}

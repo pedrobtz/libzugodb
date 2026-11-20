@@ -276,7 +276,7 @@ ParsedStmtPtr Parser::ParseStatement() {
                 item.expression = ParseExpression();
                 if (MatchKeyword(TokenType::KW_DESC)) item.ascending = false;
                 else MatchKeyword(TokenType::KW_ASC);
-                item.nulls_first = !item.ascending;
+                item.nulls_first = false;  // DuckDB's default_null_order, nulls_last
                 if (MatchKeyword(TokenType::KW_NULLS)) {
                     if (MatchKeyword(TokenType::KW_FIRST)) item.nulls_first = true;
                     else if (MatchKeyword(TokenType::KW_LAST)) item.nulls_first = false;
@@ -521,10 +521,10 @@ ParsedStmtPtr Parser::ParseSelectStatement() {
             } else {
                 MatchKeyword(TokenType::KW_ASC); // optional
             }
-            // SQL standard / Postgres / DuckDB default: ASC -> NULLS LAST,
-            // DESC -> NULLS FIRST. Apply the direction default first, then
-            // let an explicit NULLS keyword override.
-            item.nulls_first = !item.ascending;
+            // DuckDB's default_null_order is nulls_last: NULLs sort last
+            // after ASC and DESC alike (Postgres puts them first after
+            // DESC, which the engine did). An explicit NULLS overrides.
+            item.nulls_first = false;
             if (MatchKeyword(TokenType::KW_NULLS)) {
                 if (MatchKeyword(TokenType::KW_FIRST)) {
                     item.nulls_first = true;
@@ -670,6 +670,20 @@ std::unique_ptr<TableRef> Parser::ParseTableRef() {
         Expect(TokenType::RPAREN, "after column alias list");
         if (ref->subquery && !ref->column_aliases.empty()) {
             auto &sel_list = ref->subquery->select_list;
+            // More aliases than columns is DuckDB's error; it was ignored
+            // (#38). Beside a *, the aliases were set on the * and lost.
+            for (auto &e : sel_list) {
+                if (e->GetExpressionType() == ExpressionType::STAR) {
+                    throw ParserException(
+                        "A column alias list on a subquery whose select list has * "
+                        "is not supported");
+                }
+            }
+            if (ref->column_aliases.size() > sel_list.size()) {
+                throw ParserException("table has " + std::to_string(sel_list.size()) +
+                    " columns available but " + std::to_string(ref->column_aliases.size()) +
+                    " columns specified");
+            }
             for (size_t i = 0; i < ref->column_aliases.size() && i < sel_list.size(); i++) {
                 sel_list[i]->alias = ref->column_aliases[i];
             }
@@ -964,6 +978,10 @@ ParsedExprPtr Parser::ParseComparison() {
         std::string out;
         out.reserve(pat_str.size());
         for (size_t i = 0; i < pat_str.size(); i++) {
+            if (pat_str[i] == esc_char && i + 1 == pat_str.size()) {
+                // DuckDB's error; it was read as a literal (#34).
+                throw ParserException("LIKE pattern must not end with escape character");
+            }
             if (pat_str[i] == esc_char && i + 1 < pat_str.size()) {
                 // Emit \ + literal next char. Existing backslashes in
                 // the original pattern remain literal too; we just
@@ -983,6 +1001,15 @@ ParsedExprPtr Parser::ParseComparison() {
         }
         pat = std::make_unique<ConstantExpression>(out, TokenType::STRING_LITERAL);
     };
+    // SIMILAR TO is a regular expression: refused (design L24).
+    {
+        size_t k = pos_;
+        if (k < tokens_.size() && tokens_[k].type == TokenType::KW_NOT) k++;
+        if (k < tokens_.size() && tokens_[k].type == TokenType::IDENTIFIER &&
+            StringUtil::Upper(tokens_[k].value) == "SIMILAR") {
+            RefuseRegex("SIMILAR TO");
+        }
+    }
     if (MatchKeyword(TokenType::KW_LIKE)) {
         auto right = ParseAddSub();
         consume_escape_and_rewrite(right);

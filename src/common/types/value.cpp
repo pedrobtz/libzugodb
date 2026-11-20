@@ -1,4 +1,5 @@
 #include "slothdb/common/types/value.hpp"
+#include "slothdb/common/types/blob.hpp"
 #include "slothdb/common/exception.hpp"
 #include <cmath>
 #include <cstdio>
@@ -625,8 +626,11 @@ std::string Value::ToString() const {
     case LogicalTypeId::HUGEINT:
         return hugeint_.ToString();
     case LogicalTypeId::VARCHAR:
-    case LogicalTypeId::BLOB:
         return str_value_;
+    case LogicalTypeId::BLOB:
+        // DuckDB's text of a BLOB, \xHH for the bytes that are not
+        // printable ASCII (#31).
+        return blob::ToText(str_value_);
     default:
         return "(" + type_.ToString() + ")";
     }
@@ -651,6 +655,14 @@ bool Value::operator==(const Value &other) const {
     case LogicalTypeId::HUGEINT: return hugeint_ == other.hugeint_;
     case LogicalTypeId::VARCHAR:
     case LogicalTypeId::BLOB: return str_value_ == other.str_value_;
+    // A DATE holds its days and a TIME or TIMESTAMP its microseconds as
+    // an INTEGER and a BIGINT do. They compared as neither equal nor
+    // less, so a sort, a UNION and DISTINCT through Values left them as
+    // they came (#38).
+    case LogicalTypeId::DATE: return integer_ == other.integer_;
+    case LogicalTypeId::TIME:
+    case LogicalTypeId::TIMESTAMP:
+    case LogicalTypeId::TIMESTAMP_TZ: return bigint_ == other.bigint_;
     default: return false;
     }
 }
@@ -673,6 +685,10 @@ bool Value::operator<(const Value &other) const {
     case LogicalTypeId::HUGEINT: return hugeint_ < other.hugeint_;
     case LogicalTypeId::VARCHAR:
     case LogicalTypeId::BLOB: return str_value_ < other.str_value_;
+    case LogicalTypeId::DATE: return integer_ < other.integer_;
+    case LogicalTypeId::TIME:
+    case LogicalTypeId::TIMESTAMP:
+    case LogicalTypeId::TIMESTAMP_TZ: return bigint_ < other.bigint_;
     default: return false;
     }
 }

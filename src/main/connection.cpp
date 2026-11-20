@@ -1,6 +1,8 @@
 #include "slothdb/main/connection.hpp"
 #include "slothdb/main/query_materialize.hpp"
 #include "slothdb/common/exception.hpp"
+#include "slothdb/common/types/blob.hpp"
+#include "slothdb/common/types/nan_guard.hpp"
 #include "slothdb/parser/parser.hpp"
 #include "slothdb/binder/binder.hpp"
 #include "slothdb/planner/planner.hpp"
@@ -201,7 +203,10 @@ struct SetOpRowHash {
             if (v.IsNull()) {
                 vh = 0xDEAD9E37;
             } else {
-                vh = std::hash<std::string>{}(v.ToString());
+                // -0.0 and 0.0 are equal, so they hash alike (#38).
+                bool zero = (v.type().id() == LogicalTypeId::DOUBLE && v.GetValue<double>() == 0.0) ||
+                            (v.type().id() == LogicalTypeId::FLOAT && v.GetValue<float>() == 0.0f);
+                vh = std::hash<std::string>{}(zero ? std::string("0") : v.ToString());
                 vh ^= static_cast<size_t>(v.type().id()) * 0x9e3779b9u;
             }
             h ^= vh + 0x9e3779b9 + (h << 6) + (h >> 2);
@@ -254,23 +259,36 @@ static void ApplyUnionOrderLimit(
         for (auto &item : order_by) {
             Key k{ -1, item.ascending, item.nulls_first };
             auto &e = *item.expression;
+            // A key that is not an output position or name was skipped,
+            // leaving the rows in the chain's order (#35): refused.
             if (e.GetExpressionType() == ExpressionType::CONSTANT) {
                 auto &c = static_cast<const ConstantExpression &>(e);
-                if (c.literal_type == TokenType::INTEGER_LITERAL) {
-                    try {
-                        int v = std::stoi(c.value);
-                        if (v >= 1 && v <= static_cast<int>(col_names.size()))
-                            k.col_idx = v - 1;
-                    } catch (...) {}
+                if (c.literal_type != TokenType::INTEGER_LITERAL) {
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "ORDER BY non-integer literal has no effect");
                 }
-            } else if (e.GetExpressionType() == ExpressionType::COLUMN_REF) {
+                long long v = 0;
+                try { v = std::stoll(c.value); } catch (...) { v = 0; }
+                if (v < 1 || v > static_cast<long long>(col_names.size())) {
+                    throw BinderException(ErrorCode::OUT_OF_RANGE,
+                        "ORDER term out of range - should be between 1 and " +
+                        std::to_string(col_names.size()));
+                }
+                k.col_idx = static_cast<int>(v - 1);
+            } else if (e.GetExpressionType() == ExpressionType::COLUMN_REF &&
+                       static_cast<const ColumnRefExpression &>(e).table_name.empty()) {
                 auto &cr = static_cast<const ColumnRefExpression &>(e);
                 for (size_t i = 0; i < col_names.size(); i++) {
-                    if (col_names[i] == cr.column_name) {
+                    if (StringUtil::Upper(col_names[i]) == StringUtil::Upper(cr.column_name)) {
                         k.col_idx = static_cast<int>(i);
                         break;
                     }
                 }
+            }
+            if (k.col_idx < 0) {
+                throw NotImplementedException(
+                    "ORDER BY over a set operation takes an output column's name or "
+                    "position only");
             }
             keys.push_back(k);
         }
@@ -295,11 +313,18 @@ static void ApplyUnionOrderLimit(
 
     int64_t offset_val = 0;
     int64_t limit_val = -1;
+    // An integer literal, or none; any other LIMIT or OFFSET of a set
+    // operation was ignored (#35) and is refused.
     auto extract_int_literal = [](const ParsedExprPtr &p) -> int64_t {
-        if (!p || p->GetExpressionType() != ExpressionType::CONSTANT) return -1;
-        auto &c = static_cast<const ConstantExpression &>(*p);
-        if (c.literal_type != TokenType::INTEGER_LITERAL) return -1;
-        try { return std::stoll(c.value); } catch (...) { return -1; }
+        if (!p) return -1;
+        if (p->GetExpressionType() == ExpressionType::CONSTANT) {
+            auto &c = static_cast<const ConstantExpression &>(*p);
+            if (c.literal_type == TokenType::INTEGER_LITERAL) {
+                try { return std::stoll(c.value); } catch (...) {}
+            }
+        }
+        throw NotImplementedException(
+            "LIMIT and OFFSET of a set operation take a non-negative integer literal only");
     };
     int64_t lit_offset = extract_int_literal(offset_expr);
     int64_t lit_limit = extract_int_literal(limit_expr);
@@ -583,6 +608,25 @@ void MaterializeFromSubqueries(Catalog &catalog, TableRef &tref,
 }
 
 QueryResult Connection::Query(const std::string &sql) {
+    auto result = RunStatements(sql);
+    // The backstop of design L23 (#33): a NaN that a path the expression
+    // executor does not see made (an aggregate over infinities) is an
+    // error, not a value.
+    for (auto &chunk : result.chunks) RefuseNaN(chunk);
+    for (auto &row : result.rows) {
+        for (auto &v : row) {
+            if (v.IsNull()) continue;
+            auto id = v.type().id();
+            if ((id == LogicalTypeId::DOUBLE && std::isnan(v.GetValue<double>())) ||
+                (id == LogicalTypeId::FLOAT && std::isnan(v.GetValue<float>()))) {
+                ThrowNaN();
+            }
+        }
+    }
+    return result;
+}
+
+QueryResult Connection::RunStatements(const std::string &sql) {
     // 1. Parse.
     auto statements = Parser::Parse(sql);
     // Per-statement source slices — used by CREATE VIEW and any other
@@ -902,6 +946,13 @@ QueryResult Connection::Query(const std::string &sql) {
                 }
                 MaterializeSelectIntoTable(db_.GetCatalog(), *ct.query,
                                            ct.table_name);
+                // DuckDB's result: the rows the table was made with (#38).
+                auto *made = db_.GetCatalog().GetTable(ct.table_name);
+                final_result.column_names = {"Count"};
+                final_result.column_types = {LogicalType::BIGINT()};
+                final_result.rows.push_back(
+                    {Value::BIGINT(made ? static_cast<int64_t>(made->GetStorage().Count()) : 0)});
+                final_result.is_count = true;
                 continue;
             }
         }
@@ -1272,6 +1323,18 @@ QueryResult Connection::Query(const std::string &sql) {
                         }
                         }
                     };
+                    // A BLOB from text only, to text only (#31).
+                    if (dst_id == LogicalTypeId::BLOB) {
+                        if (src_id != LogicalTypeId::VARCHAR) {
+                            throw ConversionException("Unimplemented type for cast (" +
+                                src.type().ToString() + " -> BLOB)");
+                        }
+                        return Value::BLOB(blob::FromText(src.GetValue<std::string>()));
+                    }
+                    if (src_id == LogicalTypeId::BLOB && dst_id != LogicalTypeId::VARCHAR) {
+                        throw ConversionException("Unimplemented type for cast (BLOB -> " +
+                            target.ToString() + ")");
+                    }
                     // Target VARCHAR: stringify.
                     if (dst_id == LogicalTypeId::VARCHAR) {
                         return Value::VARCHAR(src.ToString());
@@ -1389,6 +1452,7 @@ QueryResult Connection::Query(const std::string &sql) {
                 final_result.column_names = {"Count"};
                 final_result.column_types = {LogicalType::BIGINT()};
                 final_result.rows.push_back({Value::BIGINT(ins_count)});
+                final_result.is_count = true;
                 continue;
             }
         }
@@ -2696,42 +2760,100 @@ QueryResult Connection::Query(const std::string &sql) {
                     auto storage = std::make_shared<DataTable>(base_sel.result_types);
                     entry.SetStorage(storage);
 
+                    // SQL's recursion (#38): each step reads only the rows
+                    // the step before made, the working table, and the CTE
+                    // is every step's rows. Each step read the whole table
+                    // so far, so rows multiplied (a count to 3 made 500,501
+                    // rows), and a window in the step saw them all. UNION
+                    // keeps a row once; a step past the caps is an error,
+                    // not the rows so far.
+                    if (cte.query->set_op != "UNION ALL" && cte.query->set_op != "UNION") {
+                        throw NotImplementedException(
+                            "A recursive CTE joins its parts with UNION or UNION ALL");
+                    }
+                    if (cte.query->set_right->set_right) {
+                        throw NotImplementedException(
+                            "A recursive CTE of more than two parts is not supported");
+                    }
+                    const bool rec_union_all = cte.query->set_op == "UNION ALL";
+                    const auto &rec_types = base_sel.result_types;
+                    auto make_table = [&](const std::vector<std::vector<Value>> &rows) {
+                        auto t = std::make_shared<DataTable>(rec_types);
+                        for (idx_t start = 0; start < rows.size(); start += VECTOR_SIZE) {
+                            idx_t n = std::min<idx_t>(VECTOR_SIZE, rows.size() - start);
+                            DataChunk c;
+                            c.Initialize(rec_types);
+                            for (idx_t r = 0; r < n; r++) {
+                                for (idx_t col = 0; col < rec_types.size(); col++) {
+                                    c.SetValue(col, r, rows[start + r][col]);
+                                }
+                            }
+                            c.SetCardinality(n);
+                            t->Append(c);
+                        }
+                        return t;
+                    };
+                    SetOpRowSet rec_seen;
+                    std::vector<std::vector<Value>> rec_all, rec_work;
+                    auto take = [&](PhysicalOperator &op, const std::vector<LogicalType> &types,
+                                    std::vector<std::vector<Value>> &out) {
+                        if (types.size() != rec_types.size()) {
+                            throw BinderException(
+                                "The parts of a recursive CTE return different numbers of columns");
+                        }
+                        for (idx_t col = 0; col < types.size(); col++) {
+                            if (types[col].id() != rec_types[col].id() &&
+                                types[col].id() != LogicalTypeId::SQLNULL) {
+                                throw NotImplementedException(
+                                    "A recursive CTE whose recursive part's types differ from its "
+                                    "base part's is not supported");
+                            }
+                        }
+                        DataChunk chunk;
+                        while (op.GetData(chunk)) {
+                            for (idx_t r = 0; r < chunk.size(); r++) {
+                                std::vector<Value> row;
+                                row.reserve(types.size());
+                                for (idx_t col = 0; col < types.size(); col++) {
+                                    auto v = chunk.GetValue(col, r);
+                                    row.push_back(v.IsNull() ? Value() : v);
+                                }
+                                if (!rec_union_all && !rec_seen.insert(row).second) continue;
+                                out.push_back(std::move(row));
+                            }
+                        }
+                    };
+
                     auto base_logical = Planner::Plan(*base_bound);
                     PhysicalPlanner base_pp(db_.GetCatalog());
                     auto base_physical = base_pp.Plan(*base_logical);
                     base_physical->Init();
-                    DataChunk cte_chunk;
-                    while (true) {
-                        if (!base_physical->GetData(cte_chunk)) break;
-                        storage->Append(cte_chunk);
-                    }
+                    take(*base_physical, base_sel.result_types, rec_work);
+                    rec_all = rec_work;
 
-                    // 2. Iterate recursive case (max 1000 iterations, 10M total rows).
                     static constexpr idx_t MAX_RECURSIVE_ROWS = 10000000;
-                    for (int iter = 0; iter < 1000; iter++) {
-                        idx_t prev_count = storage->Count();
-                        if (prev_count > MAX_RECURSIVE_ROWS)
-                            throw InternalException("Recursive CTE exceeded 10M row limit");
-
+                    static constexpr int MAX_RECURSIVE_STEPS = 100000;
+                    for (int iter = 0; !rec_work.empty(); iter++) {
+                        if (iter >= MAX_RECURSIVE_STEPS || rec_all.size() > MAX_RECURSIVE_ROWS) {
+                            throw NotImplementedException(
+                                "Recursive CTE past " + std::to_string(MAX_RECURSIVE_STEPS) +
+                                " steps or " + std::to_string(MAX_RECURSIVE_ROWS) + " rows");
+                        }
+                        entry.SetStorage(make_table(rec_work));
                         Binder rec_binder(db_.GetCatalog());
                         auto rec_bound = rec_binder.Bind(*cte.query->set_right);
+                        auto &rec_sel = static_cast<BoundSelectStatement &>(*rec_bound);
+                        auto rec_result_types = rec_sel.result_types;
                         auto rec_logical = Planner::Plan(*rec_bound);
                         PhysicalPlanner rec_pp(db_.GetCatalog());
                         auto rec_physical = rec_pp.Plan(*rec_logical);
                         rec_physical->Init();
-
-                        DataChunk rec_chunk;
-                        bool got_rows = false;
-                        while (true) {
-                            if (!rec_physical->GetData(rec_chunk)) break;
-                            if (rec_chunk.size() > 0) {
-                                storage->Append(rec_chunk);
-                                got_rows = true;
-                            }
-                        }
-
-                        if (!got_rows || storage->Count() == prev_count) break;
+                        std::vector<std::vector<Value>> next;
+                        take(*rec_physical, rec_result_types, next);
+                        rec_work = std::move(next);
+                        rec_all.insert(rec_all.end(), rec_work.begin(), rec_work.end());
                     }
+                    entry.SetStorage(make_table(rec_all));
                     // (cte_tables.push_back already happened right after
                     //  CreateTable above so a mid-iteration throw still cleans up.)
                 } else {
@@ -2825,6 +2947,13 @@ QueryResult Connection::Query(const std::string &sql) {
             final_result.column_names = {"Count"};
             final_result.column_types = {LogicalType::BIGINT()};
             final_result.rows.push_back({Value::BIGINT(affected)});
+            final_result.is_count = true;
+        } else if (stmt->GetType() == StatementType::CREATE_TABLE) {
+            // DuckDB's result for CREATE TABLE: a Count column and no row
+            // (#38).
+            final_result.column_names = {"Count"};
+            final_result.column_types = {LogicalType::BIGINT()};
+            final_result.is_count = true;
         }
 
         // Re-tag DATE / TIMESTAMP result columns. The engine carries Parquet

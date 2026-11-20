@@ -75,6 +75,9 @@ What follows from it:
   decimal literal, `10.0 % 0.0`) are fixed or refused one by one.
 - The plan text of `EXPLAIN` is the engine's own, not DuckDB's; the
   conformance runner leaves such queries out (L20).
+- The engine holds no NaN (L23, until #42), and has no regular
+  expressions until a host provides RE2's (L24, #40): both are errors,
+  not approximations.
 
 ## 4. Parser
 
@@ -373,6 +376,8 @@ minor version.
   except that an integer column does not take a fraction DuckDB's cast
   would round (`1.5` for 2) or its DOUBLE text. The type string itself is
   not checked, as there: the corpus writes `I` for many DOUBLE columns.
+  A recorded row is split at tabs as DuckDB's `StringUtil::Split` does,
+  dropping empty pieces (Stage 8, #38).
   So a type difference counts only where it changes the text past these
   rules, and a DECIMAL that the engine computes as a DOUBLE (#26) is
   wrong only where its value differs.
@@ -492,6 +497,43 @@ minor version.
   exact. The interim, per the advisor, is refusal, not a partial table; a
   complete simple case mapping generated from UnicodeData is a
   sub-issue of v0.3.0.
+
+- **L23 (2026-11-20, Stage 8, decided with an advisor).** What the
+  engine holds, and what a statement returns.
+  - No NaN. DuckDB orders NaN above every number and equal to itself;
+    the engine's comparisons are IEEE's in many hand-written paths
+    (sorts, joins, groups, `MIN`/`MAX`), and teaching each DuckDB's order
+    would leave any path missed a silent wrong answer. So a NaN is an
+    error wherever it would be made: an expression's result (text
+    `'nan'`, `0/0`, `inf - inf`, `SQRT(-1)`, `x % 0` of doubles, under
+    `TRY_CAST` too; `ExpressionExecutor::Execute` checks every `FLOAT`
+    and `DOUBLE` it computes), a table's append (`DataTable::Append`,
+    so `Connection::Append` too), a database file's value
+    (`Checkpoint::Load`; a file written before 0.3.0 that holds one is
+    refused), and a query's result, the backstop for an aggregate over
+    infinities. Infinities are kept, since IEEE orders them as DuckDB
+    does, with DuckDB's values: `x / 0` and `POWER(0, -2)` are
+    infinities. The R package decides what `dbWriteTable` of an R `NaN`
+    is (an error from the engine now). #42 tracks DuckDB's NaN
+    semantics, which would lift this refusal.
+  - DuckDB's statement results. `CREATE TABLE AS` returns one row,
+    `Count`, the rows it made; `CREATE TABLE` a `Count` column and no
+    row; the other DDL is left as it was until a recorded case shows
+    its shape. `QueryResult::is_count` marks a result of `INSERT`,
+    `UPDATE`, `DELETE` or `CREATE TABLE`, so a caller classifies by it
+    rather than by parsing SQL or trusting a column's name.
+- **L24 (2026-11-20, Stage 8, the maintainer's decision).** Every regular
+  expression function and operator is refused, at bind time or before
+  (`regexp_matches`, `regexp_full_match`, `regexp_replace`,
+  `regexp_extract`, `regexp_extract_all`, `regexp_split_to_array`,
+  `string_split_regex`, `regexp_escape`, `REGEXP`, `REGEXP_LIKE`,
+  `REGEXP_MATCH`, `SIMILAR TO`, `~`, `!~`), with one error naming #40,
+  until a host-supplied provider gives them RE2's semantics (#40,
+  zuregex#211). `std::regex`, ECMAScript over bytes, gave answers that
+  were not DuckDB's and is gone. A Pike VM over a subset of RE2 was built
+  for this stage on an advisor's recommendation and dropped by the
+  maintainer: the package family has one regex engine, zuregex's RE2,
+  and no second implementation to maintain.
 
 ## 9. Open questions
 

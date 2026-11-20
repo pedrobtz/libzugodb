@@ -21,6 +21,37 @@ static bool HasUngroupedColumn(const BoundExpression &expr,
 // BindContext
 // ============================================================================
 
+// DuckDB casts to a BLOB only from text (reading its \\xHH escapes) and
+// from a BLOB to text only; any other cast with a BLOB is an error there,
+// under TRY_CAST too (#31).
+static void CheckBlobCast(const LogicalType &from, const LogicalType &to) {
+    auto f = from.id(), t = to.id();
+    if (f == t || f == LogicalTypeId::SQLNULL) return;
+    if (t == LogicalTypeId::BLOB && f != LogicalTypeId::VARCHAR) {
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            "Unimplemented type for cast (" + from.ToString() + " -> BLOB)");
+    }
+    if (f == LogicalTypeId::BLOB && t != LogicalTypeId::VARCHAR) {
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            "Unimplemented type for cast (BLOB -> " + to.ToString() + ")");
+    }
+}
+
+// Beside a BLOB, a string literal is read as a BLOB, as DuckDB casts a
+// literal to the other operand's type; any other type is refused, since
+// DuckDB has no implicit cast from it to a BLOB (#31).
+static void CoerceBesideBlob(BoundExprPtr &e, const char *what) {
+    auto id = e->GetReturnType().id();
+    if (id == LogicalTypeId::BLOB || id == LogicalTypeId::SQLNULL) return;
+    if (id == LogicalTypeId::VARCHAR && e->GetExpressionType() == BoundExpressionType::CONSTANT) {
+        e = std::make_unique<BoundCast>(std::move(e), LogicalType::BLOB());
+        return;
+    }
+    throw BinderException(ErrorCode::TYPE_MISMATCH,
+        std::string(what) + " of a BLOB and a " + e->GetReturnType().ToString() +
+        " is not supported");
+}
+
 void BindContext::AddTable(const std::string &alias, TableCatalogEntry *entry) {
     tables[alias] = entry;
     // Compute offset: sum of all columns from previously added tables.
@@ -454,6 +485,11 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                     ord = val.GetValue<int64_t>();
                     is_int_ordinal = true;
                 }
+                if (!is_int_ordinal) {
+                    // DuckDB's error: a constant sorts nothing (#35).
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "ORDER BY non-integer literal has no effect");
+                }
                 if (is_int_ordinal) {
                     // Reference the post-expansion select_list so
                     // `SELECT * FROM t ORDER BY 2` works (previously
@@ -463,24 +499,33 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
                     if (ord >= 1 &&
                         ord <= static_cast<int64_t>(result->select_list.size())) {
                         idx_t sl_idx = static_cast<idx_t>(ord - 1);
-                        if (sl_idx < stmt.select_list.size() &&
-                            stmt.select_list[sl_idx]->GetExpressionType()
-                                != ExpressionType::STAR) {
+                        // With a * in the list, positions count its
+                        // columns, so stmt.select_list does not line up.
+                        bool has_star = false;
+                        for (auto &e : stmt.select_list) {
+                            has_star = has_star || e->GetExpressionType() == ExpressionType::STAR;
+                        }
+                        if (!has_star && sl_idx < stmt.select_list.size()) {
                             bound_item.expression = BindExpression(
                                 *stmt.select_list[sl_idx], context);
                             bound_item.select_index = sl_idx;
                             resolved = true;
-                        } else if (sl_idx < result->result_names.size()) {
-                            // Star-expanded column: re-resolve by name.
-                            auto col = std::make_unique<ColumnRefExpression>(
-                                result->result_names[sl_idx]);
-                            try {
-                                bound_item.expression = BindExpression(*col, context);
-                                bound_item.select_index = sl_idx;
-                                resolved = true;
-                            } catch (...) {
-                                // Fall through to alias path.
-                            }
+                        } else if (sl_idx < result->result_names.size() &&
+                                   result->select_list[sl_idx]->GetExpressionType() ==
+                                       BoundExpressionType::COLUMN_REF) {
+                            // Star-expanded column: the column itself. By
+                            // its name it was the other table's column of
+                            // that name after a join (SELECT * FROM a JOIN
+                            // b ... ORDER BY 1 sorted by b.i, #38).
+                            auto &cr = static_cast<const BoundColumnRef &>(*result->select_list[sl_idx]);
+                            bound_item.expression = std::make_unique<BoundColumnRef>(
+                                cr.column_name, cr.column_index, cr.GetReturnType());
+                            bound_item.select_index = sl_idx;
+                            resolved = true;
+                        } else {
+                            throw NotImplementedException(
+                                "ORDER BY position " + std::to_string(ord) +
+                                " of this select list is not supported");
                         }
                     } else {
                         throw BinderException(
@@ -621,6 +666,9 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
         }
         int64_t v = -1;
         if (extract_int(val, v)) {
+            if (v < 0) {
+                throw BinderException(ErrorCode::OUT_OF_RANGE, "LIMIT cannot be negative");
+            }
             result->limit_count = v;
         } else if (!val.IsNull()) {
             throw BinderException(ErrorCode::TYPE_MISMATCH,
@@ -643,6 +691,9 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
         }
         int64_t v = 0;
         if (extract_int(val, v)) {
+            if (v < 0) {
+                throw BinderException(ErrorCode::OUT_OF_RANGE, "OFFSET cannot be negative");
+            }
             result->offset_count = v;
         } else if (!val.IsNull()) {
             throw BinderException(ErrorCode::TYPE_MISMATCH,
@@ -712,6 +763,7 @@ BoundStmtPtr Binder::BindInsert(const InsertStatement &stmt) {
         auto src_id = bound->GetReturnType().id();
         auto dst_id = col_types[target].id();
         if (src_id != dst_id && src_id != LogicalTypeId::SQLNULL) {
+            CheckBlobCast(bound->GetReturnType(), col_types[target]);
             bound = std::make_unique<BoundCast>(std::move(bound), col_types[target]);
         }
         return bound;
@@ -850,6 +902,7 @@ BoundStmtPtr Binder::BindUpdate(const UpdateStatement &stmt) {
             auto src_id = ba.value->GetReturnType().id();
             auto dst_id = col_types[idx].id();
             if (src_id != dst_id && src_id != LogicalTypeId::SQLNULL) {
+                CheckBlobCast(ba.value->GetReturnType(), col_types[idx]);
                 ba.value = std::make_unique<BoundCast>(
                     std::move(ba.value), col_types[idx]);
             }
@@ -1077,6 +1130,11 @@ BoundExprPtr Binder::BindConstant(const ConstantExpression &expr) {
 BoundExprPtr Binder::BindComparison(const ComparisonExpression &expr, BindContext &context) {
     auto left = BindExpression(*expr.left, context);
     auto right = BindExpression(*expr.right, context);
+    if (left->GetReturnType().id() == LogicalTypeId::BLOB ||
+        right->GetReturnType().id() == LogicalTypeId::BLOB) {
+        CoerceBesideBlob(left, "A comparison");
+        CoerceBesideBlob(right, "A comparison");
+    }
 
     // Promote a literal constant to the column's type when one side is a
     // column reference and the other is a CONSTANT of a compatible numeric
@@ -1205,6 +1263,13 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
     auto right = BindExpression(*expr.right, context);
     // || is string concatenation.
     if (expr.op == "||") {
+        if (left->GetReturnType().id() == LogicalTypeId::BLOB ||
+            right->GetReturnType().id() == LogicalTypeId::BLOB) {
+            CoerceBesideBlob(left, "||");
+            CoerceBesideBlob(right, "||");
+            return std::make_unique<BoundArithmetic>(expr.op, std::move(left), std::move(right),
+                                                      LogicalType::BLOB());
+        }
         return std::make_unique<BoundArithmetic>(expr.op, std::move(left), std::move(right),
                                                   LogicalType::VARCHAR());
     }
@@ -1288,7 +1353,45 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
             "Invalid TIMESTAMP arithmetic: " + left->GetReturnType().ToString() +
             " " + expr.op + " " + right->GetReturnType().ToString());
     }
+    // Arithmetic of numbers only. A VARCHAR, BOOLEAN or TIME operand was
+    // typed INTEGER and read as garbage (1::TINYINT + 1::VARCHAR gave 1);
+    // DuckDB has no such function, or casts a literal (#34).
+    auto numeric_or_null = [](LogicalTypeId t) {
+        switch (t) {
+        case LogicalTypeId::TINYINT: case LogicalTypeId::SMALLINT: case LogicalTypeId::INTEGER:
+        case LogicalTypeId::BIGINT: case LogicalTypeId::UTINYINT: case LogicalTypeId::USMALLINT:
+        case LogicalTypeId::UINTEGER: case LogicalTypeId::UBIGINT: case LogicalTypeId::FLOAT:
+        case LogicalTypeId::DOUBLE: case LogicalTypeId::SQLNULL:
+            return true;
+        default:
+            return false;
+        }
+    };
+    bool bitwise = expr.op == "&" || expr.op == "|" || expr.op == "<<" || expr.op == ">>";
+    auto floating = [](LogicalTypeId t) {
+        return t == LogicalTypeId::FLOAT || t == LogicalTypeId::DOUBLE;
+    };
+    if (!numeric_or_null(left_id) || !numeric_or_null(right_id) ||
+        (bitwise && (floating(left_id) || floating(right_id)))) {
+        throw BinderException(ErrorCode::TYPE_MISMATCH,
+            "No function matches " + left->GetReturnType().ToString() + " " + expr.op + " " +
+            right->GetReturnType().ToString());
+    }
+    // DuckDB's ^ is POWER, not the bitwise exclusive or (2 ^ 3 gave 1).
+    if (expr.op == "^") {
+        std::vector<BoundExprPtr> pargs;
+        pargs.push_back(std::move(left));
+        pargs.push_back(std::move(right));
+        return std::make_unique<BoundFunction>("POWER", std::move(pargs), LogicalType::DOUBLE(),
+                                               false);
+    }
     auto result_type = ResolveArithmeticType(left->GetReturnType(), right->GetReturnType());
+    // DuckDB's / divides as doubles (integer_division is false by
+    // default): 7 / 2 is 3.5, not 3 (#33).
+    if (expr.op == "/" && result_type.id() != LogicalTypeId::DOUBLE &&
+        result_type.id() != LogicalTypeId::FLOAT) {
+        result_type = LogicalType::DOUBLE();
+    }
     return std::make_unique<BoundArithmetic>(expr.op, std::move(left), std::move(right),
                                              result_type);
 }
@@ -1331,6 +1434,52 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
     std::vector<BoundExprPtr> args;
     for (auto &arg : expr.arguments) {
         args.push_back(BindExpression(*arg, context));
+    }
+    // Arguments DuckDB refuses (#34): GCD, LCM and FACTORIAL of anything
+    // but integers (a string was read as 0), and CONTAINS of two NULLs,
+    // which matches more than one of DuckDB's overloads.
+    if (name == "GCD" || name == "LCM" || name == "FACTORIAL") {
+        for (auto &a : args) {
+            auto t = a->GetReturnType().id();
+            if (t != LogicalTypeId::TINYINT && t != LogicalTypeId::SMALLINT &&
+                t != LogicalTypeId::INTEGER && t != LogicalTypeId::BIGINT &&
+                t != LogicalTypeId::SQLNULL) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "No function matches " + StringUtil::Lower(name) + "() of a " +
+                    a->GetReturnType().ToString());
+            }
+        }
+    }
+    if (name == "CONTAINS" && !args.empty()) {
+        bool all_null = true;
+        for (auto &a : args) all_null = all_null && a->GetReturnType().id() == LogicalTypeId::SQLNULL;
+        if (all_null) {
+            throw BinderException(ErrorCode::TYPE_MISMATCH,
+                "Could not choose a best candidate function for contains(NULL, NULL)");
+        }
+    }
+    // Regular expressions are refused, every function of them (#32,
+    // design L24): they come from a host's RE2 provider (#40).
+    static const char *const kRegexFunctions[] = {
+        "REGEXP_MATCHES", "REGEXP_FULL_MATCH", "REGEXP_REPLACE", "REGEXP_EXTRACT",
+        "REGEXP_EXTRACT_ALL", "REGEXP_SPLIT_TO_ARRAY", "REGEXP_SPLIT_TO_TABLE",
+        "STRING_SPLIT_REGEX", "STR_SPLIT_REGEX", "REGEXP_ESCAPE", "REGEXP", "REGEXP_LIKE",
+        "REGEXP_MATCH", "SIMILAR_TO"};
+    for (auto *f : kRegexFunctions) {
+        if (name == f) RefuseRegex("Function " + StringUtil::Lower(name));
+    }
+    // A BLOB argument: the functions that read a BLOB's bytes as DuckDB
+    // does. The others read it as text, gave a VARCHAR of its bytes or
+    // unified it with no type (#31).
+    for (auto &a : args) {
+        if (a->GetReturnType().id() != LogicalTypeId::BLOB) continue;
+        static const char *const kBlobFunctions[] = {
+            "COUNT", "MIN", "MAX", "OCTET_LENGTH", "MD5", "SHA1", "SHA256"};
+        bool ok = false;
+        for (auto *f : kBlobFunctions) ok = ok || name == f;
+        if (!ok) {
+            throw NotImplementedException("Function " + name + " of a BLOB is not supported");
+        }
     }
     // STRING_AGG's separator: a constant string (NULL and a column are
     // not computed as DuckDB does).
@@ -1404,7 +1553,9 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
             {"REPLACE", 3, 3},     {"TRANSLATE", 3, 3},    {"SPLIT_PART", 3, 3},
             {"LPAD", 3, 3},        {"RPAD", 3, 3},         {"LEFT", 2, 2},
             {"RIGHT", 2, 2},       {"TRIM", 1, 2},         {"LTRIM", 1, 2},
-            {"RTRIM", 1, 2},
+            {"RTRIM", 1, 2},       {"CONCAT_WS", 2, SIZE_MAX},
+            {"GCD", 2, 2},         {"LCM", 2, 2},          {"FACTORIAL", 1, 1},
+            {"CHR", 1, 1},
         };
         for (const auto &a : kScalarArity) {
             if (name != a.name) continue;
@@ -1413,8 +1564,9 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
                 throw BinderException(ErrorCode::TYPE_MISMATCH,
                     "No function matches " + StringUtil::Lower(name) + "() with " +
                     std::to_string(n) + " argument(s); it takes " +
-                    (a.lo == a.hi ? std::to_string(a.lo)
-                                  : std::to_string(a.lo) + " to " + std::to_string(a.hi)));
+                    (a.lo == a.hi     ? std::to_string(a.lo)
+                     : a.hi == SIZE_MAX ? "at least " + std::to_string(a.lo)
+                                        : std::to_string(a.lo) + " to " + std::to_string(a.hi)));
             }
             break;
         }
@@ -1462,6 +1614,12 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
                 return_type.id() == LogicalTypeId::SMALLINT ||
                 return_type.id() == LogicalTypeId::TINYINT) {
                 return_type = LogicalType::BIGINT();
+            }
+            // DuckDB's SUM of a FLOAT is a DOUBLE; typed FLOAT, the
+            // aggregate wrote its double sum into a float slot and read
+            // back 0 (#36).
+            if (return_type.id() == LogicalTypeId::FLOAT) {
+                return_type = LogicalType::DOUBLE();
             }
         } else {
             return_type = LogicalType::DOUBLE();
@@ -1728,11 +1886,8 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         return_type = LogicalType::DOUBLE();
     } else if (name == "INITCAP") {
         return_type = LogicalType::VARCHAR();
-    } else if (name == "EXISTS" || name == "REGEXP_MATCHES" || name == "REGEXP_MATCH" ||
-               name == "REGEXP" || name == "REGEXP_LIKE") {
+    } else if (name == "EXISTS") {
         return_type = LogicalType::BOOLEAN();
-    } else if (name == "REGEXP_REPLACE" || name == "REGEXP_EXTRACT") {
-        return_type = LogicalType::VARCHAR();
     } else if (name == "LEAST" || name == "GREATEST") {
         // Same numeric/string unification as COALESCE/NULLIF: walk all
         // args, widen to the highest numeric type, fall back to VARCHAR
@@ -1909,6 +2064,7 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
 BoundExprPtr Binder::BindCast(const CastExpression &expr, BindContext &context) {
     auto child = BindExpression(*expr.child, context);
     auto target = ResolveTypeName(expr.target_type);
+    CheckBlobCast(child->GetReturnType(), target);
     return std::make_unique<BoundCast>(std::move(child), target, expr.is_try);
 }
 
@@ -1987,7 +2143,13 @@ BoundExprPtr Binder::BindWindow(const WindowExpression &expr, BindContext &conte
         return_type = args.empty() ? LogicalType::SQLNULL() : args[0]->GetReturnType();
     } else if (name == "SUM") {
         return_type = args.empty() ? LogicalType::BIGINT() : args[0]->GetReturnType();
-        if (return_type.id() == LogicalTypeId::INTEGER) return_type = LogicalType::BIGINT();
+        if (return_type.id() == LogicalTypeId::INTEGER ||
+            return_type.id() == LogicalTypeId::SMALLINT ||
+            return_type.id() == LogicalTypeId::TINYINT) {
+            return_type = LogicalType::BIGINT();
+        }
+        // As the aggregate: a FLOAT's sum is a DOUBLE (#36).
+        if (return_type.id() == LogicalTypeId::FLOAT) return_type = LogicalType::DOUBLE();
     } else if (name == "COUNT") {
         return_type = LogicalType::BIGINT();
     } else if (name == "AVG") {
@@ -2137,6 +2299,40 @@ LogicalType Binder::ResolveTypeName(const std::string &name) {
 
     // Strip parameters: DECIMAL(10,2) -> DECIMAL
     auto base = upper.substr(0, upper.find('('));
+    // Type parameters as DuckDB reads them (#34): FLOAT(p) is a FLOAT for
+    // p of 1 to 24 and a DOUBLE for 25 to 53; VARCHAR, DECIMAL and
+    // TIMESTAMP take theirs below; any other type takes none (they were
+    // dropped, INTEGER(1000) was an INTEGER).
+    if (upper != base) {
+        auto params = upper.substr(base.size());
+        if (base == "FLOAT" || base == "REAL" || base == "FLOAT4") {
+            if (params.size() < 3 || params.front() != '(' || params.back() != ')') {
+                throw BinderException(ErrorCode::TYPE_MISMATCH, "Invalid type " + name);
+            }
+            auto digits = params.substr(1, params.size() - 2);
+            long long p = -1;
+            if (!digits.empty() && digits.size() <= 6 &&
+                digits.find_first_not_of("0123456789") == std::string::npos) {
+                p = std::stoll(digits);
+            }
+            if (p < 1) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "precision for type float must be at least 1 bit");
+            }
+            if (p > 53) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "precision for type float must be less than 54 bits");
+            }
+            return p <= 24 ? LogicalType::FLOAT() : LogicalType::DOUBLE();
+        }
+        bool takes_params = base == "VARCHAR" || base == "TEXT" || base == "STRING" ||
+                            base == "CHAR" || base == "DECIMAL" || base == "NUMERIC" ||
+                            base == "TIMESTAMP";
+        if (!takes_params) {
+            throw BinderException(ErrorCode::TYPE_MISMATCH,
+                "Type " + base + " does not accept type parameters");
+        }
+    }
 
     if (base == "INTEGER" || base == "INT" || base == "INT4") return LogicalType::INTEGER();
     if (base == "BIGINT" || base == "INT8") return LogicalType::BIGINT();

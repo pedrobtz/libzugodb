@@ -1,4 +1,6 @@
 #include "doctest.h"
+#include <cmath>
+#include <limits>
 #include "slothdb/main/database.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/storage/checkpoint.hpp"
@@ -697,6 +699,16 @@ TEST_CASE("Load - each value is checked against its type") {
         CHECK(Open(one(type, Bytes().U8(1))) == "");
         CHECK(Has(Open(one(type, Bytes().U8(0).Str("1"))), "value at offset 4124, which this engine cannot read back"));
     }
+    // A FLOAT or DOUBLE NaN, which the engine does not hold (#33, design
+    // L23); an infinity loads.
+    double inf = std::numeric_limits<double>::infinity(), nan = std::nan("");
+    float finf = std::numeric_limits<float>::infinity(), fnan = std::nanf("");
+    CHECK(Open(one(LogicalTypeId::DOUBLE, Bytes().U8(0).Raw(&inf, 8))) == "");
+    CHECK(Has(Open(one(LogicalTypeId::DOUBLE, Bytes().U8(0).Raw(&nan, 8))),
+              "DOUBLE value at offset 4124 is NaN, which this engine does not hold"));
+    CHECK(Open(one(LogicalTypeId::FLOAT, Bytes().U8(0).Raw(&finf, 4))) == "");
+    CHECK(Has(Open(one(LogicalTypeId::FLOAT, Bytes().U8(0).Raw(&fnan, 4))),
+              "FLOAT value at offset 4124 is NaN, which this engine does not hold"));
     std::remove(HAND_DB_PATH);
 }
 

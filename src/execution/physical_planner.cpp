@@ -3461,6 +3461,10 @@ private:
 
         // Sequential fallback for non-Parquet inputs.
         std::priority_queue<HeapEntry, std::vector<HeapEntry>, decltype(cmp)> pq(cmp);
+        // Rows whose key is NULL, up to k: they were dropped, so ORDER BY
+        // x LIMIT k lost them (#38). They go after the others, or before
+        // them under NULLS FIRST.
+        std::vector<std::vector<Value>> null_rows;
         DataChunk chunk;
         while (true) {
             chunk.Initialize(children[0]->GetTypes());
@@ -3471,7 +3475,17 @@ private:
             bool key_all_valid = kvalid.AllValid();
             idx_t n = chunk.size();
             for (idx_t i = 0; i < n; i++) {
-                if (!key_all_valid && !kvalid.RowIsValid(i)) continue;
+                if (!key_all_valid && !kvalid.RowIsValid(i)) {
+                    if (null_rows.size() < k) {
+                        std::vector<Value> row;
+                        row.reserve(chunk.ColumnCount());
+                        for (idx_t col = 0; col < chunk.ColumnCount(); col++) {
+                            row.push_back(chunk.GetValue(col, i));
+                        }
+                        null_rows.push_back(std::move(row));
+                    }
+                    continue;
+                }
                 T key = kdata[i];
                 if (pq.size() < k) {
                     HeapEntry e; e.key = key;
@@ -3493,12 +3507,24 @@ private:
                 }
             }
         }
-        sorted_rows_.reserve(pq.size());
+        sorted_rows_.reserve(pq.size() + null_rows.size());
         while (!pq.empty()) {
             sorted_rows_.push_back(std::move(const_cast<HeapEntry &>(pq.top()).row));
             pq.pop();
         }
         std::reverse(sorted_rows_.begin(), sorted_rows_.end());
+        if (!null_rows.empty()) {
+            bool nulls_first = !orders_.empty() && orders_[0].nulls_first;
+            if (nulls_first) {
+                null_rows.insert(null_rows.end(), std::make_move_iterator(sorted_rows_.begin()),
+                                 std::make_move_iterator(sorted_rows_.end()));
+                sorted_rows_ = std::move(null_rows);
+            } else {
+                sorted_rows_.insert(sorted_rows_.end(), std::make_move_iterator(null_rows.begin()),
+                                    std::make_move_iterator(null_rows.end()));
+            }
+            if (orders_.size() <= 1 && sorted_rows_.size() > k) sorted_rows_.resize(k);
+        }
     }
 
     // Inline-value fast path. When the ORDER BY is
@@ -3876,7 +3902,11 @@ private:
         // captured, then resort by full multi-key and trim to K. For an
         // `ORDER BY <ts>, <varchar> LIMIT 10` shape
         // this captures the 10-30 rows that share each unique timestamp.
-        if (!orders_.empty() &&
+        // One key only: with more, the heap kept k * 4 rows of the first
+        // key's ties, chosen as they came, and the others decided among
+        // those, not among all the ties (#38); the generic heap below
+        // compares every key.
+        if (orders_.size() == 1 &&
             orders_[0].expression->GetExpressionType() == BoundExpressionType::COLUMN_REF) {
             auto &cref = static_cast<BoundColumnRef &>(*orders_[0].expression);
             auto tid = orders_[0].expression->GetReturnType().id();
@@ -4940,6 +4970,11 @@ private:
         sort_asc_ = win.order_by[0].ascending;
         sort_tid_ = (sort_col_ < input_.types.size()) ? input_.types[sort_col_] : LogicalTypeId::SQLNULL;
         idx_t n = input_.total;
+        // A NULL key's bytes sorted as a value; the Value path below puts
+        // NULLs last, as DuckDB does (#38).
+        for (idx_t i = 0; i < n; i++) {
+            if (input_.IsNull(i, sort_col_)) return;
+        }
         if (sort_tid_ == LogicalTypeId::INTEGER) {
             sort_i32_.resize(n);
             for (idx_t i = 0; i < n; i++) sort_i32_[i] = input_.GetInt32(i, sort_col_);
@@ -5018,6 +5053,8 @@ private:
                         auto &ref = static_cast<BoundColumnRef &>(*ord.expression);
                         auto va = input_.Get(a, ref.column_index);
                         auto vb = input_.Get(b, ref.column_index);
+                        if (va.IsNull() && vb.IsNull()) continue;
+                        if (va.IsNull() || vb.IsNull()) return vb.IsNull();
                         if (va < vb) return ord.ascending;
                         if (vb < va) return !ord.ascending;
                     }
@@ -5276,6 +5313,8 @@ private:
     bool OrderEqual(const WinInfo &info, idx_t a, idx_t b) {
         // Without an ORDER BY every row of a partition is a peer.
         if (info.rank_order_col == INVALID_INDEX) return !info.has_order;
+        bool na = input_.IsNull(a, info.rank_order_col), nb = input_.IsNull(b, info.rank_order_col);
+        if (na || nb) return na && nb;
         switch (info.rank_order_tid) {
         case LogicalTypeId::INTEGER:
             return input_.GetInt32(a, info.rank_order_col) == input_.GetInt32(b, info.rank_order_col);
@@ -5492,6 +5531,13 @@ private:
         bool asc = ref_win->order_by[0].ascending;
 
         // Reduce each partition to a single winner row - the argmin (asc) or argmax (desc).
+        // A NULL key sorts last, so it is the winner only of a partition
+        // of NULLs; this path read its bytes as a value (#38).
+        for (auto &idxs : partitions_) {
+            for (auto x : idxs) {
+                if (input_.IsNull(x, col)) return;
+            }
+        }
         auto pick_one = [&](std::vector<idx_t> &idxs) {
             if (idxs.empty()) return;
             idx_t best = idxs[0];
@@ -5746,6 +5792,11 @@ private:
                 if (tid == LogicalTypeId::INTEGER) {
                     for (auto &idxs : partitions_list) {
                         std::sort(idxs.begin(), idxs.end(), [&](idx_t a, idx_t b) {
+                            // NULLs last, after ASC and DESC alike, as
+                            // DuckDB's default; their bytes were compared
+                            // as values (#38).
+                            bool na = input.IsNull(a, col), nb = input.IsNull(b, col);
+                            if (na || nb) return !na && nb;
                             auto va = input.GetInt32(a, col);
                             auto vb = input.GetInt32(b, col);
                             return asc ? (va < vb) : (va > vb);
@@ -5756,6 +5807,11 @@ private:
                 if (tid == LogicalTypeId::BIGINT) {
                     for (auto &idxs : partitions_list) {
                         std::sort(idxs.begin(), idxs.end(), [&](idx_t a, idx_t b) {
+                            // NULLs last, after ASC and DESC alike, as
+                            // DuckDB's default; their bytes were compared
+                            // as values (#38).
+                            bool na = input.IsNull(a, col), nb = input.IsNull(b, col);
+                            if (na || nb) return !na && nb;
                             auto va = input.GetInt64(a, col);
                             auto vb = input.GetInt64(b, col);
                             return asc ? (va < vb) : (va > vb);
@@ -5766,6 +5822,11 @@ private:
                 if (tid == LogicalTypeId::DOUBLE) {
                     for (auto &idxs : partitions_list) {
                         std::sort(idxs.begin(), idxs.end(), [&](idx_t a, idx_t b) {
+                            // NULLs last, after ASC and DESC alike, as
+                            // DuckDB's default; their bytes were compared
+                            // as values (#38).
+                            bool na = input.IsNull(a, col), nb = input.IsNull(b, col);
+                            if (na || nb) return !na && nb;
                             auto va = input.GetDouble(a, col);
                             auto vb = input.GetDouble(b, col);
                             return asc ? (va < vb) : (va > vb);
@@ -5776,6 +5837,11 @@ private:
                 if (tid == LogicalTypeId::VARCHAR) {
                     for (auto &idxs : partitions_list) {
                         std::sort(idxs.begin(), idxs.end(), [&](idx_t a, idx_t b) {
+                            // NULLs last, after ASC and DESC alike, as
+                            // DuckDB's default; their bytes were compared
+                            // as values (#38).
+                            bool na = input.IsNull(a, col), nb = input.IsNull(b, col);
+                            if (na || nb) return !na && nb;
                             auto &sa = input.GetStr(a, col);
                             auto &sb = input.GetStr(b, col);
                             uint32_t la = sa.GetSize(), lb = sb.GetSize();
@@ -5796,6 +5862,8 @@ private:
                             auto &ref = static_cast<BoundColumnRef &>(*ord.expression);
                             auto va = input.Get(a, ref.column_index);
                             auto vb = input.Get(b, ref.column_index);
+                            if (va.IsNull() && vb.IsNull()) continue;
+                            if (va.IsNull() || vb.IsNull()) return vb.IsNull();
                             if (va < vb) return ord.ascending;
                             if (vb < va) return !ord.ascending;
                         }
@@ -5810,6 +5878,8 @@ private:
         auto order_equal = [&](idx_t a, idx_t b) -> bool {
             // Without an ORDER BY every row of a partition is a peer.
             if (rank_order_col == INVALID_INDEX) return win.order_by.empty();
+            bool na = input.IsNull(a, rank_order_col), nb = input.IsNull(b, rank_order_col);
+            if (na || nb) return na && nb;
             switch (rank_order_tid) {
             case LogicalTypeId::INTEGER:
                 return input.GetInt32(a, rank_order_col) == input.GetInt32(b, rank_order_col);
@@ -9239,7 +9309,7 @@ private:
                             // every row compared equal and the last row "won",
                             // silently giving MIN('zebra','apple','mango') =
                             // 'zebra'. Use Value::operator< for VARCHAR.
-                            bool is_varchar = vec.GetType().id() == LogicalTypeId::VARCHAR;
+                            bool is_varchar = vec.GetType().id() == LogicalTypeId::VARCHAR || vec.GetType().id() == LogicalTypeId::BLOB;
                             for (idx_t i = 0; i < chunk_size; i++) {
                                 if (all_valid || validity->RowIsValid(i)) {
                                     if (is_varchar) {
@@ -12465,7 +12535,7 @@ private:
                             // equal and the last row "wins", giving silently
                             // wrong results like MIN('zebra','apple','mango')
                             // = 'zebra'). Use Value::operator< for VARCHAR.
-                            bool is_varchar = vec.GetType().id() == LogicalTypeId::VARCHAR;
+                            bool is_varchar = vec.GetType().id() == LogicalTypeId::VARCHAR || vec.GetType().id() == LogicalTypeId::BLOB;
                             double val = is_varchar ? 0.0 : ReadDouble(vec, i);
                             if (info.name == "SUM" || info.name == "AVG") {
                                 state.count++;
@@ -13580,6 +13650,10 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
     std::unordered_map<std::string, std::vector<AggState>> group_states;
     std::unordered_map<std::string, std::vector<Value>> group_keys_map;
     std::vector<std::string> group_order;
+    // The groups above are seeded from every build row, matched or not;
+    // one no probe row joined is no group of the join's result. It was
+    // emitted with COUNT(*) 0 (#38).
+    std::vector<char> gidx_matched(states_by_gidx.size(), 0);
 
     // PARALLEL PATH: large file + build-side GROUP BY -> split into N thread slices.
     // Each thread does full parse + probe + local aggregate into its own state array,
@@ -13605,6 +13679,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
             }
 
             idx_t num_groups = states_by_gidx.size();
+            std::vector<std::vector<char>> thread_matched(nt, std::vector<char>(num_groups, 0));
             std::vector<std::vector<std::vector<AggState>>> thread_states(nt);
             for (auto &ts : thread_states) {
                 ts.resize(num_groups);
@@ -13673,6 +13748,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
                             if (!ml || ml->empty()) continue;
                             for (idx_t build_idx : *ml) {
                                 idx_t gidx = build_to_gidx[build_idx];
+                                thread_matched[t][gidx] = 1;
                                 auto &states = ts[gidx];
                                 auto &br = build_rows[build_idx];
                                 for (idx_t a = 0; a < num_aggs; a++) {
@@ -13727,6 +13803,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
             // Merge thread-local into final states_by_gidx.
             for (unsigned int t = 0; t < nt; t++) {
                 for (idx_t g = 0; g < num_groups; g++) {
+                    if (thread_matched[t][g]) gidx_matched[g] = 1;
                     for (idx_t a = 0; a < num_aggs; a++) {
                         auto &F = states_by_gidx[g][a];
                         auto &P = thread_states[t][g][a];
@@ -13800,6 +13877,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
                 if (all_build_gkeys) {
                     // Direct array indexing - no string hashing in the hot loop.
                     idx_t gidx = build_to_gidx[build_idx];
+                    gidx_matched[gidx] = 1;
                     states_ptr = &states_by_gidx[gidx];
                 } else {
                     std::string gkey;
@@ -13894,6 +13972,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
         emit_states = &fallback_states;
     }
     for (idx_t gi = 0; gi < emit_group_vals->size(); gi++) {
+        if (all_build_gkeys && !gkeys.empty() && !gidx_matched[gi]) continue;
         auto &states = (*emit_states)[gi];
         auto &gvals = (*emit_group_vals)[gi];
         std::vector<Value> row;
