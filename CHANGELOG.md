@@ -149,7 +149,14 @@
   `COUNT(*)` to `SUM(x)` and missed a row that overflows, and `<<` and
   `>>` follow DuckDB (`1 << 31`, a negative operand or count past the
   width are errors; they wrapped or gave NULL). `/` stays a `DOUBLE`
-  division.
+  division. `ABS` of a type's least value raises (it was NULL).
+
+  Found with it: a numeric `Value` read as another numeric type converts
+  it, where it read the bytes of another member of a union, so `TRUNC`
+  of anything but a `DOUBLE` was 0 and `CEIL`, `FLOOR` and `ROUND` of a
+  `TINYINT` or `SMALLINT` were 0. `LN`, `LOG`, `LOG2`, `LOG10` and `EXP`
+  give DuckDB's infinities (`ln(0)` is `-inf`, `exp(1000)` is `inf`)
+  where they gave NULL, and refuse a NaN.
 
 ## libzugodb 0.2.0
 

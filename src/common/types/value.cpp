@@ -517,6 +517,11 @@ bool Value::GetValue<bool>() const {
     return boolean_;
 }
 
+// A numeric read of a Value of another numeric type converts it (#43):
+// the members share a union, so GetValue<double>() of an INTEGER read a
+// double's bytes (TRUNC(54::INTEGER) gave 0) and GetValue<int64_t>() of
+// an INTEGER read four bytes it never wrote. Other types read the member
+// they are stored in, as before.
 template <>
 int8_t Value::GetValue<int8_t>() const {
     if (is_null_) throw ConversionException("Cannot get value from NULL");
@@ -526,19 +531,40 @@ int8_t Value::GetValue<int8_t>() const {
 template <>
 int16_t Value::GetValue<int16_t>() const {
     if (is_null_) throw ConversionException("Cannot get value from NULL");
-    return smallint_;
+    switch (type_.id()) {
+    case LogicalTypeId::BOOLEAN: return boolean_;
+    case LogicalTypeId::TINYINT: return tinyint_;
+    case LogicalTypeId::UTINYINT: return utinyint_;
+    default: return smallint_;
+    }
 }
 
 template <>
 int32_t Value::GetValue<int32_t>() const {
     if (is_null_) throw ConversionException("Cannot get value from NULL");
-    return integer_;
+    switch (type_.id()) {
+    case LogicalTypeId::BOOLEAN: return boolean_;
+    case LogicalTypeId::TINYINT: return tinyint_;
+    case LogicalTypeId::SMALLINT: return smallint_;
+    case LogicalTypeId::UTINYINT: return utinyint_;
+    case LogicalTypeId::USMALLINT: return usmallint_;
+    default: return integer_;
+    }
 }
 
 template <>
 int64_t Value::GetValue<int64_t>() const {
     if (is_null_) throw ConversionException("Cannot get value from NULL");
-    return bigint_;
+    switch (type_.id()) {
+    case LogicalTypeId::BOOLEAN: return boolean_;
+    case LogicalTypeId::TINYINT: return tinyint_;
+    case LogicalTypeId::SMALLINT: return smallint_;
+    case LogicalTypeId::INTEGER: case LogicalTypeId::DATE: return integer_;
+    case LogicalTypeId::UTINYINT: return utinyint_;
+    case LogicalTypeId::USMALLINT: return usmallint_;
+    case LogicalTypeId::UINTEGER: return uinteger_;
+    default: return bigint_;
+    }
 }
 
 template <>
@@ -568,13 +594,34 @@ uint64_t Value::GetValue<uint64_t>() const {
 template <>
 float Value::GetValue<float>() const {
     if (is_null_) throw ConversionException("Cannot get value from NULL");
-    return float_;
+    switch (type_.id()) {
+    case LogicalTypeId::TINYINT: return tinyint_;
+    case LogicalTypeId::SMALLINT: return smallint_;
+    case LogicalTypeId::INTEGER: return static_cast<float>(integer_);
+    case LogicalTypeId::BIGINT: return static_cast<float>(bigint_);
+    case LogicalTypeId::UTINYINT: return utinyint_;
+    case LogicalTypeId::USMALLINT: return usmallint_;
+    case LogicalTypeId::UINTEGER: return static_cast<float>(uinteger_);
+    case LogicalTypeId::UBIGINT: return static_cast<float>(ubigint_);
+    default: return float_;
+    }
 }
 
 template <>
 double Value::GetValue<double>() const {
     if (is_null_) throw ConversionException("Cannot get value from NULL");
-    return double_;
+    switch (type_.id()) {
+    case LogicalTypeId::TINYINT: return tinyint_;
+    case LogicalTypeId::SMALLINT: return smallint_;
+    case LogicalTypeId::INTEGER: return integer_;
+    case LogicalTypeId::BIGINT: return static_cast<double>(bigint_);
+    case LogicalTypeId::UTINYINT: return utinyint_;
+    case LogicalTypeId::USMALLINT: return usmallint_;
+    case LogicalTypeId::UINTEGER: return uinteger_;
+    case LogicalTypeId::UBIGINT: return static_cast<double>(ubigint_);
+    case LogicalTypeId::FLOAT: return float_;
+    default: return double_;
+    }
 }
 
 template <>

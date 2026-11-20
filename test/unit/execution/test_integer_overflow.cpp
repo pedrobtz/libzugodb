@@ -235,3 +235,22 @@ TEST_CASE("#43: shifts and bitwise operators in the operands' type") {
     CHECK(One(conn, "SELECT 127::TINYINT | 1000") ==
           std::make_pair(std::string("1023"), std::string("INTEGER")));
 }
+
+TEST_CASE("#43: TRUNC, CEIL, ROUND and ABS of every integer width") {
+    Database db;
+    Connection conn(db);
+    // function/numeric/test_trunc.test: DuckDB gives 54 and -27. TRUNC
+    // read every argument but a DOUBLE as a double's bytes, and gave 0;
+    // CEIL, FLOOR and ROUND gave 0 for TINYINT and SMALLINT.
+    CHECK(Run(conn, "SELECT trunc(54::TINYINT), trunc((-27)::SMALLINT), trunc(-27::INTEGER), "
+                    "trunc(-27::BIGINT), trunc(-42.5::FLOAT)") ==
+          Rows{{"54", "-27", "-27", "-27", "-42"}});
+    CHECK(Run(conn, "SELECT ceil(2::TINYINT), floor((-2)::SMALLINT), round(3::TINYINT)") ==
+          Rows{{"2", "-2", "3"}});
+    // DuckDB: "Overflow on abs(-128)"; it was NULL.
+    CHECK(Run(conn, "SELECT abs((-127)::TINYINT)") == Rows{{"127"}});
+    CHECK_THROWS(conn.Query("SELECT abs((-128)::TINYINT)"));
+    CHECK_THROWS(conn.Query("SELECT abs((-32768)::SMALLINT)"));
+    CHECK_THROWS(conn.Query("SELECT abs((-2147483648)::INTEGER)"));
+    CHECK_THROWS(conn.Query("SELECT abs(-9223372036854775807 - 1)"));
+}

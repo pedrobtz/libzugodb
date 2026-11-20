@@ -2728,18 +2728,13 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 result.GetValidity().SetInvalid(i);
                 continue;
             }
-            // Signed-integer ABS at the minimum value overflows (UB in
-            // C++; on x86 produces the same negative value back). SQL
-            // standard says overflow -> NULL. Matches the LN/SQRT/POWER
-            // domain-error idiom (set validity invalid). Also covers
-            // INT8/INT16 which previously fell through `default` and
-            // silently returned 0.
+            // Signed-integer ABS at the minimum value overflows: DuckDB's
+            // "Overflow on abs" error, where a NULL was given (#43).
             switch (physical) {
             case PhysicalType::INT8: {
                 auto v = arg.GetData<int8_t>()[i];
                 if (v == std::numeric_limits<int8_t>::min()) {
-                    result.GetValidity().SetInvalid(i);
-                    result.GetData<int8_t>()[i] = 0;
+                    throw OutOfRangeException("Overflow on abs(" + std::to_string(v) + ")");
                 } else {
                     result.GetData<int8_t>()[i] = static_cast<int8_t>(v < 0 ? -v : v);
                 }
@@ -2748,8 +2743,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             case PhysicalType::INT16: {
                 auto v = arg.GetData<int16_t>()[i];
                 if (v == std::numeric_limits<int16_t>::min()) {
-                    result.GetValidity().SetInvalid(i);
-                    result.GetData<int16_t>()[i] = 0;
+                    throw OutOfRangeException("Overflow on abs(" + std::to_string(v) + ")");
                 } else {
                     result.GetData<int16_t>()[i] = static_cast<int16_t>(v < 0 ? -v : v);
                 }
@@ -2758,8 +2752,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             case PhysicalType::INT32: {
                 auto v = arg.GetData<int32_t>()[i];
                 if (v == std::numeric_limits<int32_t>::min()) {
-                    result.GetValidity().SetInvalid(i);
-                    result.GetData<int32_t>()[i] = 0;
+                    throw OutOfRangeException("Overflow on abs(" + std::to_string(v) + ")");
                 } else {
                     result.GetData<int32_t>()[i] = std::abs(v);
                 }
@@ -2768,8 +2761,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             case PhysicalType::INT64: {
                 auto v = arg.GetData<int64_t>()[i];
                 if (v == std::numeric_limits<int64_t>::min()) {
-                    result.GetValidity().SetInvalid(i);
-                    result.GetData<int64_t>()[i] = 0;
+                    throw OutOfRangeException("Overflow on abs(" + std::to_string(v) + ")");
                 } else {
                     result.GetData<int64_t>()[i] = std::abs(v);
                 }
@@ -2810,6 +2802,10 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             else if (phys == PhysicalType::FLOAT) val = arg.GetData<float>()[i];
             else if (phys == PhysicalType::INT32) val = arg.GetData<int32_t>()[i];
             else if (phys == PhysicalType::INT64) val = static_cast<double>(arg.GetData<int64_t>()[i]);
+            else if (phys == PhysicalType::INT16) val = arg.GetData<int16_t>()[i];
+            else if (phys == PhysicalType::INT8) val = arg.GetData<int8_t>()[i];
+            else throw NotImplementedException(name + " of " + arg.GetType().ToString() +
+                                               " is not supported");
 
             if (name == "CEIL" || name == "CEILING") val = std::ceil(val);
             else if (name == "FLOOR") val = std::floor(val);
@@ -3341,7 +3337,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // 1-arg form computes the natural log (matches existing
         // behaviour). 2-arg LOG(base, value) computes log base `base`
         // of `value`, previously silently dropped the second arg.
-        // Domain errors (non-positive arg, base==1) return NULL.
+        // Domain errors are IEEE's, as DuckDB's (ln(0) is -inf).
         bool two_arg = (name == "LOG" && expr.arguments.size() >= 2);
         Vector arg0(Arg(expr, 0)->GetReturnType(), count);
         Execute(*Arg(expr, 0), input, arg0, count);
@@ -3361,24 +3357,14 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                     result.GetValidity().SetInvalid(i);
                     continue;
                 }
+                // DuckDB's IEEE results: log(2, 0) is -inf, log(1, 8)
+                // inf; a NaN (a negative base or value) is refused by
+                // the check on every DOUBLE computed (L23). Each was NULL.
                 double base = val_to_dbl(v0);
                 double val = val_to_dbl(v1);
-                if (base <= 0.0 || base == 1.0 || val <= 0.0) {
-                    result.GetValidity().SetInvalid(i);
-                    continue;
-                }
-                double r = std::log(val) / std::log(base);
-                if (std::isnan(r) || std::isinf(r)) {
-                    result.GetValidity().SetInvalid(i);
-                } else {
-                    result.GetData<double>()[i] = r;
-                }
+                result.GetData<double>()[i] = std::log(val) / std::log(base);
             } else {
                 double d = val_to_dbl(v0);
-                if (d <= 0.0) {
-                    result.GetValidity().SetInvalid(i);
-                    continue;
-                }
                 // 1-arg LOG(x) is log base 10 (DuckDB/Postgres/Oracle);
                 // LN(x) is the natural log. Previously LOG(x) wrongly
                 // returned ln(x) — LOG(100) gave 4.605 instead of 2.
@@ -3396,7 +3382,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            if (d <= 0.0) { result.GetValidity().SetInvalid(i); continue; }
+            // ln(0) is -inf, as DuckDB's; a NaN is refused (L23). It was NULL.
             result.GetData<double>()[i] = std::log2(d);
         }
         return;
@@ -3409,7 +3395,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            if (d <= 0.0) { result.GetValidity().SetInvalid(i); continue; }
+            // ln(0) is -inf, as DuckDB's; a NaN is refused (L23). It was NULL.
             result.GetData<double>()[i] = std::log10(d);
         }
         return;
@@ -3422,12 +3408,8 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = arg.GetValue(i);
             if (v.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             double d = (v.type().id() == LogicalTypeId::INTEGER) ? v.GetValue<int32_t>() : v.GetValue<double>();
-            double r = std::exp(d);
-            if (std::isnan(r) || std::isinf(r)) {
-                result.GetValidity().SetInvalid(i);
-            } else {
-                result.GetData<double>()[i] = r;
-            }
+            // exp(1000) is inf, as DuckDB's; it was NULL.
+            result.GetData<double>()[i] = std::exp(d);
         }
         return;
     }
