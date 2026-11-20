@@ -4,7 +4,6 @@
 #include "slothdb/execution/expression_executor.hpp"
 #include "slothdb/main/query_materialize.hpp"
 #include "slothdb/parser/expression/parsed_expression.hpp"
-#include "slothdb/storage/parquet.hpp" // zuslothdb: CheckReadable
 #include <functional>
 
 namespace zugodb {
@@ -1156,13 +1155,6 @@ BoundExprPtr Binder::BindExpression(const ParsedExpression &expr, BindContext &c
     }
 }
 
-// zuslothdb: a column of a Parquet file the reader cannot decode
-// faithfully is refused when a query names it, or expands it with *, so
-// the refusal does not depend on which columns a plan happens to decode.
-static void CheckFileColumnReadable(const TableCatalogEntry &entry, idx_t col) {
-    if (auto reader = entry.GetCachedParquetReader()) reader->CheckReadable(col);
-}
-
 BoundExprPtr Binder::BindColumnRef(const ColumnRefExpression &expr, BindContext &context) {
     // SELECT-list alias resolution (HAVING): when the active context has
     // an alias map populated, an unqualified column ref whose name matches
@@ -1189,7 +1181,6 @@ BoundExprPtr Binder::BindColumnRef(const ColumnRefExpression &expr, BindContext 
     auto [table, combined_idx] = context.ResolveColumn(expr.column_name, expr.table_name);
     idx_t offset = context.GetTableOffset(table);
     idx_t local_idx = combined_idx - offset;
-    CheckFileColumnReadable(*context.tables.at(table), local_idx);
     auto &column = context.tables.at(table)->GetColumns()[local_idx];
     // The catalog's spelling, as DuckDB names the result column `Foo` for
     // SELECT foo of a column Foo (design L26).
@@ -2590,7 +2581,6 @@ BoundExprPtr Binder::BindStar(const StarExpression &expr, BindContext &context,
         auto *entry = it->second;
         idx_t offset = context.GetTableOffset(expr.table_name);
         for (idx_t i = 0; i < entry->ColumnCount(); i++) {
-            CheckFileColumnReadable(*entry, i);
             auto &col = entry->GetColumns()[i];
             auto ref = std::make_unique<BoundColumnRef>(col.name, offset + i, col.type);
             ref->alias = col.name;
@@ -2601,7 +2591,6 @@ BoundExprPtr Binder::BindStar(const StarExpression &expr, BindContext &context,
         for (auto &[alias, offset] : context.table_order) {
             auto *entry = context.tables.at(alias);
             for (idx_t i = 0; i < entry->ColumnCount(); i++) {
-                CheckFileColumnReadable(*entry, i);
                 auto &col = entry->GetColumns()[i];
                 auto ref = std::make_unique<BoundColumnRef>(col.name, offset + i, col.type);
                 ref->alias = col.name;

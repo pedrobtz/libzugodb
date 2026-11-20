@@ -11,7 +11,6 @@
 // reaches each.
 
 #include "doctest.h"
-#include "../parquet_table.hpp"
 #include "slothdb/common/exception.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/main/database.hpp"
@@ -505,62 +504,6 @@ TEST_CASE("Chunks: a database file of 2047 to 4097 rows reads back") {
             CheckSame(Table(conn, "t"), want);
         }
         std::filesystem::remove(path);
-    }
-}
-
-// The cases whose Parquet fast path gives no rows or wrong ones, or
-// crashes, on a file ParquetWriter wrote, at any size (#50). No SQL
-// reaches a Parquet file since Stage 2, and Stage 11 removes the reader.
-bool ParquetLeftOut(const std::string &name) {
-    static const std::set<std::string> left_out = {
-        "topk-2049", "topk-2048-string", "topk-offset", "group-r", "group-i", "group-s", "group-k",
-        "group-two", "group-having", "group-count-distinct", "group-order-limit", "aggregate",
-        "aggregate-case-group", "semi-in"};
-    return left_out.count(name) > 0;
-}
-
-TEST_CASE("Chunks: a Parquet table of 2047 to 4097 rows equals the in-memory one") {
-    // The Parquet scan splits each row group into chunks; its row groups
-    // here are the whole file, and 2047 rows, so that their ends fall on
-    // each side of a chunk's. The sizes the roadmap names, to keep the
-    // sanitizer jobs' time down.
-    for (int64_t n : {2047, 2048, 2049, 4097}) {
-        for (int64_t group_rows : std::set<int64_t>{n, 2047}) {
-            CAPTURE(n);
-            CAPTURE(group_rows);
-            auto path = std::filesystem::temp_directory_path() /
-                        ("zugodb_chunks_" + std::to_string(n) + "_" + std::to_string(group_rows) + ".parquet");
-            auto nulls = NullRows(n);
-            {
-                ParquetWriter writer(path.string(), {"r", "i", "k", "s", "d"},
-                                     {LogicalType::BIGINT(), LogicalType::BIGINT(), LogicalType::INTEGER(),
-                                      LogicalType::VARCHAR(), LogicalType::DOUBLE()});
-                for (int64_t base = 0; base < n; base += group_rows) {
-                    std::vector<std::vector<Value>> rows;
-                    for (int64_t v = base; v < std::min(n, base + group_rows); v++) {
-                        rows.push_back(Row(v, nulls.count(v) > 0));
-                    }
-                    writer.WriteRowGroup(rows);
-                }
-                writer.Finish();
-            }
-            Database db;
-            Connection conn(db);
-            MakeTables(conn, n);
-            testing::AddParquetTable(db, "pq", path.string());
-            int64_t nn = (int64_t)nulls.size();
-            for (auto &c : Cases()) {
-                std::string name = c.name;
-                if (ParquetLeftOut(name)) continue;
-                CAPTURE(name);
-                auto a = conn.Query(Replace(c.sql, "t"));
-                auto b = conn.Query(Replace(c.sql, "pq"));
-                auto sa = Summarise(a), sb = Summarise(b);
-                CheckSame(sb, sa);
-                if (c.rows) CHECK((int64_t)sb.rows == c.rows(n, nn));
-            }
-            std::filesystem::remove(path);
-        }
     }
 }
 

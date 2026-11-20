@@ -22,7 +22,6 @@ enum class StatementType : uint8_t {
     TRUNCATE,
     ALTER_TABLE,
     MERGE,
-    COPY,
     BEGIN_TXN,
     COMMIT_TXN,
     ROLLBACK_TXN,
@@ -205,16 +204,14 @@ public:
     std::string arg; // empty when pragma takes no argument
 };
 
-// CREATE VIEW statement. `is_live` marks CREATE LIVE VIEW, which caches the
-// result and invalidates via file mtime on every SELECT (see
-// Connection::ExpandLiveView). Non-live views re-execute unconditionally.
+// CREATE VIEW statement. The view re-executes on every SELECT. (CREATE LIVE
+// VIEW, which watched a file, is refused in the parser.)
 class CreateViewStatement : public ParsedStatement {
 public:
     CreateViewStatement() : ParsedStatement(StatementType::CREATE_VIEW) {}
     std::string view_name;
     std::unique_ptr<SelectStatement> query;
     bool or_replace = false;
-    bool is_live = false;
     std::string original_sql; // The original SELECT SQL for virtual view re-execution.
 };
 
@@ -236,20 +233,6 @@ public:
     std::string column_name;
     std::string new_column_name; // for RENAME
     std::string column_type;     // for ADD
-};
-
-// COPY statement.
-class CopyStatement : public ParsedStatement {
-public:
-    CopyStatement() : ParsedStatement(StatementType::COPY) {}
-    std::string table_name;
-    std::string file_path;
-    bool is_from = false;   // true = COPY FROM (import), false = COPY TO (export)
-    std::string format = "CSV"; // CSV, JSON, PARQUET
-    char delimiter = ',';
-    bool header = true;
-    // Optional subquery: COPY (SELECT ...) TO 'file' - only valid for export.
-    std::unique_ptr<SelectStatement> source_query;
 };
 
 // Transaction control statements.

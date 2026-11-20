@@ -243,13 +243,15 @@ DatabaseConfig ReadOnlyCopy(const std::string &fixture) {
 
 } // namespace
 
-TEST_CASE("Persistence - the golden file reads back its recorded rows") {
-    // test/fixtures/golden_v1001.db: tools/db_fixture.sql written by the
-    // slothdb shell at format 1001 (tools/make_db_fixtures.sh). Each value
-    // below is the one that SQL inserts.
+namespace {
+
+// The rows tools/db_fixture.sql inserts, read back from `fixture`. Each
+// value below is the one that SQL inserts.
+void CheckGoldenRows(const std::string &fixture) {
+    CAPTURE(fixture);
     std::remove(DAMAGED_DB_PATH);
     {
-        Database db(ReadOnlyCopy("golden_v1001.db"));
+        Database db(ReadOnlyCopy(fixture));
         Connection conn(db);
 
         // DATE as days and TIMESTAMP as microseconds since 1970-01-01, as
@@ -302,6 +304,21 @@ TEST_CASE("Persistence - the golden file reads back its recorded rows") {
     std::remove(DAMAGED_DB_PATH);
 }
 
+} // namespace
+
+TEST_CASE("Persistence - the golden file reads back its recorded rows") {
+    // test/fixtures/golden_v1001.db: tools/db_fixture.sql written by the
+    // slothdb shell at format 1001 (tools/make_db_fixtures.sh).
+    CheckGoldenRows("golden_v1001.db");
+}
+
+TEST_CASE("Persistence - a file written by 0.3.0 reads back its recorded rows") {
+    // test/fixtures/written_by_v0.3.0.db: the same SQL written by the shell
+    // of v0.3.0, the last release with the file readers (Stage 11, #16;
+    // tools/make_db_fixtures.sh v0.3.0). Written once, never regenerated.
+    CheckGoldenRows("written_by_v0.3.0.db");
+}
+
 TEST_CASE("Persistence - the stored checksum is ComputeChecksum of the file") {
     // The golden file's checksum, at offset 12, little-endian.
     auto bytes = ReadBytes(FIXTURES + "golden_v1001.db");
@@ -327,7 +344,8 @@ TEST_CASE("Persistence - a bit flipped or a truncation anywhere is refused") {
         conn.Query("INSERT INTO t VALUES (1, 'one', 1.5, DATE '2024-01-01'), "
                    "(2, NULL, -2.25, NULL), (3, 'three', NULL, DATE '1999-12-31')");
     }
-    for (auto source : {std::string(TEST_DB_PATH), FIXTURES + "golden_v1001.db"}) {
+    for (auto source : {std::string(TEST_DB_PATH), FIXTURES + "golden_v1001.db",
+                        FIXTURES + "written_by_v0.3.0.db"}) {
         CAPTURE(source);
         auto good = ReadBytes(source);
         REQUIRE(good.size() > 4096);

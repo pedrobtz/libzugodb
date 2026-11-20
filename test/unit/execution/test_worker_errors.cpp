@@ -7,12 +7,10 @@
 // the API that started the workers), after which the same connection
 // answers another query correctly.
 //
-// The Parquet cases reach the reader as a table set up through the
-// catalog's C++ API (parquet_table.hpp), since SQL cannot name a file
-// (Stage 2, #4); the fork-join and pool cases need no file.
+// No query reaches ParallelFor or the thread pool since the Parquet scan
+// went (Stage 11, #16): those two are checked at their own API.
 
 #include "doctest.h"
-#include "../parquet_table.hpp"
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/parallel.hpp"
 #include "slothdb/execution/parallel_executor.hpp"
@@ -36,12 +34,6 @@ namespace {
 // The window operator sorts partitions on workers from 200,000 rows.
 constexpr int64_t TABLE_ROWS = 200000;
 constexpr int64_t TABLE_GROUPS = 37;
-// test/fixtures/groups.parquet, written by DuckDB with
-// tools/make_parquet_fixtures.py: k = i % 37, s = 's' || i % 11, v = i for
-// i in 0 .. 16383, eight row groups. (A file written by the engine's own
-// ParquetWriter is not used: GROUP BY over it returns no rows.)
-constexpr int64_t PARQUET_ROWS = 16384;
-const std::string PARQUET_PATH = std::string(ZUGODB_SOURCE_DIR) + "/test/fixtures/groups.parquet";
 const char *const SEAM_MESSAGE = "worker fault injected by the test seam";
 
 // Every site needs at least two threads; the cap is the engine's own.
@@ -72,11 +64,6 @@ void MakeTable(Connection &conn) {
         chunk.SetCardinality((idx_t)n);
         conn.Append("t", chunk);
     }
-}
-
-// The fixture as table pq.
-std::string ParquetSql(const std::string &select_list, const std::string &rest = "") {
-    return "SELECT " + select_list + " FROM pq" + rest;
 }
 
 // The query fails with the seam's exception, raised on a worker of `site`.
@@ -127,8 +114,6 @@ TEST_CASE("Worker errors - fork-join threads (WorkerGroup)") {
     Database db;
     Connection conn(db);
     MakeTable(conn);
-    REQUIRE(std::filesystem::exists(PARQUET_PATH));
-    zugodb::testing::AddParquetTable(db, "pq", PARQUET_PATH);
 
     SUBCASE("window partitions sorted on workers") {
         const std::string sql =
@@ -138,58 +123,30 @@ TEST_CASE("Worker errors - fork-join threads (WorkerGroup)") {
         CHECK(r.RowCount() == (idx_t)TABLE_ROWS);
         CheckTableAnswers(conn);
     }
-    SUBCASE("Parquet row groups consumed on workers") {
-        const std::string sql = ParquetSql("sum(v)");
-        CheckQueryFails(conn, sql, WorkerSite::FORK_JOIN);
-        auto r = conn.Query(sql);
-        CHECK(Int(r, 0, 0) == PARQUET_ROWS * (PARQUET_ROWS - 1) / 2);
-        CheckTableAnswers(conn);
-    }
-    SUBCASE("Parquet distinct count") {
-        const std::string sql = ParquetSql("count(DISTINCT v)");
-        CheckQueryFails(conn, sql, WorkerSite::FORK_JOIN);
-        auto r = conn.Query(sql);
-        CHECK(Int(r, 0, 0) == PARQUET_ROWS);
-        CheckTableAnswers(conn);
-    }
 }
 
 TEST_CASE("Worker errors - ParallelFor") {
+    // No query reaches ParallelFor; it is checked at its API, and runs
+    // again once the seam is disarmed.
     ThreadCapGuard cap;
     REQUIRE(HWThreads() >= 2);
-    Database db;
-    Connection conn(db);
-    MakeTable(conn);
-    REQUIRE(std::filesystem::exists(PARQUET_PATH));
-    zugodb::testing::AddParquetTable(db, "pq", PARQUET_PATH);
+    bool thrown = false;
+    unsigned long long hits = 0;
+    {
+        ArmedFault fault(WorkerSite::PARALLEL_FOR);
+        try {
+            ParallelFor(2, [](unsigned int) {});
+        } catch (const InternalException &e) {
+            thrown = std::string(e.what()).find(SEAM_MESSAGE) != std::string::npos;
+        }
+        hits = WorkerFaultHits();
+    }
+    CHECK(hits > 0);
+    CHECK(thrown);
 
-    const std::string sql = ParquetSql("k, sum(v)", " GROUP BY k");
-    CheckQueryFails(conn, sql, WorkerSite::PARALLEL_FOR);
-
-    auto r = conn.Query(sql);
-    REQUIRE(r.RowCount() == (idx_t)TABLE_GROUPS);
-    std::map<int64_t, int64_t> expected;
-    for (int64_t v = 0; v < PARQUET_ROWS; v++) expected[v % TABLE_GROUPS] += v;
-    for (idx_t i = 0; i < r.RowCount(); i++) CHECK(Int(r, i, 1) == expected[Int(r, i, 0)]);
-    CheckTableAnswers(conn);
-}
-
-TEST_CASE("Worker errors - Parquet decode pipeline") {
-    ThreadCapGuard cap;
-    REQUIRE(HWThreads() >= 2);
-    Database db;
-    Connection conn(db);
-    MakeTable(conn);
-    REQUIRE(std::filesystem::exists(PARQUET_PATH));
-    zugodb::testing::AddParquetTable(db, "pq", PARQUET_PATH);
-
-    const std::string sql = ParquetSql("*");
-    CheckQueryFails(conn, sql, WorkerSite::PIPELINE);
-
-    auto r = conn.Query(sql);
-    REQUIRE(r.RowCount() == (idx_t)PARQUET_ROWS);
-    CHECK(Int(r, PARQUET_ROWS - 1, 2) == PARQUET_ROWS - 1);
-    CheckTableAnswers(conn);
+    std::vector<int> ran(2, 0);
+    ParallelFor(2, [&](unsigned int t) { ran[t] = 1; });
+    CHECK(ran == std::vector<int>{1, 1});
 }
 
 TEST_CASE("Worker errors - thread pool tasks (ParallelExecutor)") {
@@ -221,34 +178,6 @@ TEST_CASE("Worker errors - thread pool tasks (ParallelExecutor)") {
     CheckTableAnswers(conn);
 }
 
-TEST_CASE("Worker errors - damaged Parquet file (SouravRoy-ETL/slothdb#33)") {
-    // test/fixtures/damaged_zstd.parquet: written by DuckDB (x BIGINT, 0 to
-    // 19999, ZSTD, ten row groups), then every zstd frame's magic number
-    // damaged; tools/make_parquet_fixtures.py makes it. The page fails to
-    // decompress on a decode worker. No seam is armed.
-    ThreadCapGuard cap;
-    REQUIRE(HWThreads() >= 2);
-    const std::string path = std::string(ZUGODB_SOURCE_DIR) + "/test/fixtures/damaged_zstd.parquet";
-    REQUIRE(std::filesystem::exists(path));
-    Database db;
-    Connection conn(db);
-    MakeTable(conn);
-    zugodb::testing::AddParquetTable(db, "damaged", path);
-
-    for (const char *select_list : {"sum(x)", "*"}) {
-        const std::string sql = std::string("SELECT ") + select_list + " FROM damaged";
-        INFO(sql);
-        bool thrown = false;
-        try {
-            conn.Query(sql);
-        } catch (const IOException &e) {
-            thrown = std::string(e.what()).find("decompression failed") != std::string::npos;
-        }
-        CHECK(thrown);
-        CheckTableAnswers(conn);
-    }
-}
-
 TEST_CASE("Worker errors - every thread start in src/ is a covered kind") {
     // A thread start that is not one of the kinds above fails here: start it
     // through WorkerGroup, ParallelFor or WorkerErrors, and add a doctest for
@@ -263,9 +192,6 @@ TEST_CASE("Worker errors - every thread start in src/ is a covered kind") {
         {"include/slothdb/common/thread_pool.hpp", 1},
         // The pool's one user, under WorkerErrors (WorkerSite::POOL).
         {"src/execution/parallel_executor.cpp", 1},
-        // PhysicalParquetScan's decode workers (PIPELINE, and FORK_JOIN in
-        // RunParallelRGs), under its errors_.
-        {"src/execution/physical_planner.cpp", 1},
     };
     std::map<std::string, int> found;
     for (const char *dir : {"src", "include"}) {

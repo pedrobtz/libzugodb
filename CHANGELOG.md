@@ -1,5 +1,58 @@
 # Changelog
 
+## libzugodb 0.4.0 (in development)
+
+- The engine's file readers are removed (Stage 11, #16; design L28). SQL
+  had reached none of them since 0.2.0: every file route is still refused
+  by the parser, with the same message, and now nothing is behind the
+  refusal. Gone with them: the scan operators and the Parquet and CSV fast
+  paths of `physical_planner.cpp`, the unreachable handlers of `COPY`, the
+  file table functions, a path used as a table, `DESCRIBE` of a file and
+  `CREATE LIVE VIEW` in `connection.cpp`, the catalog's file-scan and
+  live-view fields, and the execution helpers only those paths called.
+  No result of a query over a table changes, and the database file's
+  format is unchanged (1001); a file written by 0.3.0 is a new golden
+  fixture. The Parquet fast paths' wrong answers (#50) go with them.
+- For zugodb's `tools/vendor.yaml` (pedrobtz/zugodb#71), the paths
+  removed:
+  - from `copy`: `third_party/zstd` (all of `LICENSE`, `lib/zstd.h`,
+    `lib/zstd_errors.h`, `lib/common`, `lib/decompress`),
+    `third_party/fastpforlib` and `third_party/snappy`; and from `exclude`,
+    the four entries under them (`huf_decompress_amd64.S`,
+    `snappy-stubs-public.h.in`, `README.md`, `config.h`). The generated
+    `Makevars` loses their sources, their include paths and the
+    `ZSTD_DISABLE_ASM` and `ZSTD_MULTITHREAD` definitions;
+  - under `src/`: `common/file_glob.cpp`; `storage/arrow_ipc.cpp`,
+    `avro_reader.cpp`, `csv_reader.cpp`, `excel_reader.cpp`,
+    `fast_csv_reader.cpp`, `hive_partition.cpp`, `json_reader.cpp`,
+    `miniz.c`, `miniz.h`, `parquet.cpp`, `parquet_lazy_strdata.cpp`,
+    `sqlite_scanner.cpp` and `compression/compression.cpp` (with the
+    `compression/` directory); `execution/dict_histogram.cpp`,
+    `inline_row_agg.cpp`, `int_group_agg.cpp`, `radix_count_agg.cpp`,
+    `radix_multi_agg.cpp`, `str_group_distinct.cpp`, `string_dedup.cpp`,
+    `substring_search.cpp` and `topk_varchar.cpp`. No C source is left
+    under `src/`;
+  - under `include/slothdb/`: `common/file_glob.hpp`; `storage/`
+    `arrow_ipc.hpp`, `avro_reader.hpp`, `csv_reader.hpp`,
+    `excel_reader.hpp`, `fast_csv_reader.hpp`, `hive_partition.hpp`,
+    `json_reader.hpp`, `parquet.hpp`, `parquet_lazy_strdata.hpp`,
+    `sqlite_scanner.hpp` and `compression/compression.hpp` (with the
+    directory); `execution/dict_histogram.hpp`, `inline_row_agg.hpp`,
+    `int_group_agg.hpp`, `radix_count_agg.hpp`, `radix_multi_agg.hpp`,
+    `simple_i64_count_map.hpp`, `str_group_distinct.hpp`,
+    `string_dedup.hpp`, `substring_search.hpp`, `topk_varchar.hpp` and
+    `topn_filter_pass.hpp`.
+- Public names removed: `CopyStatement`, `StatementType::COPY`,
+  `CreateViewStatement::is_live`, `WorkerSite::PIPELINE`, and
+  `TableCatalogEntry`'s file-scan and live-view members (`IsFileScan`,
+  `SetFilePath`, `SetParquetPath`, `SetJsonPath`, `SetAvroPath`,
+  `SetArrowPath`, `SetSQLitePath`, `GetFilePath`, `GetFileFormat`,
+  `GetFileDelimiter`, `GetFileSubname`, `SetCachedParquetReader`,
+  `GetCachedParquetReader`, `IsLiveView`, `MarkLiveView` and the cache,
+  mtime and incremental-append accessors).
+- `tools/check_symbols.sh`, a CI step, fails on a symbol of zstd, snappy,
+  FastPFor or miniz in `libslothdb.a`, or on their paths coming back.
+
 ## libzugodb 0.3.0
 
 - A conformance runner, `tools/slt/` (`zugodb_slt`), runs DuckDB's own
