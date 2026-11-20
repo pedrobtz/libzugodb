@@ -630,7 +630,7 @@ test/sql/types/date/test_bc_dates.test	run	12	4	5	0	0	3	0	0	0
 test/sql/types/date/test_date.test	run	20	19	1	0	0	0	0	0	0
 test/sql/types/date/test_date_2411.test	run	5	4	0	1	0	0	0	0	0
 test/sql/types/date/test_incorrect_dates.test	run	13	10	1	0	1	1	0	0	0
-test/sql/types/decimal/cast_from_decimal.test	run	17	12	4	1	0	0	0	0	0
+test/sql/types/decimal/cast_from_decimal.test	run	17	13	4	0	0	0	0	0	0
 test/sql/types/decimal/cast_to_decimal.test	run	78	36	4	0	1	37	0	0	0
 test/sql/types/decimal/decimal_aggregates.test	run	9	0	6	3	0	0	0	0	0
 test/sql/types/decimal/decimal_arithmetic.test	run	28	19	6	1	1	1	0	0	0

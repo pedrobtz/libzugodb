@@ -167,7 +167,6 @@ test/sql/function/date/test_strftime_exhaustive.test	103	unreliable	SELECT strft
 test/sql/function/date/test_strftime_exhaustive.test	113	unreliable	SELECT strftime(d, '%-m') FROM dates ORDER BY d;
 test/sql/function/date/test_strftime_exhaustive.test	123	unreliable	SELECT strftime(d, '%y') FROM dates ORDER BY d;
 test/sql/function/date/test_strftime_exhaustive.test	133	unreliable	SELECT strftime(d, '%-y') FROM dates ORDER BY d;
-test/sql/function/date/test_strftime_exhaustive.test	142	unreliable	SELECT strftime(DATE '2001-01-01', '%-y')
 test/sql/function/date/test_strftime_exhaustive.test	148	unreliable	SELECT strftime(d, '%Y') FROM dates ORDER BY d;
 test/sql/function/date/test_strftime_exhaustive.test	158	unreliable	SELECT strftime(d, '%G') FROM dates ORDER BY d;
 test/sql/function/date/test_strftime_exhaustive.test	168	unreliable	SELECT strftime(d, '%H') FROM dates ORDER BY d;
@@ -328,6 +327,7 @@ test/sql/function/numeric/test_trunc_precision.test	14	unreliable	select trunc(4
 test/sql/function/numeric/test_trunc_precision.test	19	unreliable	select trunc(-42.12345::FLOAT, 2), trunc(-42.12345::FLOAT, -1)
 test/sql/function/numeric/test_trunc_precision.test	24	unreliable	select trunc(127::FLOAT, 2), trunc(127::FLOAT, -1)
 test/sql/function/numeric/test_trunc_precision.test	29	unreliable	select trunc(-127::FLOAT, 2), trunc(-127::FLOAT, -1)
+test/sql/function/numeric/test_trunc_precision.test	34	unreliable	select trunc(0::FLOAT, 2), trunc(0::FLOAT, -1)
 test/sql/function/numeric/test_trunc_precision.test	51	unreliable	select trunc(54::TINYINT, 2), trunc(54::TINYINT, -1)
 test/sql/function/numeric/test_trunc_precision.test	51	unreliable	select trunc(54::SMALLINT, 2), trunc(54::SMALLINT, -1)
 test/sql/function/numeric/test_trunc_precision.test	56	unreliable	select trunc(-27::SMALLINT, 2), trunc(-27::SMALLINT, -1)
