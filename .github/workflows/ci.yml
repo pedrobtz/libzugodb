@@ -5,7 +5,14 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  schedule:
+    # Weekly, Mondays at 04:23 UTC: the fuzz job runs each target an hour.
+    - cron: '23 4 * * 1'
   workflow_dispatch:
+    inputs:
+      fuzz_seconds:
+        description: Seconds the fuzz job runs each target
+        default: '120'
 
 jobs:
   test:
@@ -48,3 +55,43 @@ jobs:
         run: cmake --build build
       - name: Test
         run: build/test/slothdb_tests.exe
+
+  # libFuzzer, clang, ASan and UBSan (fuzz/run.sh). Each target runs 120 s
+  # on a pull request and an hour on the weekly schedule; any crash, hang,
+  # leak, out-of-memory or sanitizer report fails the job, and the input is
+  # uploaded. `floor` is the least reach accepted: the edges in `source`
+  # that the corpus covers, as libFuzzer's -print_coverage=1 reports them.
+  fuzz:
+    name: fuzz (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: checkpoint_load, source: src/storage/checkpoint.cpp, floor: 1 }
+    env:
+      FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '3600' || inputs.fuzz_seconds || '120' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: >-
+          cmake -S . -B build-fuzz -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18
+          -DSLOTHDB_FUZZ=ON -DSLOTHDB_BUILD_TESTS=OFF
+      - name: Build
+        run: cmake --build build-fuzz -j4 --target ${{ matrix.target }}_fuzzer
+      - name: Fuzz
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          export PATH=/usr/lib/llvm-18/bin:$PATH
+          fuzz/run.sh ${{ matrix.target }} "$FUZZ_SECONDS" ${{ matrix.source }} ${{ matrix.floor }}
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: |
+            fuzz-artifacts/
+            fuzz-work/*.coverage
+          if-no-files-found: ignore
