@@ -180,6 +180,7 @@ public:
         std::vector<std::unique_ptr<Node>> open_loops;
         ParseRecords(stack, open_loops);
         if (left_out_.empty() && open_loops.size() > 0) left_out_ = "missing endloop";
+        script.regex_cases = regex_cases_;
         if (!left_out_.empty()) {
             script.left_out = left_out_;
             return script;
@@ -286,10 +287,23 @@ private:
                 if (!CheckSql(c.sql)) return;
                 if (Has(i) && lines_[i] == "----") i++;
                 while (Has(i) && !lines_[i].empty()) c.values.push_back(lines_[i++]);
-                for (auto &v : c.values)
+                bool regex = false;
+                for (auto &v : c.values) {
                     if (v.rfind("<FILE>:", 0) == 0) return LeaveOut("results in a file");
-                    else if (v.rfind("<REGEX>:", 0) == 0 || v.rfind("<!REGEX>:", 0) == 0)
-                        return LeaveOut("regex results");
+                    // A regex in any column: DuckDB's runner matches it
+                    // against DuckDB's own text (an EXPLAIN plan, ...),
+                    // which no other engine gives. The query is left out
+                    // alone, not its file: a query changes nothing the
+                    // file's later cases read (design L20).
+                    std::istringstream fields(v);
+                    std::string f;
+                    while (std::getline(fields, f, '\t'))
+                        if (f.rfind("<REGEX>:", 0) == 0 || f.rfind("<!REGEX>:", 0) == 0) regex = true;
+                }
+                if (regex) {
+                    regex_cases_++;
+                    continue;
+                }
                 stack.back()->push_back(std::move(node));
             } else if (cmd == "hash-threshold") {
                 if (tok.size() != 2) return LeaveOut("malformed hash-threshold");
@@ -480,6 +494,7 @@ private:
     std::vector<std::string> lines_;
     std::string left_out_;
     int hash_threshold_ = 0;
+    size_t regex_cases_ = 0;
 };
 
 } // namespace

@@ -764,8 +764,11 @@ std::unique_ptr<TableRef> Parser::ParseTableRef() {
             join_type = "FULL";
         } else if (MatchKeyword(TokenType::KW_CROSS)) {
             join_type = "CROSS";
-        } else if (MatchKeyword(TokenType::KW_NATURAL)) {
-            join_type = "NATURAL";
+        } else if (CheckKeyword(TokenType::KW_NATURAL)) {
+            // NATURAL JOIN joins on the columns both sides name and shows
+            // each once; the engine did neither (it joined on the first
+            // column of each side), so it is refused (Stage 8, #12).
+            ThrowError("NATURAL JOIN is not supported");
         } else if (CheckKeyword(TokenType::KW_JOIN)) {
             join_type = "INNER"; // plain JOIN = INNER JOIN
         } else {
@@ -779,7 +782,12 @@ std::unique_ptr<TableRef> Parser::ParseTableRef() {
 
         // ON condition (not for CROSS JOIN).
         ParsedExprPtr on_cond;
-        if (join_type != "CROSS" && MatchKeyword(TokenType::KW_ON)) {
+        if (join_type != "CROSS") {
+            // As DuckDB: a join other than CROSS needs its condition
+            // (USING is not supported).
+            if (!MatchKeyword(TokenType::KW_ON)) {
+                ThrowError("Expected ON after " + join_type + " JOIN, got '" + Current().value + "'");
+            }
             on_cond = ParseExpression();
         }
 
@@ -1542,6 +1550,7 @@ ParsedExprPtr Parser::ParseFunctionCall(const std::string &name) {
         auto window = std::make_unique<WindowExpression>(
             StringUtil::Upper(name), std::move(args));
         window->filter = std::move(filter_expr);
+        window->is_distinct = distinct;
 
         Expect(TokenType::LPAREN, "after OVER");
 

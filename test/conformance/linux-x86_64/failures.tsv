@@ -1,77 +1,19 @@
 file	line	class	sql
-test/sql/aggregate/aggregate_state_export/approx_quantile_export_state.test	6	wrong	SELECT approx_quantile(i, 0.5) EXPORT_STATE FROM (SELECT 1 AS i WHERE false) t;
-test/sql/aggregate/aggregate_state_export/approx_top_k_export_state.test	12	wrong	SELECT approx_top_k(x, 3) EXPORT_STATE FROM (SELECT 'a' AS x WHERE false) t;
-test/sql/aggregate/aggregate_state_export/arg_min_max_export_state.test	6	wrong	SELECT arg_min(a, b) EXPORT_STATE FROM (SELECT 1 a, 1 b WHERE false) t;
-test/sql/aggregate/aggregate_state_export/bool_and_export_state.test	16	wrong	SELECT bool_and(v) EXPORT_STATE FROM (VALUES (true), (true), (true)) t(v)
-test/sql/aggregate/aggregate_state_export/bool_and_export_state.test	84	wrong	SELECT bool_or(v) EXPORT_STATE FROM (VALUES (false), (true)) t(v)
-test/sql/aggregate/aggregate_state_export/list_export_state.test	39	wrong	SELECT list(i) EXPORT_STATE FROM (SELECT NULL::INTEGER AS i WHERE false) t;
-test/sql/aggregate/aggregate_state_export/product_export_state.test	6	wrong	SELECT product(v) EXPORT_STATE FROM (SELECT NULL::double AS v WHERE false) t;
-test/sql/aggregate/aggregates/mode_rewrite.test	154	wrong	SELECT mode(v) FROM mode_rewrite WHERE false;
-test/sql/aggregate/aggregates/string_agg_union.test	5	wrong	WITH my_data as (\n        SELECT 'text1'::varchar(1000) as my_column union all\n        SELECT 'text1'::varchar(1000) as my_column union all\n        SELECT 'text1'::varchar(1000) as my_column\n    )\n        SELECT string_agg(my_column,', ') as my_string_agg\n        FROM my_data
-test/sql/aggregate/aggregates/string_agg_union.test	16	wrong	WITH my_data as (\n        SELECT 1 as dummy,  'text1'::varchar(1000) as my_column union all\n        SELECT 1 as dummy,  'text1'::varchar(1000) as my_column union all\n        SELECT 1 as dummy,  'text1'::varchar(1000) as my_column\n    )\n        SELECT string_agg(my_column,', ') as my_string_agg\n        FROM my_data\n        GROUP BY\n            dummy
 test/sql/aggregate/aggregates/test_aggr_string.test	8	unreliable	SELECT NULL as a, NULL as b, NULL as c, NULL as d, 1 as id UNION SELECT 'Кирилл' as a, 'Müller' as b, '我是谁' as c, 'ASCII' as d, 2 as id ORDER BY 1
 test/sql/aggregate/aggregates/test_aggr_string.test	34	unreliable	SELECT s, SUM(a) FROM test GROUP BY s ORDER BY s;
-test/sql/aggregate/aggregates/test_aggregate_types.test	29	wrong	SELECT STRING_AGG(s, ' '), STRING_AGG(s, ''), STRING_AGG('', ''), STRING_AGG('hello', ' ') FROM strings
-test/sql/aggregate/aggregates/test_aggregate_types.test	38	wrong	SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(s, ' ') FROM strings GROUP BY g ORDER BY g
-test/sql/aggregate/aggregates/test_aggregate_types.test	89	wrong	SELECT g, COUNT(*), COUNT(s), MIN(s), MAX(s), STRING_AGG(s, ' ') FROM strings WHERE s IS NULL OR s <> 'hello' GROUP BY g ORDER BY g
-test/sql/aggregate/aggregates/test_aggregate_types.test	121	wrong	SELECT COUNT(*), COUNT(b), MIN(b), MAX(b) FROM booleans
-test/sql/aggregate/aggregates/test_aggregate_types.test	137	wrong	SELECT g, COUNT(*), COUNT(b), MIN(b), MAX(b) FROM booleans GROUP BY g ORDER BY g
-test/sql/aggregate/aggregates/test_aggregate_types_scalar.test	47	wrong	SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN(DATE '1992-02-02'), MIN(TIMESTAMP '2008-01-01 00:00:01')
-test/sql/aggregate/aggregates/test_aggregate_types_scalar.test	61	wrong	SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-02'), MAX(TIMESTAMP '2008-01-01 00:00:01')
-test/sql/aggregate/aggregates/test_aggregate_types_scalar.test	127	wrong	SELECT STRING_AGG('hello')
-test/sql/aggregate/aggregates/test_aggregate_types_scalar.test	132	wrong	SELECT STRING_AGG('hello', ' '), STRING_AGG('hello', NULL), STRING_AGG(NULL, ' '), STRING_AGG(NULL, NULL), STRING_AGG('', '')
-test/sql/aggregate/aggregates/test_any_value_noninlined.test	32	wrong	SELECT ANY_VALUE(b) FROM tbl WHERE a=0
-test/sql/aggregate/aggregates/test_approx_quantile_timestamp_infinity.test	28	unreliable	SELECT q, q = '-infinity'::TIMESTAMP FROM t
-test/sql/aggregate/aggregates/test_arg_min_max.test	115	unreliable	select argmin(a,b) over ( partition by a%2) from args;
-test/sql/aggregate/aggregates/test_arg_min_max.test	123	unreliable	select argmax(a,b) over ( partition by a%2) from args;
-test/sql/aggregate/aggregates/test_arg_min_max_null.test	114	wrong	select arg_min_null(a,b) over ( partition by a%2) from args;
-test/sql/aggregate/aggregates/test_arg_min_max_null.test	124	wrong	select arg_max_null(a,b) over ( partition by a%2) from args;
-test/sql/aggregate/aggregates/test_bit_and.test	42	unreliable	SELECT BIT_AND(i) FROM integers WHERE i > 100
-test/sql/aggregate/aggregates/test_bit_or.test	42	unreliable	SELECT BIT_OR(i) FROM integers WHERE i > 100
-test/sql/aggregate/aggregates/test_bit_xor.test	42	unreliable	SELECT BIT_XOR(i) FROM integers WHERE i > 100
 test/sql/aggregate/aggregates/test_bool.test	9	unreliable	select bool_or(0)
 test/sql/aggregate/aggregates/test_bool.test	13	unreliable	select bool_and(0)
 test/sql/aggregate/aggregates/test_bool.test	76	unreliable	select d,bool_or(d > '2021-02-09') AS or_result,\n       bool_and(d > '2021-02-09') AS and_result\nfrom t\ngroup by d\norder by d;
-test/sql/aggregate/aggregates/test_bool.test	88	unreliable	select bool_or(d > '2021-02-09') over (partition by d)\n    from t order by d;
-test/sql/aggregate/aggregates/test_bool.test	96	unreliable	select bool_and(d > '2021-02-09') over (partition by d)\n    from t order by d;
-test/sql/aggregate/aggregates/test_corr.test	42	wrong	select  corr(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_count_qualified_star.test	493	unreliable	EXPLAIN SELECT count(*) FROM l LEFT JOIN r ON l.id = r.id;
-test/sql/aggregate/aggregates/test_covar.test	92	unreliable	SELECT COVAR_POP(x,y), COVAR_SAMP(x,y) FROM integers WHERE x > 100
-test/sql/aggregate/aggregates/test_entropy.test	78	unreliable	select entropy(k) over (partition by k%2)\n    from aggr;
-test/sql/aggregate/aggregates/test_histogram.test	133	wrong	select g,histogram(g) over (partition by g%2)\n    from hist_data;
-test/sql/aggregate/aggregates/test_kurtosis.test	87	wrong	select kurtosis(v2) over (partition by v)\n    from aggr;
-test/sql/aggregate/aggregates/test_mode.test	83	unreliable	select k, v, mode(v) over (partition by k)\n    from aggr\n    order by k, v;
-test/sql/aggregate/aggregates/test_mode.test	130	unreliable	select k, v, mode(v) over (partition by k)\n    from dates\n    order by k, v;
-test/sql/aggregate/aggregates/test_mode.test	168	unreliable	select k, v, mode(v) over (partition by k)\n    from times\n    order by k, v;
-test/sql/aggregate/aggregates/test_mode.test	206	unreliable	select k, v, mode(v) over (partition by k)\n    from timestamps\n    order by k, v;
 test/sql/aggregate/aggregates/test_null_aggregates.test	311	unreliable	SELECT c0, sum(c1), min(c1), max(c1) FROM t1 GROUP BY c0 ORDER BY 1, 2, 3, 4
 test/sql/aggregate/aggregates/test_perfect_ht.test	25	unreliable	SELECT year, SUM(val), COUNT(val), COUNT(*) FROM timeseries GROUP BY year ORDER BY year;
-test/sql/aggregate/aggregates/test_product.test	60	wrong	select product(i) over (partition by i%2)\n    from integers;
-test/sql/aggregate/aggregates/test_regression.test	304	wrong	select  regr_avgx(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_regression.test	314	wrong	select  regr_avgy(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_regression.test	324	wrong	select  regr_count(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_regression.test	334	wrong	select  regr_slope(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_regression.test	344	wrong	select  regr_r2(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_regression.test	354	wrong	select  regr_sxx(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_regression.test	364	wrong	select  regr_syy(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_regression.test	374	wrong	select  regr_sxy(v, v2) over (partition by k)\n    from aggr;
-test/sql/aggregate/aggregates/test_regression.test	384	wrong	select  regr_intercept(v, v2) over (partition by k)\n    from aggr;
 test/sql/aggregate/aggregates/test_scalar_aggr.test	42	unreliable	SELECT NULL as a, NULL as b, 1 as id UNION SELECT CAST('00:00:00' AS TIME) as a, CAST('12:34:56' AS TIME) as b, 2 as id ORDER BY 1
 test/sql/aggregate/aggregates/test_simple_filter.test	44	wrong	SELECT\n\tSUM(pay) FILTER (WHERE gender = 'male'),\n\tSUM(pay) FILTER (WHERE gender = 'female'),\n\tSUM(pay)\nFROM issue3105;
 test/sql/aggregate/aggregates/test_simple_filter.test	53	wrong	SELECT\n\tSUM(pay),\n\tSUM(pay) FILTER (WHERE gender = 'male'),\n\tSUM(pay) FILTER (WHERE gender = 'female')\nFROM issue3105;
 test/sql/aggregate/aggregates/test_simple_filter.test	62	wrong	SELECT\n\tSUM(pay) FILTER (WHERE gender = 'male'),\n\tSUM(pay),\n\tSUM(pay) FILTER (WHERE gender = 'female')\nFROM issue3105;
-test/sql/aggregate/aggregates/test_skewness.test	72	wrong	select skewness(v2) over (partition by v)\n    from aggr order by v;
 test/sql/aggregate/aggregates/test_stddev.test	164	wrong	select stddev(a) from (values (1.0/0.0), (2.0)) tbl(a)
 test/sql/aggregate/aggregates/test_stddev.test	169	wrong	select var_samp(a) from (values (1.0/0.0), (2.0)) tbl(a)
 test/sql/aggregate/aggregates/test_stddev.test	174	wrong	select var_pop(a) from (values (1.0/0.0), (2.0)) tbl(a)
 test/sql/aggregate/aggregates/test_stddev.test	179	wrong	select stddev(a) from (values (-1.0/0.0), (2.0)) tbl(a)
-test/sql/aggregate/aggregates/test_string_agg.test	26	unreliable	SELECT STRING_AGG('a',',')
-test/sql/aggregate/aggregates/test_string_agg.test	32	unreliable	SELECT STRING_AGG('a',','), STRING_AGG(NULL,','), STRING_AGG('a', NULL), STRING_AGG(NULL,NULL)
-test/sql/aggregate/aggregates/test_string_agg.test	48	unreliable	SELECT STRING_AGG(x,','), STRING_AGG(x,y) FROM strings
-test/sql/aggregate/aggregates/test_string_agg.test	52	unreliable	SELECT g, STRING_AGG(x,'|') FROM strings GROUP BY g ORDER BY g
-test/sql/aggregate/aggregates/test_string_agg.test	67	unreliable	SELECT STRING_AGG(1, 2)
-test/sql/aggregate/aggregates/test_string_agg.test	73	unreliable	SELECT GROUP_CONCAT('a', ',')
-test/sql/aggregate/aggregates/test_string_agg.test	78	unreliable	SELECT GROUP_CONCAT('a')
 test/sql/aggregate/aggregates/test_sum.test	12	unreliable	SELECT SUM(i) FROM integers;
 test/sql/aggregate/aggregates/test_sum.test	21	unreliable	SELECT SUM(i) FROM integers;
 test/sql/aggregate/aggregates/test_sum.test	30	unreliable	SELECT SUM(i) FROM integers;
@@ -80,7 +22,6 @@ test/sql/aggregate/aggregates/test_sum.test	42	unreliable	SELECT SUM(-1) FROM in
 test/sql/aggregate/aggregates/test_sum.test	48	unreliable	SELECT SUM(-1) FROM integers WHERE i=-1;
 test/sql/aggregate/aggregates/test_sum.test	68	unreliable	SELECT SUM(b) FROM bigints
 test/sql/aggregate/aggregates/test_sum.test	74	unreliable	SELECT SUM(b)::BIGINT FROM bigints
-test/sql/aggregate/aggregates/test_sum_fastpath.test	13	wrong	SELECT sum(i) FROM generate_series(9007199254738944, 9007199254740991) t(i);
 test/sql/aggregate/distinct/issue2656.test	11	unreliable	SELECT DISTINCT t1\nFROM T\nORDER BY t1, t2;
 test/sql/aggregate/distinct/issue2656.test	25	unreliable	SELECT DISTINCT t1 FROM T\nUNION\nSELECT DISTINCT t1 FROM T\nORDER BY t1;
 test/sql/aggregate/distinct/issue2656.test	33	unreliable	SELECT DISTINCT t1 FROM T\nUNION ALL\nSELECT DISTINCT t1 FROM T\nORDER BY t1;
@@ -101,14 +42,8 @@ test/sql/aggregate/group/test_group_by_alias.test	61	unreliable	SELECT i, i % 2 
 test/sql/aggregate/group/test_group_by_alias.test	78	unreliable	SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY i
 test/sql/aggregate/group/test_group_null.test	14	unreliable	SELECT i, SUM(j) FROM integers GROUP BY i ORDER BY i
 test/sql/aggregate/grouping_sets/grouping_sets.test	33	unreliable	select course, type, count(*) from students group by course, type order by 1, 2, 3;
-test/sql/aggregate/qualify/test_qualify.test	71	wrong	SELECT * FROM exam QUALIFY last_value(mark) OVER (PARTITION BY student ORDER BY mark) >= 85 order by mark
 test/sql/aggregate/qualify/test_qualify.test	108	wrong	SELECT * FROM power QUALIFY rank() OVER (PARTITION BY plant ORDER BY date DESC) = 2 ORDER BY plant
-test/sql/aggregate/qualify/test_qualify.test	131	unreliable	SELECT * FROM qt QUALIFY row_number() OVER (PARTITION BY b ORDER BY c) = (SELECT max(c) FROM qt) ORDER BY b;
-test/sql/aggregate/qualify/test_qualify.test	144	unreliable	SELECT unique1 FROM tenk1 QUALIFY cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) = 5 order by four, ten
 test/sql/aggregate/qualify/test_qualify.test	152	unreliable	SELECT unique1 FROM tenk1 QUALIFY first_value(ten) OVER (PARTITION BY four ORDER BY ten) = 1 order by four, ten
-test/sql/aggregate/qualify/test_qualify.test	163	unreliable	SELECT unique1 FROM tenk1 qualify lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) = -1 order by four, ten
-test/sql/aggregate/qualify/test_qualify.test	185	unreliable	SELECT * FROM test QUALIFY row_number() OVER (PARTITION BY test.b) = (SELECT max(a) FROM qt GROUP BY qt.b QUALIFY rank() OVER (PARTITION BY qt.b) = 1 order by qt.b limit 1)
-test/sql/aggregate/qualify/test_qualify.test	207	unreliable	SELECT b FROM test QUALIFY avga() > 10
 test/sql/filter/test_obsolete_filters.test	14	unreliable	SELECT * FROM integers WHERE TRUE ORDER BY 1
 test/sql/function/date/date_part_stats.test	143	unreliable	SELECT (t0.c0), WEEKOFYEAR(t0.c0), WEEKOFYEAR(t0.c0) IS NULL FROM t0 ORDER BY c0;
 test/sql/function/date/date_part_stats.test	149	unreliable	SELECT (t0.c0), WEEKDAY(t0.c0), WEEKDAY(t0.c0) IS NULL FROM t0 ORDER BY c0;
@@ -359,19 +294,11 @@ test/sql/function/numeric/test_trunc_precision.test	56	unreliable	select trunc(-
 test/sql/function/numeric/test_trunc_precision.test	92	unreliable	select \n\ttrunc('NAN'::FLOAT, 2), \n\ttrunc('infinity'::FLOAT, 2), \n\ttrunc('-infinity'::FLOAT, 2)\n;
 test/sql/function/numeric/test_trunc_precision.test	92	unreliable	select \n\ttrunc('NAN'::FLOAT, 0), \n\ttrunc('infinity'::FLOAT, 0), \n\ttrunc('-infinity'::FLOAT, 0)\n;
 test/sql/function/numeric/test_trunc_precision.test	92	unreliable	select \n\ttrunc('NAN'::FLOAT, -1), \n\ttrunc('infinity'::FLOAT, -1), \n\ttrunc('-infinity'::FLOAT, -1)\n;
-test/sql/function/numeric/test_type_resolution.test	25	wrong	SELECT 1::TINYINT + 1::REAL
-test/sql/function/numeric/test_type_resolution.test	30	wrong	SELECT 1::TINYINT + 1::DOUBLE
 test/sql/function/numeric/test_type_resolution.test	35	accepted	SELECT 1::TINYINT + 1::VARCHAR
-test/sql/function/numeric/test_type_resolution.test	60	unreliable	SELECT 1::SMALLINT + 1::REAL
-test/sql/function/numeric/test_type_resolution.test	65	unreliable	SELECT 1::SMALLINT + 1::DOUBLE
 test/sql/function/numeric/test_type_resolution.test	70	unreliable	SELECT 1::SMALLINT + 1::VARCHAR
 test/sql/function/numeric/test_type_resolution.test	105	unreliable	SELECT 1::INTEGER + 1::VARCHAR
 test/sql/function/numeric/test_type_resolution.test	140	unreliable	SELECT 1::BIGINT + 1::VARCHAR
-test/sql/function/numeric/test_type_resolution.test	145	unreliable	SELECT 1::REAL + 1::TINYINT
-test/sql/function/numeric/test_type_resolution.test	150	unreliable	SELECT 1::REAL + 1::SMALLINT
 test/sql/function/numeric/test_type_resolution.test	175	unreliable	SELECT 1::REAL + 1::VARCHAR
-test/sql/function/numeric/test_type_resolution.test	180	unreliable	SELECT 1::DOUBLE + 1::TINYINT
-test/sql/function/numeric/test_type_resolution.test	185	unreliable	SELECT 1::DOUBLE + 1::SMALLINT
 test/sql/function/numeric/test_type_resolution.test	210	unreliable	SELECT 1::DOUBLE + 1::VARCHAR
 test/sql/function/numeric/test_unary.test	50	unreliable	SELECT -t from minima;
 test/sql/function/numeric/test_unary.test	54	unreliable	SELECT -s from minima;
@@ -380,11 +307,6 @@ test/sql/function/numeric/test_unary.test	62	unreliable	SELECT -b from minima;
 test/sql/function/numeric/test_unary.test	67	unreliable	SELECT +'hello'
 test/sql/function/numeric/test_unary.test	82	unreliable	SELECT +d FROM dates
 test/sql/function/numeric/test_unary.test	86	unreliable	SELECT -d FROM dates
-test/sql/function/string/like_unicode.test	11	wrong	SELECT count(*) FROM t0 WHERE t0.c0 LIKE '_';
-test/sql/function/string/like_unicode.test	16	wrong	SELECT count(*) FROM t0 WHERE t0.c0 ILIKE '_';
-test/sql/function/string/like_unicode.test	21	wrong	SELECT '🦆a🦆' LIKE '_a_'
-test/sql/function/string/like_unicode.test	26	wrong	SELECT '🦆a🦆' ILIKE '_A_'
-test/sql/function/string/like_unicode.test	41	wrong	SELECT '🦆🦆' ILIKE '__'
 test/sql/function/string/md5.test	11	wrong	select md5('\xff\xff'::BLOB)
 test/sql/function/string/null_byte.test	10	wrong	SELECT chr(0)::blob
 test/sql/function/string/null_byte.test	20	wrong	CREATE TABLE null_byte AS SELECT concat('goo', chr(0), 'se') AS v
@@ -454,16 +376,6 @@ test/sql/function/string/sha1.test	56	unreliable	SELECT sha1(42)
 test/sql/function/string/sha256.test	16	wrong	SELECT sha256('\xff\xff'::BLOB)
 test/sql/function/string/test_ascii.test	72	accepted	SELECT CHR(-10)
 test/sql/function/string/test_ascii.test	77	unreliable	SELECT CHR(1073741824)
-test/sql/function/string/test_caseconvert.test	6	wrong	select UPPER('áaaá'), UPPER('ö'), LOWER('S̈'), UPPER('ω')
-test/sql/function/string/test_caseconvert.test	12	wrong	SELECT UPPER('Αα Ββ Γγ Δδ Εε Ζζ  Ηη Θθ Ιι Κκ Λλ Μμ Νν Ξξ Οο Ππ Ρρ Σσς Ττ Υυ Φφ Χχ Ψψ Ωω'), LOWER('Αα Ββ Γγ Δδ Εε Ζζ  Ηη Θθ Ιι Κκ Λλ Μμ Νν Ξξ Οο Ππ Ρρ Σσς Ττ Υυ Φφ Χχ Ψψ Ωω')
-test/sql/function/string/test_caseconvert.test	18	wrong	select UPPER(''), UPPER('hello'), UPPER('MotörHead'), UPPER(NULL)
-test/sql/function/string/test_complex_unicode.test	38	wrong	SELECT strlen('🤦🏼‍♂️')
-test/sql/function/string/test_complex_unicode.test	43	wrong	SELECT strlen('S̈a')
-test/sql/function/string/test_complex_unicode.test	49	wrong	SELECT REVERSE('S̈a︍')
-test/sql/function/string/test_complex_unicode.test	54	wrong	SELECT REVERSE('Z͑ͫ̓ͪ̂ͫ̽͏̴̙̤̞͉͚̯̞̠͍A̴̵̜̰͔ͫ͗͢')
-test/sql/function/string/test_complex_unicode.test	59	wrong	SELECT REVERSE('🤦🏼‍♂️')
-test/sql/function/string/test_complex_unicode.test	64	wrong	SELECT REVERSE('🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️')
-test/sql/function/string/test_complex_unicode.test	69	wrong	SELECT REVERSE('MotörHead')
 test/sql/function/string/test_concat.test	21	unreliable	SELECT s || ' ' || s FROM strings ORDER BY s
 test/sql/function/string/test_concat.test	29	unreliable	SELECT s || ' ' || '🦆' FROM strings ORDER BY s
 test/sql/function/string/test_concat.test	36	unreliable	SELECT s || ' ' || '🦆' FROM strings ORDER BY s
@@ -472,17 +384,6 @@ test/sql/function/string/test_concat.test	75	unreliable	SELECT CONCAT('hello', '
 test/sql/function/string/test_concat_ws.test	66	accepted	select CONCAT_WS()
 test/sql/function/string/test_concat_ws.test	70	unreliable	select CONCAT_WS(',')
 test/sql/function/string/test_contains.test	135	accepted	SELECT contains(NULL,NULL) FROM strings
-test/sql/function/string/test_ilike.test	126	wrong	SELECT 'MÜHLEISEN' ILIKE 'mühleisen'
-test/sql/function/string/test_ilike.test	138	wrong	SELECT s FROM unicode_strings WHERE s ILIKE pat
-test/sql/function/string/test_ilike.test	144	wrong	SELECT s FROM unicode_strings WHERE s NOT ILIKE pat
-test/sql/function/string/test_ilike_constant_pattern.test	61	wrong	SELECT id FROM t WHERE s ILIKE '%æther%' ORDER BY id
-test/sql/function/string/test_ilike_constant_pattern.test	66	wrong	SELECT id FROM t WHERE s ILIKE '%DÉJÀ%' ORDER BY id
-test/sql/function/string/test_ilike_escape_constant_pattern.test	57	wrong	SELECT id FROM t WHERE s ILIKE '%æther%' ESCAPE '\' ORDER BY id
-test/sql/function/string/test_ilike_escape_constant_pattern.test	62	wrong	SELECT id FROM t WHERE s ILIKE '%DÉJÀ%' ESCAPE '\' ORDER BY id
-test/sql/function/string/test_instr_utf8.test	74	wrong	SELECT instr(s,'₡ four 🦆 e') FROM strings
-test/sql/function/string/test_instr_utf8.test	83	wrong	SELECT instr(s,'🦆 end') FROM strings
-test/sql/function/string/test_left.test	13	wrong	SELECT LEFT('🦆ab', 0), LEFT('🦆ab', 1), LEFT('🦆ab', 2), LEFT('🦆ab', 3), LEFT('🦆ab', 4)
-test/sql/function/string/test_left.test	24	wrong	SELECT LEFT('🦆ab', 0), LEFT('🦆ab', -1), LEFT('🦆ab', -2), LEFT('🦆ab', -3), LEFT('🦆ab', -4)
 test/sql/function/string/test_left.test	50	unreliable	SELECT LEFT(a, b) FROM strings
 test/sql/function/string/test_left.test	68	unreliable	SELECT LEFT(a, b) FROM strings
 test/sql/function/string/test_left.test	86	unreliable	SELECT LEFT(a, b) FROM strings
@@ -496,45 +397,12 @@ test/sql/function/string/test_like_escape.test	130	unreliable	SELECT 'abcd' LIKE
 test/sql/function/string/test_like_escape.test	135	unreliable	SELECT 'abc' LIKE 'abc#' ESCAPE '#';
 test/sql/function/string/test_prefix.test	241	unreliable	SELECT c0, prefix(t0.c0, '') FROM t0 WHERE c0 IS NULL OR c0 <> 'b' ORDER BY t0.c0;
 test/sql/function/string/test_regex_match_positions.test	32	accepted	SELECT regexp_extract('abc', p) FROM (VALUES ('(a')) t(p);
-test/sql/function/string/test_repeat.test	79	accepted	select REPEAT('hello', 'world')
-test/sql/function/string/test_reverse.test	6	wrong	select REVERSE(''), REVERSE('Hello'), REVERSE('MotörHead'), REVERSE(NULL)
-test/sql/function/string/test_reverse.test	18	wrong	select REVERSE(a) FROM strings
-test/sql/function/string/test_reverse.test	26	wrong	select REVERSE(b) FROM strings
-test/sql/function/string/test_reverse.test	34	wrong	select REVERSE(a) FROM strings WHERE b IS NOT NULL
-test/sql/function/string/test_right.test	13	wrong	SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', 1), RIGHT('🦆ab', 2), RIGHT('🦆ab', 3), RIGHT('🦆ab', 4)
-test/sql/function/string/test_right.test	24	wrong	SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', -1), RIGHT('🦆ab', -2), RIGHT('🦆ab', -3), RIGHT('🦆ab', -4)
 test/sql/function/string/test_right.test	50	unreliable	SELECT RIGHT(a, b) FROM strings
 test/sql/function/string/test_right.test	68	unreliable	SELECT RIGHT(a, b) FROM strings
 test/sql/function/string/test_right.test	86	unreliable	SELECT RIGHT(a, b) FROM strings
 test/sql/function/string/test_right.test	50	unreliable	SELECT RIGHT_GRAPHEME(a, b) FROM strings
 test/sql/function/string/test_right.test	68	unreliable	SELECT RIGHT_GRAPHEME(a, b) FROM strings
 test/sql/function/string/test_right.test	86	unreliable	SELECT RIGHT_GRAPHEME(a, b) FROM strings
-test/sql/function/string/test_substring.test	129	wrong	SELECT substring(s from -2 for 2) FROM strings
-test/sql/function/string/test_substring.test	147	wrong	SELECT substring(s, 2, -2) FROM strings
-test/sql/function/string/test_substring.test	156	wrong	SELECT substring(s, -2, -2) FROM strings
-test/sql/function/string/test_substring.test	199	wrong	SELECT substring(s, 2147483647, -2147483648) FROM strings
-test/sql/function/string/test_substring.test	207	wrong	SELECT substring(s, -2147483647, 2147483647) FROM strings
-test/sql/function/string/test_substring.test	235	wrong	SELECT substring('abcd', -1)
-test/sql/function/string/test_substring.test	259	accepted	SELECT substring(s, 9223372036854775807, 9223372036854775807) FROM strings
-test/sql/function/string/test_substring.test	269	unreliable	SELECT substring(s, 0, 9223372036854775807) FROM strings
-test/sql/function/string/test_substring.test	280	unreliable	SELECT substring(s, 4294967296, 2147483647) FROM strings
-test/sql/function/string/test_substring.test	285	unreliable	SELECT substring(s, -4294967297, 2147483647) FROM strings
-test/sql/function/string/test_substring.test	290	unreliable	SELECT substring(s, 0, 4294967296) FROM strings
-test/sql/function/string/test_substring.test	295	unreliable	SELECT substring(s, 0, -4294967297) FROM strings
-test/sql/function/string/test_substring.test	129	unreliable	SELECT substring(s from -2 for 2) FROM strings
-test/sql/function/string/test_substring_utf8.test	11	wrong	SELECT substring(s from 1 for 7) FROM strings
-test/sql/function/string/test_substring_utf8.test	16	wrong	SELECT substring(s from 10 for 7) FROM strings
-test/sql/function/string/test_substring_utf8.test	21	wrong	SELECT substring(s from 15 for 7) FROM strings
-test/sql/function/string/test_substring_utf8.test	29	wrong	SELECT substr(s, -4, 4) FROM strings
-test/sql/function/string/test_substring_utf8.test	34	wrong	SELECT substr(s, -1, -4) FROM strings
-test/sql/function/string/test_substring_utf8.test	44	wrong	SELECT substr(s, 0, 5) FROM strings
-test/sql/function/string/test_substring_utf8.test	49	wrong	SELECT substr(s, 5, -5) FROM strings
-test/sql/function/string/test_substring_utf8.test	55	wrong	SELECT substr(s, 5) FROM strings
-test/sql/function/string/test_translate.test	67	wrong	select TRANSLATE('MotörHeadΩ', 'aeΩ', 'eÄ')
-test/sql/function/string/test_translate.test	77	wrong	select TRANSLATE('Äañt₡Xá你好世界我', 'ñá世界我xyz', 'naDBá')
-test/sql/function/string/test_translate.test	89	wrong	select TRANSLATE(a, 'öHl', 'oA-') FROM strings
-test/sql/function/string/test_translate.test	98	wrong	select TRANSLATE(a, 'loD', '🦆') FROM strings
-test/sql/function/string/test_translate.test	107	wrong	select TRANSLATE(b, 'ÄW🦆l', 'ow🐱') FROM strings
 test/sql/join/full_outer/full_outer_join_union.test	24	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION ALL\nSELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nORDER BY i
 test/sql/join/full_outer/full_outer_join_union.test	37	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nORDER BY i
 test/sql/join/full_outer/full_outer_join_union.test	47	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i+1, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i+2, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i+3, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i+4, j, k, l FROM i...
@@ -545,129 +413,26 @@ test/sql/join/full_outer/test_full_outer_join.test	41	unreliable	SELECT i, j, k,
 test/sql/join/full_outer/test_full_outer_join_complex.test	23	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i+integers2.k+9<>integers.j+integers2.l ORDER BY 1, 2, 3, 4
 test/sql/join/full_outer/test_full_outer_join_inequality.test	23	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i<>integers2.k ORDER BY 1, 2, 3, 4
 test/sql/join/full_outer/test_full_outer_join_range.test	24	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i<integers2.k ORDER BY 1, 2, 3, 4
-test/sql/join/iejoin/iejoin_issue_6861.test	32	wrong	EXPLAIN\nSELECT * \nFROM all_null AS a, all_null AS b \nWHERE (a.x BETWEEN b.x AND b.x);
-test/sql/join/iejoin/iejoin_issue_6861.test	46	wrong	EXPLAIN\nSELECT * \nFROM test AS a, all_null AS b \nWHERE (a.x BETWEEN b.x AND b.x);
-test/sql/join/iejoin/iejoin_issue_6861.test	60	wrong	EXPLAIN\nSELECT * \nFROM all_null AS a, test AS b \nWHERE (a.x BETWEEN b.x AND b.x);
-test/sql/join/iejoin/test_iejoin_east_west.test	34	wrong	EXPLAIN\nSELECT s1.rid, s2.rid\nFROM west s1, west s2\nWHERE s1.time > s2.time\nORDER BY 1, 2
-test/sql/join/iejoin/test_iejoin_east_west.test	57	wrong	EXPLAIN\nSELECT s1.rid, s2.rid\nFROM west s1, west s2\nWHERE s1.time > s2.time AND s1.cost < s2.cost\nORDER BY 1, 2
-test/sql/join/iejoin/test_iejoin_east_west.test	76	wrong	EXPLAIN\nSELECT east.rid, west.rid\nFROM east, west\nWHERE east.dur < west.time AND east.rev > west.cost\nORDER BY 1, 2
-test/sql/join/iejoin/test_iejoin_null_keys.test	23	unreliable	EXPLAIN\nselect * \nfrom tt t1 left join tt t2 \non t1.x < t2.x and t1.y < t2.y \norder by t1.x nulls first, t1.y nulls first, t1.z, t2.x, t2.y, t2.z;
 test/sql/join/iejoin/test_iejoin_null_keys.test	32	unreliable	select * \nfrom tt t1 left join tt t2 \non t1.x < t2.x and t1.y < t2.y \norder by t1.x nulls first, t1.y nulls first, t1.z, t2.x, t2.y, t2.z;
 test/sql/join/iejoin/test_iejoin_null_keys.test	71	unreliable	select t1.x, t1.y\nfrom (\n    select (case when x < 100 then null else 99 end) x, (case when x < 100 then 99 else 99 end) y\n    from tt2\n) t1 left join tt2 t2\non t1.x < t2.x and t1.y < t2.x\norder by t1.x nulls first, t1.y nulls first;
 test/sql/join/inner/equality_join_limits.test	93	unreliable	SELECT t_k0, u_k0 FROM   t, u   WHERE t_k0 = u_k0;
-test/sql/join/inner/join_cross_product.test	37	wrong	select * from t1 join t2 on (i=j), t3 join t4 on (i+k=j+l)
-test/sql/join/inner/not_between_is_null.test	15	wrong	SELECT * FROM t1 INNER JOIN t2 ON ((t1.c0 NOT BETWEEN t2.c0 AND t2.c0) IS NULL);
 test/sql/join/inner/right_semi_dict_emission_dead_end.test	24	unreliable	SELECT COUNT(*) FROM p WHERE p.pb IN (SELECT x.f FROM v x JOIN v y ON x.s = y.s CROSS JOIN v z);
 test/sql/join/inner/right_semi_dict_emission_dead_end.test	33	unreliable	SELECT COUNT(*) FROM p WHERE p.pb IN (SELECT x.f FROM v x JOIN v y ON x.s = y.s CROSS JOIN v z);
 test/sql/join/inner/right_semi_dict_emission_dead_end.test	45	unreliable	SELECT COUNT(*) FROM p WHERE p.pb NOT IN (SELECT x.f FROM v x JOIN v y ON x.s = y.s);
 test/sql/join/inner/right_semi_dict_emission_dead_end.test	55	unreliable	SELECT COUNT(*) FROM p WHERE p.pb IN (SELECT f FROM v);
-test/sql/join/inner/test_join.test	78	wrong	SELECT a, test.b, c FROM test INNER JOIN test2 ON test.b = 2 ORDER BY c;
-test/sql/join/inner/test_range_join.test	74	wrong	SELECT * FROM issue4419 t1 INNER JOIN issue4419 t2 ON t1.x < t2.x;
 test/sql/join/left_outer/left_join_issue_1172.test	99	unreliable	select * from t1 left join t2 on t1.id = t2.id order by 1, 2;
 test/sql/join/left_outer/left_join_issue_1172.test	119	unreliable	select * from t1 left join t2 on t1.id = t2.id order by 1, 2;
-test/sql/join/left_outer/left_join_issue_15316.test	42	unreliable	SELECT\n    i1.i AS i1_i,\n    i2.s,\n    i3.i AS i3_i\nFROM\n    integers1 i1\nLEFT OUTER JOIN (integers2 i2 LEFT OUTER JOIN integers3 i3 ON i2.i = i3.i) on false;
-test/sql/join/left_outer/left_join_issue_24540.test	5	wrong	SELECT * FROM (VALUES (1),(2),(NULL)) AS a(x)\nLEFT JOIN (SELECT p.y AS y, q.z AS z\n           FROM (VALUES (2),(3),(NULL)) AS p(y)\n           LEFT JOIN (VALUES (1),(3),(NULL)) AS q(z) ON p.y <> q.z) AS s\nON a.x <> s.y\nWHERE s.z IS NULL;
-test/sql/join/left_outer/test_left_join_on_true.test	114	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i
-test/sql/join/left_outer/test_left_outer.test	54	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON i=1 ORDER BY i, k;
-test/sql/join/left_outer/test_left_outer.test	63	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON 1=1 ORDER BY i, k;
-test/sql/join/left_outer/test_left_outer.test	82	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON 1=2 ORDER BY i;
-test/sql/join/left_outer/test_left_outer.test	90	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON NULL<>NULL ORDER BY i;
-test/sql/join/left_outer/test_left_outer.test	98	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON i=1 ORDER BY i, k;
-test/sql/join/left_outer/test_left_outer.test	107	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON l=20 ORDER BY i, k;
-test/sql/join/left_outer/test_left_outer.test	114	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON l>0 ORDER BY i, k;
-test/sql/join/left_outer/test_left_outer.test	125	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON i=1 OR l=20 ORDER BY i, k;
-test/sql/join/left_outer/test_left_outer.test	140	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON i+l=21 ORDER BY i;
-test/sql/join/left_outer/test_left_outer.test	147	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON i+l>12 ORDER BY i, k;
-test/sql/join/left_outer/test_left_outer.test	156	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON integers.i<integers2.k WHERE integers.i <= 2 ORDER BY i
-test/sql/join/left_outer/test_left_outer.test	163	wrong	SELECT * FROM integers LEFT OUTER JOIN integers2 ON integers.i<integers2.k AND integers.i<integers2.l WHERE integers.i <= 2 ORDER BY i
 test/sql/join/left_outer/test_left_outer.test	176	wrong	select * from (values(1), (2)) t1(i) left join (values (2), (3)) t2(i) on t1.i=t2.i AND t1.i+t2.i=4 ORDER BY 1, 2;
-test/sql/join/mark/test_null_safe_semi_uncommitted_stats.test	37	wrong	EXPLAIN SELECT count(*) FROM a WHERE EXISTS (SELECT 1 FROM b WHERE a.x IS NOT DISTINCT FROM b.y);
-test/sql/join/mark/test_null_safe_semi_uncommitted_stats.test	69	wrong	EXPLAIN SELECT count(*) FROM a WHERE EXISTS (SELECT 1 FROM c WHERE a.x IS NOT DISTINCT FROM c.k);
-test/sql/join/mark/test_null_safe_semi_uncommitted_stats.test	88	unreliable	EXPLAIN SELECT count(*) FROM n n1 WHERE EXISTS (SELECT 1 FROM n n2 WHERE n1.k IS NOT DISTINCT FROM n2.k);
-test/sql/join/mark/test_null_safe_semi_uncommitted_stats.test	124	unreliable	EXPLAIN SELECT count(*) FROM u WHERE EXISTS (SELECT 1 FROM v WHERE u.x IS NOT DISTINCT FROM v.y);
-test/sql/join/mark/test_null_safe_semi_uncommitted_stats.test	146	unreliable	EXPLAIN SELECT count(*) FROM w w1 WHERE EXISTS (SELECT 1 FROM w w2 WHERE w1.z IS NOT DISTINCT FROM w2.z);
-test/sql/join/natural/natural_join.test	19	wrong	SELECT * FROM t1 NATURAL JOIN t2
-test/sql/join/natural/natural_join.test	41	wrong	SELECT * FROM t1 NATURAL JOIN t3
-test/sql/join/natural/natural_join.test	46	wrong	SELECT * FROM t3 NATURAL JOIN t2
-test/sql/join/natural/natural_join.test	52	wrong	SELECT * FROM t1 NATURAL JOIN t2 NATURAL JOIN t3
-test/sql/join/natural/natural_join.test	88	accepted	select * from (values (1)) tbl(a) natural join (values (1), (2)) tbl2(b) order by 1, 2
-test/sql/join/natural/natural_join.test	94	unreliable	SELECT * FROM (VALUES (1, 2)) l(a, b) NATURAL JOIN (VALUES (3, 4)) r(c, d)
-test/sql/join/natural/natural_join.test	100	unreliable	select * from (values (1)) tbl(a) natural join (values (1)) tbl2(a) natural join (values (1)) tbl3(a)\n              natural join (values (1)) tbl4(a) natural join (values (1)) tbl5(a)
-test/sql/join/natural/natural_join.test	107	unreliable	select * from (select 42) tbl(a) natural join (select 42) tbl2(a)
-test/sql/join/natural/natural_join.test	119	unreliable	select *\nfrom\n    (select 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52) tbl1(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11)\n    natural join\n    (select 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52) tbl2(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11);
-test/sql/join/natural/natural_join.test	252	unreliable	select (select * from (select 42) tbl(a) natural join (select 42) tbl(a))
-test/sql/join/natural/natural_join.test	281	unreliable	select * from (values (1)) t1(i) join (values (1)) t2(i) on (t1.i=t2.i) natural join (values (1)) t3(i);
-test/sql/join/natural/natural_join.test	290	unreliable	select * from (values (1)) t1(i) natural join ((values (1)) t2(i)  join (values (1)) t3(i) on (t2.i=t3.i))
-test/sql/join/non_inner_join_subquery.test	25	wrong	SELECT l.i, r.i\nFROM non_inner_l l\nLEFT JOIN non_inner_r r ON l.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = l.i)\nORDER BY l.i, r.i NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	43	wrong	SELECT l.i, r.i\nFROM non_inner_l l\nLEFT JOIN non_inner_r r ON r.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = r.i)\nORDER BY l.i, r.i NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	57	wrong	SELECT l.i, r.i\nFROM non_inner_l l\nLEFT JOIN non_inner_r r ON r.i = CASE\n\tWHEN l.j >= 20 THEN (SELECT s.i FROM non_inner_s s WHERE s.i = l.i LIMIT 1)\n\tELSE NULL\nEND\nORDER BY l.i, r.i NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	73	wrong	SELECT l.i, r.i\nFROM non_inner_l l\nLEFT JOIN non_inner_r r ON l.i + (SELECT 1) = r.i + (SELECT 0)\nORDER BY l.i, r.i NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	85	wrong	SELECT l.i, r.i, r.j\nFROM non_inner_l l\nLEFT JOIN non_inner_r r ON r.i IS NULL OR (r.i = l.i AND l.i NOT IN (SELECT i FROM non_inner_s))\nORDER BY l.i, r.i NULLS LAST, r.j NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	97	wrong	SELECT l.i, r.i, r.j, nested.i\nFROM non_inner_l l\nLEFT JOIN non_inner_r r ON EXISTS (\n\tSELECT 1 FROM non_inner_s s WHERE s.i = l.i AND s.j * 10 = r.j\n)\nLEFT JOIN non_inner_s nested ON FALSE\nORDER BY l.i, r.i NULLS LAST, r.j NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	112	wrong	SELECT l.i, r.i, r.j\nFROM non_inner_l l\nFULL OUTER JOIN non_inner_r r ON l.i = (SELECT MIN(i) FROM non_inner_s)\nORDER BY l.i, r.i NULLS LAST, r.j NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	128	wrong	SELECT l.i, r.i, r.j\nFROM non_inner_l l\nFULL OUTER JOIN non_inner_r r ON l.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = l.i)\nORDER BY l.i NULLS LAST, r.i NULLS LAST, r.j NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	144	wrong	SELECT l.i, r.i, r.j\nFROM non_inner_l l\nFULL OUTER JOIN non_inner_r r ON r.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = r.i)\nORDER BY l.i NULLS LAST, r.i NULLS LAST, r.j NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	161	wrong	SELECT l.i, r.i, r.j\nFROM non_inner_l l\nRIGHT JOIN non_inner_r r ON l.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = l.i)\nORDER BY l.i NULLS LAST, r.i NULLS LAST, r.j NULLS LAST;
-test/sql/join/non_inner_join_subquery.test	176	wrong	SELECT l.i, r.i, r.j\nFROM non_inner_l l\nRIGHT JOIN non_inner_r r ON r.i IN (SELECT s.i FROM non_inner_s s WHERE s.i = r.i)\nORDER BY l.i NULLS LAST, r.i NULLS LAST, r.j NULLS LAST;
-test/sql/join/non_inner_join_subquery_binding.test	10	accepted	SELECT *\nFROM (VALUES (1)) l(a)\nLEFT JOIN (VALUES (2)) r(a)\nON EXISTS (\n\tSELECT 1\n\tWHERE a = l.a\n\t  AND r.a = 2\n);
-test/sql/join/non_inner_join_subquery_binding.test	36	unreliable	SELECT *\nFROM (VALUES ('a')) l(v)\nLEFT JOIN (VALUES ('A')) r(v)\nON EXISTS (\n\tSELECT 1\n\tWHERE lower(v) = l.v\n\t  AND r.v = 'A'\n);
 test/sql/join/non_inner_join_subquery_binding.test	236	unreliable	SELECT i FROM update_target ORDER BY i;
 test/sql/join/non_inner_join_subquery_binding.test	259	unreliable	SELECT count(*) FROM delete_target;
-test/sql/join/pair_dependent_full_outer_join_subquery.test	25	wrong	SELECT l.a, r.b\nFROM pair_l l\nFULL OUTER JOIN pair_r r ON EXISTS (\n\tSELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b\n)\nORDER BY l.a NULLS LAST, r.b NULLS LAST;
-test/sql/join/pair_dependent_full_outer_join_subquery.test	42	wrong	SELECT l.a, r.b\nFROM pair_l l\nFULL OUTER JOIN pair_r r ON r.b IN (\n\tSELECT s.b FROM pair_s s WHERE s.a = l.a\n)\nORDER BY l.a NULLS LAST, r.b NULLS LAST;
-test/sql/join/pair_dependent_full_outer_join_subquery.test	94	wrong	SELECT l.a, r.b\nFROM pair_l l\nFULL OUTER JOIN pair_r r ON NOT EXISTS (\n\tSELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b\n)\nORDER BY l.a NULLS LAST, r.b NULLS LAST;
-test/sql/join/pair_dependent_full_outer_join_subquery.test	198	unreliable	SELECT l.a, r.b\nFROM pair_nested_l l\nFULL OUTER JOIN pair_nested_r r ON EXISTS (\n\tSELECT 1\n\tWHERE EXISTS (\n\t\tSELECT 1 FROM pair_split_l sl WHERE sl.a = l.a\n\t)\n\tAND EXISTS (\n\t\tSELECT 1 FROM pair_split_r sr WHERE sr.b = r.b\n\t)\n)\nORDER BY l.a NULLS LAST, r.b NULLS LAST;
-test/sql/join/pair_dependent_full_outer_join_subquery.test	219	unreliable	SELECT l.a, r.b\nFROM pair_nested_l l\nFULL OUTER JOIN pair_nested_r r ON EXISTS (\n\tSELECT 1\n\tWHERE EXISTS (\n\t\tSELECT 1 FROM pair_split_l sl WHERE sl.a = l.a\n\t)\n\tOR EXISTS (\n\t\tSELECT 1 FROM pair_split_r sr WHERE sr.b = r.b\n\t)\n)\nORDER BY l.a NULLS LAST, r.b NULLS LAST;
-test/sql/join/pair_dependent_full_outer_join_subquery.test	812	unreliable	SELECT l.a, r.b\nFROM (SELECT a FROM pair_sparse_l) l\nFULL OUTER JOIN (SELECT b FROM pair_sparse_r) r ON EXISTS (\n\tSELECT 1\n\tFROM pair_sparse_s s\n\tWHERE s.a = l.a\n\t  AND s.b = r.b\n)\nORDER BY l.a NULLS LAST, r.b NULLS LAST;
-test/sql/join/pair_dependent_full_outer_join_subquery.test	830	unreliable	SELECT l.a, r.b\nFROM pair_l l\nFULL OUTER JOIN pair_r r ON EXISTS (\n\tSELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b\n) AND random() >= 0\nORDER BY l.a NULLS LAST, r.b NULLS LAST;
-test/sql/join/pair_dependent_full_outer_join_subquery.test	847	unreliable	SELECT l.a, r.b\nFROM pair_l l\nFULL OUTER JOIN pair_r r ON EXISTS (\n\tSELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b AND random() >= 0\n)\nORDER BY l.a NULLS LAST, r.b NULLS LAST;
-test/sql/join/pair_dependent_full_outer_join_subquery_cte.test	131	unreliable	SELECT l.a, l.x, r.b, r.y\nFROM (SELECT a, max(x)::INTEGER AS x FROM pair_unique_domain_l GROUP BY a) l\nFULL OUTER JOIN (SELECT b, max(y)::INTEGER AS y FROM pair_unique_domain_r GROUP BY b) r ON EXISTS (\n\tSELECT 1\n\tFROM pair_unique_domain_s s\n\tWHERE s.a = l.a\n\t  AND s.b = r.b\n);
-test/sql/join/pair_dependent_full_outer_join_subquery_cte.test	148	unreliable	EXPLAIN SELECT l.a, l.x, r.b, r.y\nFROM pair_unique_domain_l l\nFULL OUTER JOIN pair_unique_domain_r r ON EXISTS (\n\tSELECT 1\n\tFROM pair_unique_domain_s s\n\tWHERE s.a = l.a\n\t  AND s.b = r.b\n);
-test/sql/join/pair_dependent_full_outer_join_subquery_cte.test	160	unreliable	EXPLAIN SELECT l.a, l.x, r.b, r.y\nFROM pair_unique_domain_l l\nFULL OUTER JOIN pair_unique_domain_r r ON EXISTS (\n\tSELECT 1\n\tFROM pair_unique_domain_s s\n\tWHERE s.a = l.a\n\t  AND s.b = r.b\n);
-test/sql/join/pair_dependent_full_outer_join_subquery_cte.test	172	unreliable	EXPLAIN SELECT l.a, l.x, r.b, r.y\nFROM pair_unique_domain_l l\nFULL OUTER JOIN pair_unique_domain_r r ON EXISTS (\n\tSELECT 1\n\tFROM pair_unique_domain_s s\n\tWHERE s.a = l.a\n\t  AND s.b = r.b\n);
-test/sql/join/pair_dependent_join_subquery.test	26	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON EXISTS (\n\tSELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b\n)\nORDER BY l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	66	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON l.a IN (\n\tSELECT s.a FROM pair_s s WHERE s.b = r.b\n)\nORDER BY l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	81	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON r.b IN (\n\tSELECT s.b FROM pair_s s WHERE s.a = l.a\n)\nORDER BY l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	96	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON l.x > 10 AND r.b IN (\n\tSELECT s.b FROM pair_s s WHERE s.a = l.a\n)\nORDER BY l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	111	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON r.b NOT IN (\n\tSELECT s.b FROM pair_s s WHERE s.a = l.a\n)\nORDER BY l.a, l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	129	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON r.b = (\n\tSELECT max(s.b) FROM pair_s s WHERE s.a = l.a AND s.b <= r.b\n)\nORDER BY l.a, l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	144	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON CASE WHEN l.x > 10 THEN r.b ELSE NULL END = (\n\tSELECT s.b FROM pair_s s WHERE s.a = l.a AND s.b = r.b LIMIT 1\n)\nORDER BY l.a, l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	232	wrong	SELECT l.a, r.b, r2.c\nFROM pair_l l\nLEFT JOIN (pair_r r JOIN pair_left_multi_r2 r2 ON true) ON EXISTS (\n\tSELECT 1\n\tFROM pair_left_multi_s s\n\tWHERE s.a = l.a\n\t  AND s.b = r.b\n\t  AND s.c = r2.c\n)\nORDER BY l.a, r.b NULLS LAST, r2.c NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	274	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON EXISTS (\n\tSELECT 1\n\tFROM pair_left_nested_t t\n\tWHERE EXISTS (\n\t\tSELECT 1\n\t\tFROM pair_left_multi_s s\n\t\tWHERE s.a = l.a\n\t\t  AND s.b = r.b\n\t\t  AND s.c = t.c\n\t)\n)\nORDER BY l.a, l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	295	wrong	SELECT l.a, l.x, r.b\nFROM pair_l l\nLEFT JOIN pair_r r ON EXISTS (\n\tSELECT 1\n\tFROM pair_left_nested_t t\n\tWHERE EXISTS (\n\t\tSELECT 1\n\t\tWHERE EXISTS (\n\t\t\tSELECT 1\n\t\t\tFROM pair_left_multi_s s\n\t\t\tWHERE s.a = l.a\n\t\t\t  AND s.b = r.b\n\t\t\t  AND s.c = t.c\n\t\t)\n\t)\n)\nORDER BY l.a, l.x, r.b NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	588	unreliable	SELECT l.a, l.x, r.b\nFROM pair_l l\nRIGHT JOIN pair_r r ON EXISTS (\n\tSELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b\n)\nORDER BY r.b, l.x NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	604	unreliable	SELECT l.a, l.x, r.b\nFROM pair_l l\nRIGHT JOIN pair_r r ON EXISTS (\n\tSELECT 1\n\tFROM pair_left_nested_t t\n\tWHERE EXISTS (\n\t\tSELECT 1\n\t\tFROM pair_left_multi_s s\n\t\tWHERE s.a = l.a\n\t\t  AND s.b = r.b\n\t\t  AND s.c = t.c\n\t)\n)\nORDER BY r.b, l.x NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	629	unreliable	SELECT l.a, l.x, r.b\nFROM pair_l l\nRIGHT JOIN pair_r r ON EXISTS (\n\tSELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b\n)\nORDER BY r.b, l.x NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	645	unreliable	SELECT l.a, l.x, r.b\nFROM pair_l l\nRIGHT JOIN pair_r r ON EXISTS (\n\tSELECT 1\n\tFROM pair_left_nested_t t\n\tWHERE EXISTS (\n\t\tSELECT 1\n\t\tWHERE EXISTS (\n\t\t\tSELECT 1\n\t\t\tFROM pair_left_multi_s s\n\t\t\tWHERE s.a = l.a\n\t\t\t  AND s.b = r.b\n\t\t\t  AND s.c = t.c\n\t\t)\n\t)\n)\nORDER BY r.b, l.x NULLS LAST;
-test/sql/join/pair_dependent_join_subquery.test	670	unreliable	SELECT *\nFROM pair_l l\nRIGHT JOIN pair_r r ON EXISTS (\n\tSELECT 1 FROM pair_s s WHERE s.a = l.a AND s.b = r.b\n)\nORDER BY r.b, l.x NULLS LAST;
-test/sql/join/right_outer/test_right_outer.test	43	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON i=1 ORDER BY i, k;
-test/sql/join/right_outer/test_right_outer.test	51	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON 1=1 ORDER BY i, k;
-test/sql/join/right_outer/test_right_outer.test	61	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON 1=2 ORDER BY i;
-test/sql/join/right_outer/test_right_outer.test	68	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON NULL<>NULL ORDER BY i;
-test/sql/join/right_outer/test_right_outer.test	75	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON i=1 ORDER BY i, k;
-test/sql/join/right_outer/test_right_outer.test	83	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON l=20 ORDER BY i, k;
-test/sql/join/right_outer/test_right_outer.test	90	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON l>0 ORDER BY i, k;
-test/sql/join/right_outer/test_right_outer.test	100	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON i=1 OR l=20 ORDER BY i, k;
-test/sql/join/right_outer/test_right_outer.test	115	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON i+l=21 ORDER BY i;
-test/sql/join/right_outer/test_right_outer.test	122	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON i+l>12 ORDER BY i, k;
-test/sql/join/right_outer/test_right_outer.test	130	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON integers.i<integers2.k WHERE integers.i <= 2 ORDER BY i
-test/sql/join/right_outer/test_right_outer.test	136	wrong	SELECT integers.*, integers2.* FROM integers2 RIGHT OUTER JOIN integers ON integers.i<integers2.k AND integers.i<integers2.l WHERE integers.i <= 2 ORDER BY i
 test/sql/join/semianti/antijoin.test	60	wrong	CREATE TABLE other (a INTEGER, b INTEGER);
 test/sql/join/semianti/right_anti.test	50	unreliable	CREATE TABLE other (a INTEGER, b INTEGER);
 test/sql/join/semianti/right_semi.test	46	unreliable	CREATE TABLE other (a INTEGER, b INTEGER);
 test/sql/join/semianti/semijoin.test	60	wrong	CREATE TABLE other (a INTEGER, b INTEGER);
 test/sql/join/test_between_null_bound_join.test	31	unreliable	SELECT ((EXISTS (SELECT 1)) BETWEEN NULL::BOOLEAN AND false) AS b, ((EXISTS (SELECT 1)) BETWEEN NULL::BOOLEAN AND false) IS NULL;
 test/sql/join/test_between_null_bound_join.test	36	unreliable	SELECT ((EXISTS (SELECT 1)) NOT BETWEEN NULL::BOOLEAN AND false);
-test/sql/join/test_complex_join_expr.test	21	unreliable	SELECT * FROM test JOIN test2 ON test.a+test2.c=test.b+test2.b
-test/sql/join/test_complex_join_expr.test	26	unreliable	SELECT * FROM test LEFT JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1
 test/sql/join/test_complex_join_expr.test	32	unreliable	SELECT * FROM test RIGHT JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1
 test/sql/join/test_complex_join_expr.test	38	unreliable	SELECT * FROM test FULL OUTER JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1
-test/sql/join/test_join_always_true_conditions.test	21	wrong	SELECT * FROM left_table l\nINNER JOIN right_table r ON TRUE;
-test/sql/join/test_join_always_true_conditions.test	31	wrong	SELECT * FROM left_table l\nLEFT JOIN right_table r ON TRUE;
-test/sql/join/test_join_always_true_conditions.test	41	wrong	SELECT * FROM left_table l\nRIGHT JOIN right_table r ON TRUE;
-test/sql/join/test_join_always_true_conditions.test	51	wrong	SELECT * FROM left_table l\nFULL OUTER JOIN right_table r ON TRUE;
-test/sql/join/test_merge_join_predicate.test	254	unreliable	explain\nselect l.c2\nfrom tleft l\nleft join tright r\non l.c0 >= r.c0\nand l.c2 != r.c1\nand l.c2
-test/sql/join/test_merge_join_predicate.test	265	unreliable	select l.c2\nfrom tleft l\nleft join tright r\non l.c0 >= r.c0\nand l.c2 != r.c1\nand l.c2\norder by 1
 test/sql/order/negative_offset.test	5	accepted	SELECT * FROM generate_series(0,10,1) LIMIT 3 OFFSET -1;
 test/sql/order/negative_offset.test	10	unreliable	SELECT * FROM generate_series(0,10,1) LIMIT -3;
 test/sql/order/negative_offset.test	23	unreliable	SELECT * FROM generate_series(0,10,1) LIMIT (SELECT k FROM integers);
@@ -697,21 +462,8 @@ test/sql/subquery/exists/test_uncorrelated_exists_subquery.test	23	unreliable	SE
 test/sql/subquery/exists/test_uncorrelated_exists_subquery.test	35	unreliable	SELECT * FROM integers WHERE EXISTS(SELECT NULL) ORDER BY i
 test/sql/subquery/exists/test_uncorrelated_exists_subquery.test	73	unreliable	SELECT * FROM integers WHERE 1 IN (SELECT 1) ORDER BY i
 test/sql/subquery/exists/test_uncorrelated_exists_subquery.test	81	unreliable	SELECT * FROM integers WHERE 1 IN (SELECT * FROM integers) ORDER BY i
-test/sql/subquery/scalar/test_complex_correlated_subquery.test	51	unreliable	SELECT * FROM integers s1 INNER JOIN integers s2 ON (SELECT 2*SUM(i)*s1.i FROM integers)=(SELECT SUM(i)*s2.i FROM integers) ORDER BY s1.i;
-test/sql/subquery/scalar/test_complex_correlated_subquery.test	72	unreliable	SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON (SELECT 2*SUM(i)*s1.i FROM integers)=(SELECT SUM(i)*s2.i FROM integers) ORDER BY s1.i;
-test/sql/subquery/scalar/test_complex_correlated_subquery.test	81	unreliable	SELECT * FROM integers s1 LEFT OUTER JOIN integers s2 ON (SELECT CASE WHEN s1.i+s2.i>10 THEN TRUE ELSE FALSE END) ORDER BY s1.i;
-test/sql/subquery/scalar/test_complex_nested_correlated_subquery.test	41	wrong	SELECT * FROM tbl t1 LEFT JOIN tbl t2 ON (SELECT t2.a)>100
-test/sql/subquery/scalar/test_correlated_having.test	108	unreliable	EXPLAIN SELECT (SELECT avg(inner_values.i) * 0.2\n                FROM inner_values\n                WHERE inner_values.i = outer_values.i\n                HAVING true)\nFROM outer_values;
-test/sql/subquery/scalar/test_correlated_having.test	117	unreliable	EXPLAIN SELECT (SELECT coalesce(avg(inner_values.i), 0)\n                FROM inner_values\n                WHERE inner_values.i = outer_values.i\n                HAVING true)\nFROM outer_values;
-test/sql/subquery/scalar/test_correlated_window.test	23	unreliable	SELECT i, (SELECT SUM((SELECT i + 1)) OVER ()) FROM integers ORDER BY i
-test/sql/subquery/scalar/test_correlated_window.test	40	unreliable	SELECT i, (SELECT SUM((SELECT SUM(i))) OVER ()) FROM integers GROUP BY i ORDER BY i
-test/sql/subquery/scalar/test_correlated_window.test	48	unreliable	SELECT i, (SELECT SUM(win) FROM (SELECT SUM((SELECT i1.i + integers.i)) OVER () AS win FROM integers i1) t) FROM integers ORDER BY i
 test/sql/subquery/scalar/test_delete_subquery.test	15	unreliable	SELECT id, i FROM integers ORDER BY id
 test/sql/subquery/scalar/test_delete_subquery.test	26	unreliable	SELECT id, i FROM integers ORDER BY id
-test/sql/subquery/scalar/test_scalar_subquery.test	42	wrong	EXPLAIN SELECT (SELECT 42)
-test/sql/subquery/scalar/test_scalar_subquery.test	47	wrong	EXPLAIN SELECT (SELECT 42 LIMIT 1)
-test/sql/subquery/scalar/test_scalar_subquery.test	52	wrong	EXPLAIN SELECT (SELECT NULL)
-test/sql/subquery/scalar/test_scalar_subquery.test	62	wrong	EXPLAIN SELECT (SELECT 42 WHERE false LIMIT 1)
 test/sql/subquery/scalar/test_scalar_subquery.test	86	accepted	SELECT * FROM (SELECT 42, 41 AS x) v1(a, b, c);
 test/sql/subquery/scalar/test_uncorrelated_scalar_subquery.test	35	unreliable	SELECT *, (SELECT MAX(i) FROM integers) FROM integers ORDER BY i
 test/sql/subquery/scalar/test_uncorrelated_scalar_subquery.test	50	unreliable	SELECT i, MAX((SELECT 42)) FROM integers GROUP BY i ORDER BY i
@@ -741,7 +493,6 @@ test/sql/types/blob/test_blob_cast.test	58	unreliable	SELECT 1::tinyint::BYTEA
 test/sql/types/blob/test_blob_cast.test	63	unreliable	SELECT 1::smallint::BYTEA
 test/sql/types/blob/test_blob_cast.test	68	unreliable	SELECT 1::integer::BYTEA
 test/sql/types/blob/test_blob_cast.test	73	unreliable	SELECT 1::bigint::BYTEA
-test/sql/types/blob/test_blob_cast.test	78	unreliable	SELECT 1::decimal::BYTEA
 test/sql/types/blob/test_blob_function.test	31	wrong	SELECT OCTET_LENGTH(b) FROM blobs
 test/sql/types/blob/test_blob_function.test	49	wrong	SELECT b || '\x5A\x5A'::BYTEA FROM blobs
 test/sql/types/blob/test_blob_function.test	76	wrong	SELECT OCTET_LENGTH(b) FROM blobs
@@ -762,192 +513,10 @@ test/sql/types/blob/test_blob_try_cast.test	51	unreliable	SELECT '\\b12'::BLOB
 test/sql/types/blob/test_blob_try_cast.test	55	unreliable	SELECT '\\xx2'::BLOB
 test/sql/types/blob/test_blob_try_cast.test	59	unreliable	SELECT '\\x2x'::BLOB
 test/sql/types/blob/test_blob_try_cast.test	63	unreliable	SELECT 'ü'::BLOB
-test/sql/types/date/date_parsing.test	144	accepted	SELECT '1993-02-29'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	160	unreliable	SELECT '1993-04-31'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	176	unreliable	SELECT '1993-06-31'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	200	unreliable	SELECT '1993-09-31'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	216	unreliable	SELECT '1993-11-31'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	241	unreliable	SELECT '1992-02-30'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	257	unreliable	SELECT '1992-04-31'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	273	unreliable	SELECT '1992-06-31'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	297	unreliable	SELECT '1992-09-31'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	313	unreliable	SELECT '1992-11-31'::DATE::VARCHAR
-test/sql/types/date/date_parsing.test	328	unreliable	SELECT '1900-02-29'::DATE::VARCHAR
-test/sql/types/date/date_try_cast.test	56	wrong	select try_cast('1111-11-11 (bc)' as date)
-test/sql/types/date/date_try_cast.test	62	wrong	select try_cast('2001-02-29' as date)
-test/sql/types/date/date_try_cast.test	73	wrong	select try_cast('2004/02/29' as date)
-test/sql/types/date/date_try_cast.test	84	wrong	select try_cast('5877642-06-25 (BC)' as date)
-test/sql/types/date/date_try_cast.test	94	wrong	select try_cast('-infinity' as date);
-test/sql/types/date/date_try_cast.test	120	wrong	select try_cast('5881580-07-10' as date)
-test/sql/types/date/date_try_cast.test	130	wrong	select try_cast('infinity' as date)
 test/sql/types/date/test_bc_dates.test	18	unreliable	SELECT * FROM dates
 test/sql/types/date/test_bc_dates.test	25	unreliable	SELECT year(i) FROM dates
 test/sql/types/date/test_bc_dates.test	31	unreliable	SELECT cast(i AS VARCHAR) FROM dates
-test/sql/types/date/test_date_2411.test	17	wrong	select count(*) from dates inner join timestamp on (timestamp.i::DATE = dates.i)
-test/sql/types/date/test_incorrect_dates.test	23	accepted	INSERT INTO dates VALUES ('1993-02-29')
-test/sql/types/date/test_incorrect_dates.test	28	unreliable	INSERT INTO dates VALUES ('1900-02-29')
-test/sql/types/decimal/cast_from_decimal.test	69	wrong	SELECT 127::DECIMAL(3,0)::BIGINT, -9223372036854775807::DECIMAL(19,0)::BIGINT, -7::DECIMAL(9,1)::BIGINT, 27::DECIMAL(18,1)::BIGINT, 33::DECIMAL(38,1)::BIGINT
-test/sql/types/decimal/cast_to_decimal.test	17	accepted	SELECT 100::TINYINT::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	22	unreliable	SELECT 1::TINYINT::DECIMAL(3,3)
-test/sql/types/decimal/cast_to_decimal.test	27	unreliable	SELECT 100::TINYINT::DECIMAL(18,17)
-test/sql/types/decimal/cast_to_decimal.test	32	unreliable	SELECT 100::TINYINT::DECIMAL(9,7)
-test/sql/types/decimal/cast_to_decimal.test	37	unreliable	SELECT 100::TINYINT::DECIMAL(38,37)
-test/sql/types/decimal/cast_to_decimal.test	54	unreliable	SELECT 100::SMALLINT::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	59	unreliable	SELECT 1::SMALLINT::DECIMAL(3,3)
-test/sql/types/decimal/cast_to_decimal.test	64	unreliable	SELECT 100::SMALLINT::DECIMAL(18,17)
-test/sql/types/decimal/cast_to_decimal.test	69	unreliable	SELECT 100::SMALLINT::DECIMAL(9,7)
-test/sql/types/decimal/cast_to_decimal.test	74	unreliable	SELECT 100::SMALLINT::DECIMAL(38,37)
-test/sql/types/decimal/cast_to_decimal.test	91	unreliable	SELECT 100::INTEGER::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	96	unreliable	SELECT 10000000::INTEGER::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	101	unreliable	SELECT -10000000::INTEGER::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	106	unreliable	SELECT 1::INTEGER::DECIMAL(3,3)
-test/sql/types/decimal/cast_to_decimal.test	111	unreliable	SELECT 100::INTEGER::DECIMAL(18,17)
-test/sql/types/decimal/cast_to_decimal.test	116	unreliable	SELECT 100::INTEGER::DECIMAL(9,7)
-test/sql/types/decimal/cast_to_decimal.test	121	unreliable	SELECT 100::INTEGER::DECIMAL(38,37)
-test/sql/types/decimal/cast_to_decimal.test	143	unreliable	SELECT 100::BIGINT::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	148	unreliable	SELECT 10000000::BIGINT::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	153	unreliable	SELECT -10000000::BIGINT::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	158	unreliable	SELECT 1::BIGINT::DECIMAL(3,3)
-test/sql/types/decimal/cast_to_decimal.test	163	unreliable	SELECT 100::BIGINT::DECIMAL(18,17)
-test/sql/types/decimal/cast_to_decimal.test	168	unreliable	SELECT 100::BIGINT::DECIMAL(9,7)
-test/sql/types/decimal/cast_to_decimal.test	173	unreliable	SELECT 100::BIGINT::DECIMAL(38,37)
-test/sql/types/decimal/cast_to_decimal.test	272	unreliable	SELECT 100::FLOAT::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	277	unreliable	SELECT 10000000::FLOAT::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	282	unreliable	SELECT -10000000::FLOAT::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	287	unreliable	SELECT 1::FLOAT::DECIMAL(3,3)
-test/sql/types/decimal/cast_to_decimal.test	292	unreliable	SELECT 100::FLOAT::DECIMAL(18,17)
-test/sql/types/decimal/cast_to_decimal.test	297	unreliable	SELECT 100::FLOAT::DECIMAL(9,7)
-test/sql/types/decimal/cast_to_decimal.test	302	unreliable	SELECT 100::FLOAT::DECIMAL(38,37)
-test/sql/types/decimal/cast_to_decimal.test	349	unreliable	SELECT 100::DOUBLE::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	354	unreliable	SELECT 10000000::DOUBLE::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	359	unreliable	SELECT -10000000::DOUBLE::DECIMAL(3,1)
-test/sql/types/decimal/cast_to_decimal.test	364	unreliable	SELECT 1::DOUBLE::DECIMAL(3,3)
-test/sql/types/decimal/cast_to_decimal.test	369	unreliable	SELECT 100::DOUBLE::DECIMAL(18,17)
-test/sql/types/decimal/cast_to_decimal.test	374	unreliable	SELECT 100::DOUBLE::DECIMAL(9,7)
-test/sql/types/decimal/cast_to_decimal.test	379	unreliable	SELECT 100::DOUBLE::DECIMAL(38,37)
-test/sql/types/decimal/decimal_aggregates.test	26	wrong	SELECT MIN(NULL::DECIMAL),\n       MIN('0.1'::DECIMAL(4,1))::VARCHAR,\n       MIN('4938245.1'::DECIMAL(9,1))::VARCHAR,\n       MIN('45672564564938245.1'::DECIMAL(18,1))::VARCHAR,\n       MIN('4567645908450368043562342564564938245.1'::DECIMAL(38,1))::VARCHAR
-test/sql/types/decimal/decimal_aggregates.test	39	wrong	SELECT MAX(NULL::DECIMAL),\n       MAX('0.1'::DECIMAL(4,1))::VARCHAR,\n       MAX('4938245.1'::DECIMAL(9,1))::VARCHAR,\n       MAX('45672564564938245.1'::DECIMAL(18,1))::VARCHAR,\n       MAX('4567645908450368043562342564564938245.1'::DECIMAL(38,1))::VARCHAR
-test/sql/types/decimal/decimal_aggregates.test	53	wrong	SELECT SUM(NULL::DECIMAL),\n       SUM('0.1'::DECIMAL(4,1))::VARCHAR,\n       SUM('4938245.1'::DECIMAL(9,1))::VARCHAR,\n       SUM('45672564564938245.1'::DECIMAL(18,1))::VARCHAR,\n       SUM('4567645908450368043562342564564938245.1'::DECIMAL(38,1))::VARCHAR
-test/sql/types/decimal/decimal_arithmetic.test	42	wrong	SELECT ('0.5'::DECIMAL(1,1) + 10000)::VARCHAR,\n       ('0.54321'::DECIMAL(5,5) + 10000)::VARCHAR,\n       ('0.5432154321'::DECIMAL(10,10) + 10000)::VARCHAR,\n       ('0.543215432154321'::DECIMAL(15,15) + 10000::DECIMAL(20,15))::VARCHAR,\n       ('0.54321543215432154321'::DECIMAL(20,20) + 10000)::VARCHAR,\n       ('0.5432154321543215432154321'::DECIMAL(25,25) + 10000)::VARCHAR
-test/sql/types/decimal/decimal_arithmetic.test	58	accepted	SELECT ('0.54321543215432154321543215432154321'::DECIMAL(35,35) + 10000)::VARCHAR
-test/sql/types/decimal/decimal_arithmetic.test	177	unreliable	SELECT '0.000000000000000000000000000001'::DECIMAL(38,30) * '0.000000000000000000000000000001'::DECIMAL(38,30)
-test/sql/types/decimal/decimal_average.test	47	wrong	SELECT decimal_average(v) FROM prices WHERE v > 1000.00;
-test/sql/types/decimal/decimal_average.test	175	unreliable	SELECT decimal_average(v) FROM overflow_big;
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	28	accepted	SELECT 10.00::DECIMAL(4,2)::DECIMAL(4,3);
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	33	unreliable	SELECT 10.00::DECIMAL(4,2)::DECIMAL(9,8);
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	38	unreliable	SELECT 10.00::DECIMAL(4,2)::DECIMAL(18,17);
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	43	unreliable	SELECT 10.00::DECIMAL(4,2)::DECIMAL(38,37);
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	49	unreliable	SELECT 10.00::DECIMAL(4,2)::DECIMAL(2,1);
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	54	unreliable	SELECT 10.00::DECIMAL(9,7)::DECIMAL(7,6);
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	59	unreliable	SELECT 10.00::DECIMAL(18,16)::DECIMAL(16,15);
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	64	unreliable	SELECT 10.00::DECIMAL(38,36)::DECIMAL(36,35);
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	97	unreliable	SELECT 1.0::DECIMAL(3,1)::DECIMAL(1,1)
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	102	unreliable	SELECT 1.0::DECIMAL(9,1)::DECIMAL(1,1)
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	107	unreliable	SELECT 1.0::DECIMAL(18,1)::DECIMAL(1,1)
-test/sql/types/decimal/decimal_decimal_overflow_cast.test	112	unreliable	SELECT 1.0::DECIMAL(38,1)::DECIMAL(1,1)
-test/sql/types/decimal/decimal_exception.test	5	accepted	select cast('9.99' as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	10	unreliable	select cast(9.99::float as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	15	unreliable	select cast(9.99::double as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	20	unreliable	select cast(9.99 as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	25	unreliable	select cast(9.49 as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	30	unreliable	select cast(9.5 as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	36	unreliable	select cast(-9.99 as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	41	unreliable	select cast(-9.5 as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	52	unreliable	select cast(-9.999999999 as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	58	unreliable	select cast(9.9999999999999999999999999999999 as decimal(1,0));
-test/sql/types/decimal/decimal_exception.test	63	unreliable	select cast(-9.9999999999999999999999999999999 as decimal(1,0));
-test/sql/types/decimal/decimal_exponent.test	56	accepted	SELECT '1e4'::DECIMAL(4,0)
-test/sql/types/decimal/decimal_exponent.test	61	unreliable	SELECT '1e9'::DECIMAL(9,0)
-test/sql/types/decimal/decimal_exponent.test	66	unreliable	SELECT '1e18'::DECIMAL(18,0)
-test/sql/types/decimal/decimal_exponent.test	71	unreliable	SELECT '1e38'::DECIMAL(38,0)
-test/sql/types/decimal/decimal_exponent.test	77	unreliable	SELECT '1e100'::DECIMAL
-test/sql/types/decimal/decimal_exponent.test	190	unreliable	SELECT '5e-5'::DECIMAL(18,4)
-test/sql/types/decimal/decimal_exponent.test	195	unreliable	SELECT '4.9e-5'::DECIMAL(18,4)
-test/sql/types/decimal/decimal_exponent.test	200	unreliable	SELECT '5.5e-5'::DECIMAL(18,4)
-test/sql/types/decimal/decimal_exponent.test	217	unreliable	SELECT '5.5e-6'::DECIMAL(18,6)
-test/sql/types/decimal/decimal_exponent.test	222	unreliable	SELECT '5.5e-7'::DECIMAL(18,6)
-test/sql/types/decimal/decimal_exponent.test	227	unreliable	SELECT '5.5e-8'::DECIMAL(18,6)
-test/sql/types/decimal/decimal_overflow.test	11	accepted	select (99000000000000000.0::DECIMAL(18,1)+99000000000000000.0::DECIMAL(18,1))::VARCHAR::DECIMAL(18,1);
-test/sql/types/decimal/decimal_overflow.test	32	unreliable	select (9900000000000000000000000000000000000.0::DECIMAL(38,1)+9900000000000000000000000000000000000.0::DECIMAL(38,1));
-test/sql/types/decimal/decimal_overflow.test	37	unreliable	select (5000000000000000000000000000000000000.0::DECIMAL(38,1)+5000000000000000000000000000000000000.0::DECIMAL(38,1));
-test/sql/types/decimal/decimal_overflow.test	42	unreliable	select '10000000000000000000000000000000000000.0'::DECIMAL(38,1);
-test/sql/types/decimal/decimal_overflow.test	47	unreliable	select (-5000000000000000000000000000000000000.0::DECIMAL(38,1)-5000000000000000000000000000000000000.0::DECIMAL(38,1));
-test/sql/types/decimal/decimal_overflow.test	54	unreliable	select 90000000000000000.0::DECIMAL(18,1) * 10::DECIMAL(2,0);
-test/sql/types/decimal/decimal_overflow.test	59	unreliable	select 90000000000000000.0::DECIMAL(18,1) * 1000::DECIMAL(4,0);
-test/sql/types/decimal/decimal_overflow.test	65	unreliable	select 5000000000000000000000000000000000000.0::DECIMAL(38,1) * 2::DECIMAL(1,0);
-test/sql/types/decimal/decimal_overflow.test	71	unreliable	select 9900000000000000000000000000000000000.0::DECIMAL(38,1) * 1.0;
-test/sql/types/decimal/decimal_overflow_table.test	39	accepted	SELECT 2*d FROM decimals
-test/sql/types/decimal/decimal_promotion.test	50	unreliable	SELECT add_left + add_right FROM decimal_stats_overflow
-test/sql/types/decimal/decimal_promotion.test	55	unreliable	SELECT subtract_left - subtract_right FROM decimal_stats_overflow
-test/sql/types/decimal/decimal_promotion.test	60	unreliable	SELECT multiply_left * multiply_right FROM decimal_stats_overflow
-test/sql/types/decimal/decimal_try_cast.test	6	accepted	SELECT CAST(1000 AS DECIMAL(3,0))
-test/sql/types/decimal/decimal_try_cast.test	11	unreliable	SELECT CAST(100 AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	16	unreliable	SELECT CAST('100' AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	21	unreliable	SELECT CAST('100'::DOUBLE AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	26	unreliable	SELECT CAST(100::DECIMAL(3,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	31	unreliable	SELECT CAST(10000::DECIMAL(5,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	36	unreliable	SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	41	unreliable	SELECT CAST(1000000000::DECIMAL(20,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	46	unreliable	SELECT TRY_CAST(1000 AS DECIMAL(3,0))
-test/sql/types/decimal/decimal_try_cast.test	51	unreliable	SELECT TRY_CAST(100 AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	56	unreliable	SELECT TRY_CAST('100' AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	61	unreliable	SELECT TRY_CAST('100'::DOUBLE AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	66	unreliable	SELECT TRY_CAST(100::DECIMAL(3,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	71	unreliable	SELECT TRY_CAST(10000::DECIMAL(5,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	76	unreliable	SELECT TRY_CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	81	unreliable	SELECT TRY_CAST(1000000000::DECIMAL(20,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	87	unreliable	SELECT CAST(1000000 AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	92	unreliable	SELECT CAST('100000' AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	97	unreliable	SELECT CAST('100000'::DOUBLE AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	102	unreliable	SELECT CAST(100000::DECIMAL(6,0) AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	107	unreliable	SELECT CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	112	unreliable	SELECT CAST(1000000000::DECIMAL(20,0) AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	117	unreliable	SELECT TRY_CAST(1000000 AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	122	unreliable	SELECT TRY_CAST('100000' AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	127	unreliable	SELECT TRY_CAST('100000'::DOUBLE AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	132	unreliable	SELECT TRY_CAST(100000::DECIMAL(6,0) AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	137	unreliable	SELECT TRY_CAST(1000000000::DECIMAL(10,0) AS DECIMAL(2,0))
-test/sql/types/decimal/decimal_try_cast.test	142	unreliable	SELECT TRY_CAST(1000000000::DECIMAL(20,0) AS DECIMAL(5,0))
-test/sql/types/decimal/decimal_try_cast.test	148	unreliable	SELECT CAST(10000000000 AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	152	unreliable	SELECT CAST('10000000000' AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	156	unreliable	SELECT CAST('10000000000'::DOUBLE AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	160	unreliable	SELECT CAST(10000000000::DECIMAL(11,0) AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	164	unreliable	SELECT CAST(10000000000::DECIMAL(20,0) AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	168	unreliable	SELECT TRY_CAST(10000000000 AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	173	unreliable	SELECT TRY_CAST('10000000000' AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	178	unreliable	SELECT TRY_CAST('10000000000'::DOUBLE AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	183	unreliable	SELECT TRY_CAST(10000000000::DECIMAL(11,0) AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	188	unreliable	SELECT TRY_CAST(10000000000::DECIMAL(20,0) AS DECIMAL(10,0))
-test/sql/types/decimal/decimal_try_cast.test	198	unreliable	SELECT CAST('100000000000000000000' AS DECIMAL(20,0))
-test/sql/types/decimal/decimal_try_cast.test	202	unreliable	SELECT CAST('100000000000000000000'::DOUBLE AS DECIMAL(20,0))
-test/sql/types/decimal/decimal_try_cast.test	215	unreliable	SELECT TRY_CAST('100000000000000000000' AS DECIMAL(20,0))
-test/sql/types/decimal/decimal_try_cast.test	220	unreliable	SELECT TRY_CAST('100000000000000000000'::DOUBLE AS DECIMAL(20,0))
-test/sql/types/decimal/decimal_values_warning.test	12	unreliable	VALUES (32942348563242.111222333444555666777888::DECIMAL(38,24)), (NULL::NUMERIC);
-test/sql/types/decimal/decimal_values_warning.test	18	unreliable	VALUES (NULL::NUMERIC), (32942348563242.111222333444555666777888::DECIMAL(38,24));
-test/sql/types/decimal/test_decimal.test	12	wrong	SELECT '0.1'::DECIMAL::VARCHAR, '922337203685478.758'::DECIMAL::VARCHAR;
-test/sql/types/decimal/test_decimal.test	18	wrong	SELECT '-0.1'::DECIMAL::VARCHAR, '-922337203685478.758'::DECIMAL::VARCHAR;
-test/sql/types/decimal/test_decimal.test	24	wrong	SELECT '   7   '::DECIMAL::VARCHAR, '9.'::DECIMAL::VARCHAR, '.1'::DECIMAL::VARCHAR;
-test/sql/types/decimal/test_decimal.test	30	wrong	SELECT '0.123456789'::DECIMAL::VARCHAR, '-0.123456789'::DECIMAL::VARCHAR;
-test/sql/types/decimal/test_decimal.test	36	accepted	SELECT '9223372036854788.758'::DECIMAL;
-test/sql/types/decimal/test_decimal.test	42	unreliable	SELECT '0.1'::DECIMAL(3, 0)::VARCHAR;
-test/sql/types/decimal/test_decimal.test	48	unreliable	SELECT '123.4'::DECIMAL(9)::VARCHAR;
-test/sql/types/decimal/test_decimal.test	54	unreliable	SELECT '0.1'::DECIMAL(3, 3)::VARCHAR, '-0.1'::DECIMAL(3, 3)::VARCHAR;
-test/sql/types/decimal/test_decimal.test	60	unreliable	SELECT '1'::DECIMAL(3, 3)::VARCHAR;
-test/sql/types/decimal/test_decimal.test	65	unreliable	SELECT '-1'::DECIMAL(3, 3)::VARCHAR;
-test/sql/types/decimal/test_decimal.test	97	unreliable	select '123456789'::DECIMAL(18,3)::VARCHAR
-test/sql/types/decimal/test_decimal.test	102	unreliable	select '1701411834604692317316873037.1588410572'::DECIMAL(38,10)::VARCHAR
-test/sql/types/decimal/test_decimal.test	107	unreliable	select '0'::DECIMAL(38,10)::VARCHAR
-test/sql/types/decimal/test_decimal.test	112	unreliable	select '0.00003'::DECIMAL(38,10)::VARCHAR
-test/sql/types/decimal/test_decimal.test	135	unreliable	SELECT '0.1'::DECIMAL(3, 4);
-test/sql/types/decimal/test_decimal.test	153	unreliable	SELECT '0.1'::DECIMAL(40);
-test/sql/types/decimal/test_decimal.test	163	unreliable	SELECT '1'::INTEGER(1000);
-test/sql/types/decimal/test_decimal_2411.test	17	unreliable	select count(*) from decimals inner join decimals2 on (decimals.i = decimals2.i)
-test/sql/types/decimal/test_decimal_from_string.test	49	accepted	select cast('9.99' as decimal(1,0));
-test/sql/types/decimal/test_decimal_ops.test	66	wrong	DELETE FROM decimals WHERE d <> d::DECIMAL(9,1)
-test/sql/types/decimal/test_decimal_ops.test	165	wrong	SELECT ROUND('100.3908147521'::DECIMAL(18,10), 0)::VARCHAR,\n\t   ROUND('100.3908147521'::DECIMAL(18,10), 1)::VARCHAR,\n\t   ROUND('100.3908147521'::DECIMAL(18,10), 2)::VARCHAR,\n\t   ROUND('100.3908147521'::DECIMAL(18,10), 3)::VARCHAR,\n\t   ROUND('100.3908147521'::DECIMAL(18,10), 4)::VARCHAR,\n\t   ROUND('100.3908147521'::DECIMAL(18,10), 5)::VARCHAR,\n\t   ROUND('100.3908147521'::DECIMAL(18,10),...
-test/sql/types/decimal/test_decimal_ops.test	195	wrong	SELECT ROUND('1049578239572094512.32415'::DECIMAL(30,10), 0)::VARCHAR,\n\t   ROUND('1049578239572094512.32415'::DECIMAL(30,10), -1)::VARCHAR,\n\t   ROUND('1049578239572094512.32415'::DECIMAL(30,10), -2)::VARCHAR,\n\t   ROUND('1049578239572094512.32415'::DECIMAL(30,10), -3)::VARCHAR,\n\t   ROUND('1049578239572094512.32415'::DECIMAL(30,10), -4)::VARCHAR,\n\t   ROUND('1049578239572094512.32415'::DECI...
-test/sql/types/decimal/test_decimal_ops.test	241	wrong	SELECT ROUND('-100.3908147521'::DECIMAL(18,10), 0)::VARCHAR,\n\t   ROUND('-100.3908147521'::DECIMAL(18,10), 1)::VARCHAR,\n\t   ROUND('-100.3908147521'::DECIMAL(18,10), 2)::VARCHAR,\n\t   ROUND('-100.3908147521'::DECIMAL(18,10), 3)::VARCHAR,\n\t   ROUND('-100.3908147521'::DECIMAL(18,10), 4)::VARCHAR,\n\t   ROUND('-100.3908147521'::DECIMAL(18,10), 5)::VARCHAR,\n\t   ROUND('-100.3908147521'::DECIMAL(...
-test/sql/types/decimal/test_decimal_ops.test	270	wrong	SELECT ROUND('-1049578239572094512.32415'::DECIMAL(30,10), 0)::VARCHAR,\n\t   ROUND('-1049578239572094512.32415'::DECIMAL(30,10), -1)::VARCHAR,\n\t   ROUND('-1049578239572094512.32415'::DECIMAL(30,10), -2)::VARCHAR,\n\t   ROUND('-1049578239572094512.32415'::DECIMAL(30,10), -3)::VARCHAR,\n\t   ROUND('-1049578239572094512.32415'::DECIMAL(30,10), -4)::VARCHAR,\n\t   ROUND('-1049578239572094512.32415'...
+test/sql/types/decimal/test_decimal.test	163	accepted	SELECT '1'::INTEGER(1000);
 test/sql/types/float/ieee_floating_points.test	14	unreliable	SELECT val, val / 0::FLOAT FROM tbl
 test/sql/types/float/ieee_floating_points.test	24	unreliable	SELECT val, val % 0::FLOAT FROM tbl
 test/sql/types/float/ieee_floating_points.test	37	unreliable	SELECT val, val / 0::FLOAT FROM tbl
@@ -1000,30 +569,6 @@ test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::integer
 test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::FLOAT::bigint
 test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::bigint
 test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::bigint
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::FLOAT::DECIMAL(4,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::DECIMAL(4,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::DECIMAL(4,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::FLOAT::DECIMAL(9,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::DECIMAL(9,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::DECIMAL(9,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::FLOAT::DECIMAL(18,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::DECIMAL(18,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::DECIMAL(18,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::FLOAT::DECIMAL(38,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::FLOAT::DECIMAL(38,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::FLOAT::DECIMAL(38,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::DOUBLE::DECIMAL(4,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::DOUBLE::DECIMAL(4,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::DOUBLE::DECIMAL(4,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::DOUBLE::DECIMAL(9,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::DOUBLE::DECIMAL(9,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::DOUBLE::DECIMAL(9,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::DOUBLE::DECIMAL(18,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::DOUBLE::DECIMAL(18,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::DOUBLE::DECIMAL(18,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'nan'::DOUBLE::DECIMAL(38,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT 'inf'::DOUBLE::DECIMAL(38,1)
-test/sql/types/float/nan_cast.test	16	unreliable	SELECT '-inf'::DOUBLE::DECIMAL(38,1)
 test/sql/types/float/nan_functions.test	50	wrong	SELECT sign('nan'::FLOAT)
 test/sql/types/float/nan_functions.test	82	unreliable	select f, abs(f), exp(f), pow(f, 2), sqrt(case when f < 0 then NULL else f end), cbrt(f), ln(case when f < 0 then NULL else f end), degrees(f), radians(f), gamma(f), lgamma(f), atan(f), atan2(f, 0)\nfrom floats;
 test/sql/types/float/nan_functions.test	93	unreliable	select sin('inf'::FLOAT)
@@ -1084,9 +629,6 @@ test/sql/types/float/nan_ordering.test	83	unreliable	SELECT COUNT(*) FROM floats
 test/sql/types/float/nan_test.test	34	unreliable	select 'nan'::FLOAT <> 'nan'::FLOAT
 test/sql/types/float/nan_test.test	34	unreliable	select 'nan'::DOUBLE <> 'nan'::DOUBLE
 test/sql/types/float/nan_window.test	14	unreliable	SELECT f, SUM(i) OVER (PARTITION BY f) FROM floats ORDER BY f
-test/sql/types/float/nan_window.test	24	unreliable	SELECT f, i, SUM(i) OVER (ORDER BY f, i) FROM floats ORDER BY f, i
-test/sql/types/float/nan_window.test	34	unreliable	SELECT f, i, SUM(i) OVER (PARTITION BY f ORDER BY f, i) FROM floats ORDER BY f, i
-test/sql/types/float/nan_window.test	44	unreliable	SELECT i, f, SUM(i) OVER (ORDER BY i, f) FROM floats ORDER BY i, f
 test/sql/types/null/test_boolean_null.test	48	unreliable	SELECT\n    x,\n    x IS NULL,\n    x IS NOT NULL,\n    x IS DISTINCT FROM NULL,\n    x IS NOT DISTINCT FROM NULL,\n    NULL IS DISTINCT FROM x,\n    NULL IS NOT DISTINCT FROM x,\n    x IS DISTINCT FROM 1,\n    x IS NOT DISTINCT FROM 1\nFROM (VALUES (NULL), (1), (2)) t(x)\nORDER BY x
 test/sql/types/null/test_boolean_null.test	66	unreliable	SELECT\n    x,\n    (x + 1) IS DISTINCT FROM NULL,\n    (x + 1) IS NOT DISTINCT FROM NULL,\n    NULL IS DISTINCT FROM (x + 1),\n    NULL IS NOT DISTINCT FROM (x + 1)\nFROM (VALUES (NULL), (1), (2)) t(x)\nORDER BY x
 test/sql/types/null/test_boolean_null.test	92	unreliable	SELECT b, COUNT(a), SUM(a), MIN(a), MAX(a) FROM test GROUP BY b ORDER BY b
@@ -1097,161 +639,8 @@ test/sql/types/numeric/float_precision.test	47	accepted	SELECT CAST(NULL AS FLOA
 test/sql/types/numeric/float_precision.test	52	unreliable	SELECT CAST(NULL AS FLOAT(54));
 test/sql/types/numeric/float_precision.test	57	unreliable	CREATE TABLE float_precision_too_low(i FLOAT(0));
 test/sql/types/numeric/float_precision.test	62	unreliable	CREATE TABLE float_precision_too_high(i FLOAT(54));
-test/sql/types/numeric/integer_try_cast.test	162	accepted	SELECT i::DECIMAL(3,0)::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	166	unreliable	SELECT i::DECIMAL(9,0)::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	184	unreliable	SELECT i::DECIMAL(3,0)::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	188	unreliable	SELECT i::DECIMAL(9,0)::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	192	unreliable	SELECT i::DECIMAL(18,9)::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	196	unreliable	SELECT i::DECIMAL(38,29)::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	200	unreliable	SELECT TRY_CAST(i AS DECIMAL(3,0))::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	207	unreliable	SELECT TRY_CAST(i AS DECIMAL(9,0))::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	214	unreliable	SELECT TRY_CAST(i AS DECIMAL(18,9))::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/integer_try_cast.test	221	unreliable	SELECT TRY_CAST(i AS DECIMAL(38,29))::INTEGER FROM integers ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	160	accepted	SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	185	unreliable	SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	189	unreliable	SELECT i::DECIMAL(9,5)::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	193	unreliable	SELECT i::DECIMAL(18,14)::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	197	unreliable	SELECT i::DECIMAL(38,34)::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	201	unreliable	SELECT TRY_CAST(i AS DECIMAL(3,0))::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	208	unreliable	SELECT TRY_CAST(i AS DECIMAL(9,5))::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	215	unreliable	SELECT TRY_CAST(i AS DECIMAL(18,14))::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/smallint_try_cast.test	222	unreliable	SELECT TRY_CAST(i AS DECIMAL(38,34))::SMALLINT FROM smallints ORDER BY i
-test/sql/types/numeric/tinyint_try_cast.test	186	accepted	SELECT i::DECIMAL(3,1)::TINYINT FROM tinyints ORDER BY i
-test/sql/types/numeric/tinyint_try_cast.test	190	unreliable	SELECT i::DECIMAL(9,7)::TINYINT FROM tinyints ORDER BY i
-test/sql/types/numeric/tinyint_try_cast.test	194	unreliable	SELECT i::DECIMAL(18,16)::TINYINT FROM tinyints ORDER BY i
-test/sql/types/numeric/tinyint_try_cast.test	198	unreliable	SELECT i::DECIMAL(38,36)::TINYINT FROM tinyints ORDER BY i
-test/sql/types/numeric/tinyint_try_cast.test	202	unreliable	SELECT TRY_CAST(i AS DECIMAL(3,1))::TINYINT FROM tinyints ORDER BY i
-test/sql/types/numeric/tinyint_try_cast.test	209	unreliable	SELECT TRY_CAST(i AS DECIMAL(9,7))::TINYINT FROM tinyints ORDER BY i
-test/sql/types/numeric/tinyint_try_cast.test	216	unreliable	SELECT TRY_CAST(i AS DECIMAL(18,16))::TINYINT FROM tinyints ORDER BY i
-test/sql/types/numeric/tinyint_try_cast.test	223	unreliable	SELECT TRY_CAST(i AS DECIMAL(38,36))::TINYINT FROM tinyints ORDER BY i
-test/sql/types/string/test_unicode.test	20	wrong	SELECT substring(s, 1, 1), substring(s, 2, 1) FROM emojis ORDER BY id
-test/sql/types/string/test_unicode.test	31	wrong	SELECT substring('u🦆', -2, 1);
-test/sql/types/string/test_unicode.test	36	wrong	SELECT substring('A3🦤u🦆f', -3, 3);
-test/sql/types/string/test_unicode.test	41	wrong	SELECT substring('🦤🦆f', -3, 2);
-test/sql/types/time/test_time.test	11	wrong	SELECT * FROM times
-test/sql/types/time/test_time.test	20	wrong	SELECT cast(i AS VARCHAR) FROM times
-test/sql/types/time/test_time.test	29	accepted	SELECT ''::TIME
-test/sql/types/time/test_time.test	34	unreliable	SELECT '  '::TIME
-test/sql/types/time/test_time.test	39	unreliable	SELECT '  \t'::TIME
-test/sql/types/time/test_time.test	44	unreliable	SELECT '1'::TIME
-test/sql/types/time/test_time.test	49	unreliable	SELECT '11'::TIME
-test/sql/types/time/test_time.test	54	unreliable	SELECT '11:'::TIME
-test/sql/types/time/test_time.test	59	unreliable	SELECT '11:1'::TIME
-test/sql/types/time/test_time.test	64	unreliable	SELECT '11:11'::TIME
-test/sql/types/time/test_time.test	69	unreliable	SELECT '11:11:'::TIME
-test/sql/types/time/test_time.test	74	unreliable	SELECT '11:11:f'::TIME
-test/sql/types/time/test_time_2411.test	17	wrong	select count(*) from times inner join timestamp on (timestamp.i::TIME = times.i)
-test/sql/types/time/time_parsing.test	5	wrong	SELECT '14:42:04'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	11	wrong	SELECT '14:42:04.35'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	17	wrong	SELECT '14:42:04.999999'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	23	wrong	SELECT '14:42:04.999999999'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	29	wrong	SELECT '14:42:04.000000'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	34	wrong	SELECT '14:42:04.500'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	40	accepted	SELECT '50:42:04.500'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	45	unreliable	SELECT '100:42:04.500'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	50	unreliable	SELECT '14:70:04.500'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	55	unreliable	SELECT '14:100:04.500'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	60	unreliable	SELECT '14:42:70.500'::TIME::VARCHAR
-test/sql/types/time/time_parsing.test	66	unreliable	SELECT '14-42-04'::TIME::VARCHAR
-test/sql/types/time/time_try_cast.test	6	wrong	select try_cast('' as time)
-test/sql/types/time/time_try_cast.test	11	wrong	select try_cast('    ' as time)
-test/sql/types/time/time_try_cast.test	16	wrong	select try_cast('11' as time)
-test/sql/types/time/time_try_cast.test	21	wrong	select try_cast('11:' as time)
-test/sql/types/time/time_try_cast.test	26	wrong	select try_cast('11:11' as time)
-test/sql/types/time/time_try_cast.test	31	wrong	select try_cast('11:11:' as time)
-test/sql/types/time/time_try_cast.test	36	wrong	select try_cast('11:11:A' as time)
-test/sql/types/time/time_try_cast.test	41	wrong	select try_cast('11:11:A1' as time)
-test/sql/types/time/time_try_cast.test	51	wrong	select try_cast('  11:11:11  ' as time)
-test/sql/types/time/time_try_cast.test	57	wrong	select try_cast('24:00:00' as time)
-test/sql/types/time/time_try_cast.test	62	wrong	select try_cast('24:00:01' as time)
-test/sql/types/time/time_try_cast.test	67	wrong	select try_cast('23:60:00' as time)
-test/sql/types/time/time_try_cast.test	72	wrong	select try_cast('23:59:60' as time)
-test/sql/types/time/time_try_cast.test	77	wrong	select try_cast('23:59:59' as time)
-test/sql/types/time/time_try_cast.test	82	wrong	select try_cast('23:59:59.999999' as time)
-test/sql/types/time/time_try_cast.test	87	wrong	select try_cast('24:00:00' as time)
-test/sql/types/timestamp/alternative_timestamp_casts.test	20	wrong	select '2023-12-08 08:51:39.123456'::TIMESTAMP_MS::TIME;
-test/sql/types/timestamp/alternative_timestamp_casts.test	25	wrong	select '2023-12-08 08:51:39.123456'::TIMESTAMP_S::TIME;
-test/sql/types/timestamp/alternative_timestamp_casts.test	30	wrong	select '2023-12-08 08:51:39.123456'::TIMESTAMP_NS::TIME;
-test/sql/types/timestamp/alternative_timestamp_casts.test	36	wrong	select '2024-05-10 11:06:33.446'::TIMESTAMP_S;
-test/sql/types/timestamp/alternative_timestamp_casts.test	41	wrong	select '2024-05-10 11:06:33.846'::TIMESTAMP_S;
-test/sql/types/timestamp/alternative_timestamp_casts.test	46	wrong	select '2024-05-10 11:06:33.123446'::TIMESTAMP_MS;
-test/sql/types/timestamp/alternative_timestamp_casts.test	51	wrong	select '2024-05-10 11:06:33.123846'::TIMESTAMP_MS;
-test/sql/types/timestamp/alternative_timestamp_casts.test	68	wrong	SELECT t, t::TIMESTAMP_MS, t::TIMESTAMP_S\nFROM issue11995
-test/sql/types/timestamp/bc_timestamp.test	5	wrong	SELECT '1969-01-01 01:03:20.45432'::TIMESTAMP::VARCHAR
-test/sql/types/timestamp/test_incorrect_timestamp.test	23	accepted	INSERT INTO timestamp VALUES ('1993-02-29 00:00:00')
-test/sql/types/timestamp/test_incorrect_timestamp.test	28	unreliable	INSERT INTO timestamp VALUES ('1900-02-29 00:00:00')
-test/sql/types/timestamp/test_infinite_time.test	49	unreliable	SELECT * FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	65	unreliable	SELECT * FROM abbreviations;
-test/sql/types/timestamp/test_infinite_time.test	135	unreliable	SELECT MIN(ts), MAX(ts), MIN(tstz), MAX(tstz), MIN(dt), MAX(dt)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	141	unreliable	SELECT MEDIAN(ts), MEDIAN(tstz), MEDIAN(dt)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	154	unreliable	SELECT APPROX_COUNT_DISTINCT(ts), APPROX_COUNT_DISTINCT(tstz), APPROX_COUNT_DISTINCT(dt)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(ts, ts), ARG_MAX(ts, ts) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(ts, tstz), ARG_MAX(ts, tstz) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(ts, dt), ARG_MAX(ts, dt) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(tstz, ts), ARG_MAX(tstz, ts) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(tstz, tstz), ARG_MAX(tstz, tstz) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(tstz, dt), ARG_MAX(tstz, dt) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(dt, ts), ARG_MAX(dt, ts) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(dt, tstz), ARG_MAX(dt, tstz) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	182	unreliable	SELECT ARG_MIN(dt, dt), ARG_MAX(dt, dt) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	191	unreliable	SELECT HISTOGRAM(ts), HISTOGRAM(tstz), HISTOGRAM(dt)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	197	unreliable	SELECT QUANTILE_DISC(ts, 0.32), QUANTILE_DISC(tstz, 0.32), QUANTILE_DISC(dt, 0.32)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	209	unreliable	SELECT QUANTILE_CONT(ts, 0.25), QUANTILE_CONT(tstz, 0.25), QUANTILE_CONT(dt, 0.25)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	221	unreliable	SELECT MAD(ts), MAD(tstz), MAD(dt)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	228	unreliable	SELECT ENTROPY(ts), ENTROPY(tstz), ENTROPY(dt) FROM specials;
-test/sql/types/timestamp/test_infinite_time.test	265	unreliable	SELECT dt + 1, dt - 1 FROM specials
-test/sql/types/timestamp/test_infinite_time.test	281	unreliable	SELECT isfinite(ts), isfinite(tstz), isfinite(dt)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	289	unreliable	SELECT isinf(ts), isinf(tstz), isinf(dt)\nFROM specials;
-test/sql/types/timestamp/test_infinite_time.test	299	unreliable	select ts::VARCHAR, tstz::VARCHAR, dt::VARCHAR FROM specials
-test/sql/types/timestamp/test_infinite_time.test	306	unreliable	select ts::TIME, tstz::TIME, dt::TIME FROM specials
-test/sql/types/timestamp/test_infinite_time.test	310	unreliable	select 'infinity'::TIME;
 test/sql/types/timestamp/test_timestamp.test	50	unreliable	SELECT t FROM timestamp ORDER BY t;
 test/sql/types/timestamp/test_timestamp.test	97	unreliable	SELECT t-t FROM timestamp
-test/sql/types/timestamp/test_timestamp.test	124	unreliable	SELECT (TIMESTAMP '1992-01-01 01:01:01')::TIME;
-test/sql/types/timestamp/test_timestamp.test	134	unreliable	SELECT t::TIME FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1
-test/sql/types/timestamp/test_timestamp.test	144	unreliable	SELECT TIMESTAMP '2008-01-01 00:00:01.5'::VARCHAR
-test/sql/types/timestamp/test_timestamp_tz.test	12	wrong	select '2021-11-15 02:30:00'::TIMESTAMP::TIMESTAMPTZ;
-test/sql/types/timestamp/timestamp_precision.test	16	unreliable	SELECT sec::VARCHAR, msec::VARCHAR, micros::VARCHAR, nanos::VARCHAR FROM ts_precision
-test/sql/types/timestamp/timestamp_precision.test	21	unreliable	SELECT EXTRACT(microseconds FROM sec), EXTRACT(microseconds FROM msec), EXTRACT(microseconds FROM micros), EXTRACT(microseconds FROM nanos) FROM ts_precision
-test/sql/types/timestamp/timestamp_try_cast.test	56	wrong	select try_cast('1111-11-11 11:11' as timestamp)
-test/sql/types/timestamp/timestamp_try_cast.test	92	wrong	select try_cast('290309-12-22 (BC) 00:00:00' as timestamp)
-test/sql/types/timestamp/timestamp_try_cast.test	97	wrong	select try_cast('294247-01-10 04:00:54.775806' as timestamp)
-test/sql/types/timestamp/timestamp_try_cast.test	102	wrong	select try_cast('infinity' as timestamp)
-test/sql/types/timestamp/timestamp_try_cast.test	107	wrong	select try_cast('-infinity' as timestamp)
-test/sql/window/test_basic_window.test	133	wrong	SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m2, AVG(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno
-test/sql/window/test_basic_window.test	148	wrong	SELECT depname, STDDEV_POP(salary) OVER (PARTITION BY depname ORDER BY salary, empno) s FROM empsalary ORDER BY depname, empno
-test/sql/window/test_basic_window.test	163	wrong	SELECT depname, COVAR_POP(salary, empno) OVER (PARTITION BY depname ORDER BY salary, empno) c FROM empsalary ORDER BY depname, empno
-test/sql/window/test_duplicate_partition.test	56	wrong	SELECT\n\tSUM(v) OVER (PARTITION BY a, a ORDER BY b, v),\n\tSUM(v) OVER (PARTITION BY a ORDER BY b),\n\tMAX(v) OVER (PARTITION BY a)\nFROM src\nORDER BY b;
-test/sql/window/test_duplicate_partition.test	68	wrong	SELECT\n\tSUM(v) OVER (PARTITION BY a, a ORDER BY b),\n\tSUM(v) OVER (PARTITION BY a ORDER BY b, v),\n\tMAX(v) OVER (PARTITION BY a, a, a)\nFROM src\nORDER BY b;
-test/sql/window/test_evil_window.test	35	wrong	SELECT empno, sum(salary*2) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary ORDER BY depname, empno
-test/sql/window/test_fill_physical_types.test	40	wrong	SELECT i, fill(value) OVER (ORDER BY i) AS filled\nFROM (VALUES (0, NULL::INTEGER), (1, 1), (2, NULL::INTEGER)) t(i, value)\nORDER BY i;
-test/sql/window/test_naive_aggregation.test	48	unreliable	SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m2, AVG(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno
-test/sql/window/test_naive_aggregation.test	63	unreliable	SELECT depname, STDDEV_POP(salary) OVER (PARTITION BY depname ORDER BY salary, empno) s FROM empsalary ORDER BY depname, empno
-test/sql/window/test_naive_aggregation.test	78	unreliable	SELECT depname, COVAR_POP(salary, empno) OVER (PARTITION BY depname ORDER BY salary, empno) c FROM empsalary ORDER BY depname, empno
-test/sql/window/test_no_default_window_spec.test	12	wrong	SELECT four, ten, sum(ten) over (partition by four order by ten) st, last_value(ten) over (partition by four order by ten) lt FROM tenk1d ORDER BY four, ten
-test/sql/window/test_scalar_window.test	11	wrong	SELECT avg(42) OVER ()
-test/sql/window/test_scalar_window.test	17	accepted	SELECT concat() OVER ()
-test/sql/window/test_scalar_window.test	22	unreliable	SELECT nonexistingfunction() OVER ()
-test/sql/window/test_scalar_window.test	28	unreliable	SELECT avg(row_number() over ()) over ()
-test/sql/window/test_scalar_window.test	38	unreliable	SELECT avg(42) over (order by row_number() over ())
-test/sql/window/test_streaming_window.test	18	wrong	EXPLAIN\nSELECT i, COUNT(*) OVER() FROM integers;
-test/sql/window/test_streaming_window.test	24	wrong	EXPLAIN\nSELECT i, SUM(i) OVER() FROM integers;
-test/sql/window/test_streaming_window.test	50	wrong	explain select row_number() over (), i, j from integers
-test/sql/window/test_streaming_window.test	64	wrong	explain select row_number() over (), i, j from integers where i>1
-test/sql/window/test_streaming_window.test	75	wrong	explain select rank() over (), i, j from integers
-test/sql/window/test_streaming_window.test	88	wrong	explain select dense_rank() over (), i, j from integers
-test/sql/window/test_streaming_window.test	101	wrong	explain select percent_rank() over (), i, j from integers
-test/sql/window/test_streaming_window.test	106	wrong	select percent_rank() over (), i, j from integers
-test/sql/window/test_streaming_window.test	283	wrong	explain select i, j, first_value(i) over (), first_value(j) over () from integers
-test/sql/window/test_streaming_window.test	524	wrong	explain select first_value(i) over (), last_value(i) over () from integers
-test/sql/window/test_streaming_window.test	529	wrong	explain select last_value(i) over (), first_value(i) over () from integers
-test/sql/window/test_streaming_window.test	534	wrong	explain select first_value(i) over (), last_value(i) over (order by j) from integers
-test/sql/window/test_streaming_window.test	539	wrong	explain select last_value(i) over (order by j), first_value(i) over () from integers
 test/sql/window/test_streaming_window.test	578	wrong	WITH RECURSIVE rte AS (\n\tSELECT 1 l, 1::BIGINT r\n\tUNION  ALL\n\tSELECT l+1, row_number() OVER()\n\tFROM rte\n\tWHERE l < 3\n)\nSELECT * FROM rte;
 test/sql/window/test_window_wisconsin.test	157	unreliable	SELECT ntile(4) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
 test/sql/window/test_window_wisconsin.test	186	unreliable	SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
-test/sql/window/test_window_wisconsin.test	214	unreliable	SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
-test/sql/window/test_window_wisconsin.test	228	unreliable	SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
-test/sql/window/test_window_wisconsin.test	242	unreliable	SELECT lag(ten, four, 0, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
-test/sql/window/test_window_wisconsin.test	261	unreliable	SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
-test/sql/window/test_window_wisconsin.test	275	unreliable	SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt

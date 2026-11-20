@@ -1321,21 +1321,15 @@ QueryResult Connection::Query(const std::string &sql) {
                         double d;
                         if (to_double(d)) return Value::FLOAT(static_cast<float>(d));
                     }
-                    if (dst_id == LogicalTypeId::DATE && src_id == LogicalTypeId::VARCHAR) {
-                        auto s = src.GetValue<std::string>();
-                        int32_t days;
-                        if (Value::TryParseDateStringEpochDays(s.data(), s.size(), days)) {
-                            return Value::DATE(days);
-                        }
-                    }
-                    if ((dst_id == LogicalTypeId::TIMESTAMP ||
+                    if ((dst_id == LogicalTypeId::DATE || dst_id == LogicalTypeId::TIME ||
+                         dst_id == LogicalTypeId::TIMESTAMP ||
                          dst_id == LogicalTypeId::TIMESTAMP_TZ) &&
                         src_id == LogicalTypeId::VARCHAR) {
-                        auto s = src.GetValue<std::string>();
-                        int64_t micros;
-                        if (Value::TryParseTimestampMicros(s.data(), s.size(), micros)) {
-                            return Value::TIMESTAMP(micros);
-                        }
+                        // DuckDB's grammar; text it rejects is an error,
+                        // not a value (design L19).
+                        return Value::ParseTemporal(src.GetValue<std::string>(),
+                                                    dst_id == LogicalTypeId::TIMESTAMP_TZ
+                                                        ? LogicalTypeId::TIMESTAMP : dst_id);
                     }
                     // Fallback: let SetValue do whatever it does (legacy
                     // behavior); at least we tried the typed paths.

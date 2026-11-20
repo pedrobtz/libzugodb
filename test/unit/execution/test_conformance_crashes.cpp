@@ -287,8 +287,10 @@ TEST_CASE("Stage 7: substring with nullable BIGINT bounds under FILTER") {
                     "FROM nullable_substring_bounds") == Rows{{"1", "1", "2"}});
     CHECK(Run(conn, "SELECT substring(v, off, len) FROM nullable_substring_bounds") ==
           Rows{{"NULL"}, {"NULL"}, {"a"}});
-    // Bounds past the 32-bit range.
-    CHECK(Run(conn, "SELECT substring('hello', 2, 4294967297), substring('hello', 4294967298, 2), "
-                    "substring('hello', -4294967296, 4294967299)") ==
-          Rows{{"ello", "", "he"}});
+    // Bounds past DuckDB's range, +-2^32: an error, as DuckDB's
+    // (test_substring.test; Stage 8 made them errors).
+    CHECK_THROWS(conn.Query("SELECT substring('hello', 2, 4294967297)"));
+    CHECK_THROWS(conn.Query("SELECT substring('hello', 4294967298, 2)"));
+    CHECK_THROWS(conn.Query("SELECT substring('hello', -4294967297, 2)"));
+    CHECK(Run(conn, "SELECT substring('hello', -4294967296, 4294967295)") == Rows{{"hell"}});
 }

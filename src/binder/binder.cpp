@@ -1062,29 +1062,13 @@ BoundExprPtr Binder::BindConstant(const ConstantExpression &expr) {
         return std::make_unique<BoundConstant>(Value::BOOLEAN(true));
     case TokenType::KW_FALSE:
         return std::make_unique<BoundConstant>(Value::BOOLEAN(false));
-    case TokenType::KW_DATE: {
-        // SQL-92 typed literal DATE 'YYYY-MM-DD' — parsed at the
-        // expression-grammar level so the binder receives a string
-        // tagged with the DATE token; convert via the existing helper.
-        int32_t days;
-        if (!Value::TryParseDateStringEpochDays(expr.value.data(), expr.value.size(), days)) {
-            throw ParserException("Invalid DATE literal '" + expr.value + "'");
-        }
-        return std::make_unique<BoundConstant>(Value::DATE(days));
-    }
-    case TokenType::KW_TIMESTAMP: {
-        int64_t micros;
-        if (!Value::TryParseTimestampMicros(expr.value.data(), expr.value.size(), micros)) {
-            int32_t days;
-            if (!Value::TryParseDateStringEpochDays(expr.value.data(), expr.value.size(), days)) {
-                throw ParserException("Invalid TIMESTAMP literal '" + expr.value + "'");
-            }
-            micros = static_cast<int64_t>(days) * 86400LL * 1000000LL;
-        }
-        return std::make_unique<BoundConstant>(Value::TIMESTAMP(micros));
-    }
+    case TokenType::KW_DATE:
+        // SQL-92 typed literals, read by DuckDB's grammar (design L19).
+        return std::make_unique<BoundConstant>(Value::ParseTemporal(expr.value, LogicalTypeId::DATE));
+    case TokenType::KW_TIMESTAMP:
+        return std::make_unique<BoundConstant>(Value::ParseTemporal(expr.value, LogicalTypeId::TIMESTAMP));
     case TokenType::KW_TIME:
-        throw NotImplementedException("TIME literal not yet supported");
+        return std::make_unique<BoundConstant>(Value::ParseTemporal(expr.value, LogicalTypeId::TIME));
     default:
         throw InternalException("Unknown constant literal type");
     }
@@ -1326,10 +1310,35 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         name = "LENGTH";
     }
     bool is_agg = IsAggregateFunction(name);
+    // DuckDB's aggregates the engine does not have. Bound as an unknown
+    // scalar function, one was an error per row, so over no rows it gave
+    // no row where DuckDB gives one (Stage 8, #12).
+    static const char *const kMissingAggregates[] = {
+        "ANY_VALUE", "ARBITRARY", "FIRST", "LAST", "ARG_MAX", "ARG_MIN", "ARGMAX", "ARGMIN",
+        "MAX_BY", "MIN_BY", "ARG_MAX_NULL", "ARG_MIN_NULL", "APPROX_COUNT_DISTINCT",
+        "APPROX_QUANTILE", "APPROX_TOP_K", "RESERVOIR_QUANTILE", "MEAN", "BIT_AND", "BIT_OR",
+        "BIT_XOR", "BITSTRING_AGG", "COUNT_IF", "COUNTIF", "CORR", "COVAR_POP", "COVAR_SAMP",
+        "ENTROPY", "FAVG", "FSUM", "SUMKAHAN", "KAHAN_SUM", "GEOMEAN", "GEOMETRIC_MEAN",
+        "HISTOGRAM", "HISTOGRAM_EXACT", "KURTOSIS", "KURTOSIS_POP", "LIST", "ARRAY_AGG", "MAD",
+        "MODE", "PRODUCT", "QUANTILE", "QUANTILE_CONT", "QUANTILE_DISC", "PERCENTILE_CONT",
+        "PERCENTILE_DISC", "REGR_AVGX", "REGR_AVGY", "REGR_COUNT", "REGR_INTERCEPT", "REGR_R2",
+        "REGR_SLOPE", "REGR_SXX", "REGR_SXY", "REGR_SYY", "SEM", "SKEWNESS", "SUM_NO_OVERFLOW",
+        "WEIGHTED_AVG", "WAVG", "BOOL_XOR"};
+    for (auto *m : kMissingAggregates) {
+        if (name == m) throw NotImplementedException("Aggregate function " + name + " is not supported");
+    }
 
     std::vector<BoundExprPtr> args;
     for (auto &arg : expr.arguments) {
         args.push_back(BindExpression(*arg, context));
+    }
+    // STRING_AGG's separator: a constant string (NULL and a column are
+    // not computed as DuckDB does).
+    if ((name == "STRING_AGG" || name == "LISTAGG" || name == "GROUP_CONCAT") && args.size() == 2) {
+        bool ok = args[1]->GetExpressionType() == BoundExpressionType::CONSTANT &&
+                  !static_cast<const BoundConstant &>(*args[1]).value.IsNull() &&
+                  static_cast<const BoundConstant &>(*args[1]).value.type().id() == LogicalTypeId::VARCHAR;
+        if (!ok) throw NotImplementedException(name + " with a separator other than a string constant is not supported");
     }
 
     // Reject nested aggregates (`SUM(COUNT(*))`, `AVG(SUM(x))`). SQL
@@ -1903,6 +1912,64 @@ BoundExprPtr Binder::BindCast(const CastExpression &expr, BindContext &context) 
     return std::make_unique<BoundCast>(std::move(child), target, expr.is_try);
 }
 
+// The window operator (PhysicalWindow) computes these functions, each
+// over a column, with the frames SQL gives them by default; any other
+// shape it computed wrongly (a NULL, the whole partition for a running
+// frame, the first ORDER BY key alone for peers), so it is refused here
+// (Stage 8, #12; design L21).
+static void CheckWindowShape(const std::string &name, const WindowExpression &expr,
+                             const std::vector<BoundExprPtr> &args,
+                             const std::vector<BoundWindowOrder> &order) {
+    auto refuse = [&](const std::string &what) {
+        throw NotImplementedException("Window function " + name + ": " + what + " is not supported");
+    };
+    bool ranking = name == "ROW_NUMBER" || name == "RANK" || name == "DENSE_RANK" || name == "NTILE";
+    bool offset = name == "LAG" || name == "LEAD";
+    bool value = name == "FIRST_VALUE" || name == "LAST_VALUE";
+    bool aggregate = name == "SUM" || name == "COUNT" || name == "AVG" || name == "MIN" || name == "MAX";
+    if (!ranking && !offset && !value && !aggregate) refuse("this function");
+    if (expr.is_distinct) refuse("DISTINCT");
+    if (expr.filter) refuse("FILTER");
+    auto is_column = [](const BoundExpression &e) {
+        return e.GetExpressionType() == BoundExpressionType::COLUMN_REF;
+    };
+    auto is_int_constant = [](const BoundExpression &e) {
+        if (e.GetExpressionType() != BoundExpressionType::CONSTANT) return false;
+        auto &v = static_cast<const BoundConstant &>(e).value;
+        auto t = v.type().id();
+        return !v.IsNull() && (t == LogicalTypeId::INTEGER || t == LogicalTypeId::BIGINT);
+    };
+    if (name == "ROW_NUMBER" || name == "RANK" || name == "DENSE_RANK") {
+        if (!args.empty()) refuse("an argument");
+    } else if (name == "NTILE") {
+        if (args.size() != 1 || !is_int_constant(*args[0])) refuse("an argument other than an integer");
+    } else if (offset) {
+        if (args.empty() || args.size() > 2 || !is_column(*args[0]) ||
+            (args.size() == 2 && !is_int_constant(*args[1]))) {
+            refuse("arguments other than a column and an integer offset");
+        }
+    } else if (name == "COUNT" && args.empty()) {
+        // COUNT(*)
+    } else if (args.size() != 1 || !is_column(*args[0])) {
+        refuse("an argument other than one column");
+    }
+    if ((name == "SUM" || name == "AVG") && !args.empty()) {
+        auto t = args[0]->GetReturnType().id();
+        if (t != LogicalTypeId::TINYINT && t != LogicalTypeId::SMALLINT && t != LogicalTypeId::INTEGER &&
+            t != LogicalTypeId::BIGINT && t != LogicalTypeId::FLOAT && t != LogicalTypeId::DOUBLE) {
+            refuse("an argument of type " + args[0]->GetReturnType().ToString());
+        }
+    }
+    for (auto &o : order) {
+        if (!is_column(*o.expression)) refuse("an ORDER BY key other than a column");
+    }
+    // Peers by one key only, and LAST_VALUE's frame end at the current
+    // row's last peer is not computed.
+    bool peers = name == "RANK" || name == "DENSE_RANK" || aggregate;
+    if (peers && order.size() > 1) refuse("ORDER BY with more than one key");
+    if (name == "LAST_VALUE" && !order.empty()) refuse("ORDER BY");
+}
+
 BoundExprPtr Binder::BindWindow(const WindowExpression &expr, BindContext &context) {
     auto name = StringUtil::Upper(expr.function_name);
 
@@ -1940,11 +2007,7 @@ BoundExprPtr Binder::BindWindow(const WindowExpression &expr, BindContext &conte
         bo.ascending = o.ascending;
         window->order_by.push_back(std::move(bo));
     }
-    // SQL:2003 FILTER on window aggregates — same per-row semantics as
-    // BindFunction's filter (NULL filter result acts as false).
-    if (expr.filter) {
-        window->filter = BindExpression(*expr.filter, context);
-    }
+    CheckWindowShape(name, expr, window->arguments, window->order_by);
 
     return window;
 }
@@ -2097,20 +2160,30 @@ LogicalType Binder::ResolveTypeName(const std::string &name) {
     if (base == "BLOB" || base == "BYTEA") return LogicalType::BLOB();
     if (base == "DATE") return LogicalType::DATE();
     if (base == "TIME") return LogicalType::TIME();
-    if (base == "TIMESTAMP" || base == "TIMESTAMPTZ" ||
-        base == "TIMESTAMP_S" || base == "TIMESTAMP_MS" ||
-        base == "TIMESTAMP_NS" || base == "DATETIME")
-        return LogicalType::TIMESTAMP();
+    // The engine's TIMESTAMP is DuckDB's: microseconds, no time zone.
+    // DuckDB's seconds, milliseconds and nanoseconds timestamps and its
+    // TIMESTAMPTZ round, print and compare otherwise; aliased to TIMESTAMP
+    // they gave wrong values, so they are refused (Stage 8, #12). So is a
+    // precision other than DuckDB's microsecond ones, 4 to 6.
+    if (base == "TIMESTAMP_S" || base == "TIMESTAMP_MS" || base == "TIMESTAMP_NS" ||
+        base == "TIMESTAMPTZ" || base == "TIMESTAMP_TZ" || base == "TIMETZ" ||
+        base == "TIME_TZ") {
+        throw NotImplementedException(base + " is not supported");
+    }
+    if (base == "TIMESTAMP" && upper != base) {
+        auto p = upper.substr(base.size());
+        if (p != "(4)" && p != "(5)" && p != "(6)") {
+            throw NotImplementedException("TIMESTAMP" + p + " is not supported");
+        }
+    }
+    if (base == "TIMESTAMP" || base == "DATETIME") return LogicalType::TIMESTAMP();
 
     if (base == "DECIMAL" || base == "NUMERIC") {
-        // SlothDB has no native DECIMAL execution path: INSERT into
-        // DECIMAL columns silently stored zeros, SUM/AVG returned 0,
-        // and CAST AS DECIMAL produced 0. Until a real fixed-point
-        // codepath lands, alias DECIMAL/NUMERIC to DOUBLE so the
-        // queries work with approximate semantics instead of silent
-        // wrong results. Width/scale parameters are parsed and
-        // discarded (matches MySQL's "approximate DECIMAL" pragma).
-        return LogicalType::DOUBLE();
+        // The engine has no fixed-point type: DECIMAL(p,s) bound to DOUBLE
+        // and dropped p and s, so its arithmetic, rounding, text and
+        // overflow were a double's, not DuckDB's. Refused until a real
+        // DECIMAL exists (#26). Decimal literals (1.5) stay DOUBLE.
+        throw NotImplementedException(base + " is not supported");
     }
 
     throw BinderException(ErrorCode::TYPE_MISMATCH, "Unknown type: " + name);

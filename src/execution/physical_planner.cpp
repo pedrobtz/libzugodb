@@ -5098,22 +5098,52 @@ private:
         int64_t count = 0;
         double min_d = 0, max_d = 0;
         bool has_mm = false;
+        if (info.arg_col != INVALID_INDEX &&
+            (info.arg_tid == LogicalTypeId::INTEGER || info.arg_tid == LogicalTypeId::BIGINT ||
+             info.arg_tid == LogicalTypeId::SMALLINT || info.arg_tid == LogicalTypeId::TINYINT)) {
+            // Integers in 64 bits, exactly: through a double, a sum or a
+            // bound past 2^53 lost its low digits, and a sum of NULLs was 0
+            // (Stage 8, #12). A sum past BIGINT is DuckDB's HUGEINT, which
+            // the engine does not have: refused.
+            int64_t isum = 0, imin = 0, imax = 0;
+            for (idx_t k = 0; k < ps; k++) {
+                idx_t idx = indices[k];
+                if (input_.IsNull(idx, info.arg_col)) continue;
+                int64_t d;
+                if (info.arg_tid == LogicalTypeId::INTEGER) d = input_.GetInt32(idx, info.arg_col);
+                else if (info.arg_tid == LogicalTypeId::BIGINT) d = input_.GetInt64(idx, info.arg_col);
+                else {
+                    auto v = input_.Get(idx, info.arg_col);
+                    d = info.arg_tid == LogicalTypeId::SMALLINT ? v.GetValue<int16_t>() : v.GetValue<int8_t>();
+                }
+                if ((d > 0 && isum > std::numeric_limits<int64_t>::max() - d) ||
+                    (d < 0 && isum < std::numeric_limits<int64_t>::min() - d)) {
+                    if (info.fn == WF_SUM || info.fn == WF_AVG)
+                        throw OutOfRangeException("Window " + std::string(info.fn == WF_SUM ? "SUM" : "AVG") +
+                                                  " is out of the range of BIGINT");
+                }
+                isum += d;
+                if (count == 0 || d < imin) imin = d;
+                if (count == 0 || d > imax) imax = d;
+                count++;
+            }
+            if (info.fn == WF_COUNT) return Value::BIGINT(count);
+            if (count == 0) return Value();
+            if (info.fn == WF_SUM) return Value::BIGINT(isum);
+            if (info.fn == WF_AVG) return Value::DOUBLE(static_cast<double>(isum) / static_cast<double>(count));
+            int64_t m = info.fn == WF_MIN ? imin : imax;
+            if (info.fn == WF_MIN || info.fn == WF_MAX) {
+                switch (info.arg_tid) {
+                case LogicalTypeId::TINYINT: return Value::TINYINT(static_cast<int8_t>(m));
+                case LogicalTypeId::SMALLINT: return Value::SMALLINT(static_cast<int16_t>(m));
+                case LogicalTypeId::INTEGER: return Value::INTEGER(static_cast<int32_t>(m));
+                default: return Value::BIGINT(m);
+                }
+            }
+            return Value();
+        }
         if (info.arg_col == INVALID_INDEX) {
             count = static_cast<int64_t>(ps);
-        } else if (info.arg_tid == LogicalTypeId::INTEGER) {
-            for (idx_t k = 0; k < ps; k++) { idx_t idx = indices[k]; if (!input_.IsNull(idx, info.arg_col)) {
-                double d = input_.GetInt32(idx, info.arg_col);
-                count++; sum += d;
-                if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-            } }
-        } else if (info.arg_tid == LogicalTypeId::BIGINT) {
-            for (idx_t k = 0; k < ps; k++) { idx_t idx = indices[k]; if (!input_.IsNull(idx, info.arg_col)) {
-                double d = static_cast<double>(input_.GetInt64(idx, info.arg_col));
-                count++; sum += d;
-                if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-            } }
         } else if (info.arg_tid == LogicalTypeId::DOUBLE) {
             for (idx_t k = 0; k < ps; k++) { idx_t idx = indices[k]; if (!input_.IsNull(idx, info.arg_col)) {
                 double d = input_.GetDouble(idx, info.arg_col);
@@ -5133,6 +5163,7 @@ private:
                     if (tid == LogicalTypeId::INTEGER) d = v.GetValue<int32_t>();
                     else if (tid == LogicalTypeId::BIGINT) d = static_cast<double>(v.GetValue<int64_t>());
                     else if (tid == LogicalTypeId::DOUBLE) d = v.GetValue<double>();
+                    else if (tid == LogicalTypeId::FLOAT) d = v.GetValue<float>();
                     sum += d;
                     if (!has_mm || v < min_v) min_v = v;
                     if (!has_mm || v > max_v) max_v = v;
@@ -5141,6 +5172,7 @@ private:
             }
             if (info.fn == WF_COUNT) return Value::BIGINT(count);
             if (info.fn == WF_SUM) {
+                if (count == 0) return Value();
                 if (info.arg_tid == LogicalTypeId::DOUBLE || info.arg_tid == LogicalTypeId::FLOAT)
                     return Value::DOUBLE(sum);
                 return Value::BIGINT(static_cast<int64_t>(sum));
@@ -5152,6 +5184,7 @@ private:
         }
         if (info.fn == WF_COUNT) return Value::BIGINT(count);
         if (info.fn == WF_SUM) {
+            if (count == 0) return Value();
             // Return type matches argument's numeric type (DOUBLE for DOUBLE, BIGINT otherwise).
             if (info.arg_tid == LogicalTypeId::DOUBLE) return Value::DOUBLE(sum);
             return Value::BIGINT(static_cast<int64_t>(sum));
@@ -5876,116 +5909,15 @@ private:
             case WF_AVG:
             case WF_MIN:
             case WF_MAX: {
-                // Aggregate over whole partition (typed fast path), broadcast to rows.
-                double sum = 0;
-                int64_t count = 0;
-                double min_d = 0, max_d = 0;
-                bool has_mm = false;
-                bool is_str = false;
-                bool has_str = false;
-                string_t min_s, max_s;
-                LogicalTypeId arg_tid = (arg_col != INVALID_INDEX && arg_col < input.types.size())
-                                            ? input.types[arg_col] : LogicalTypeId::SQLNULL;
-                if (arg_tid == LogicalTypeId::VARCHAR) is_str = true;
-
-                if (arg_col == INVALID_INDEX) {
-                    count = static_cast<int64_t>(ps);
-                } else if (arg_tid == LogicalTypeId::INTEGER) {
-                    for (auto idx : indices) {
-                        if (!input.IsNull(idx, arg_col)) {
-                            double d = input.GetInt32(idx, arg_col);
-                            count++; sum += d;
-                            if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                            else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-                        }
-                    }
-                } else if (arg_tid == LogicalTypeId::BIGINT) {
-                    for (auto idx : indices) {
-                        if (!input.IsNull(idx, arg_col)) {
-                            double d = static_cast<double>(input.GetInt64(idx, arg_col));
-                            count++; sum += d;
-                            if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                            else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-                        }
-                    }
-                } else if (arg_tid == LogicalTypeId::DOUBLE) {
-                    for (auto idx : indices) {
-                        if (!input.IsNull(idx, arg_col)) {
-                            double d = input.GetDouble(idx, arg_col);
-                            count++; sum += d;
-                            if (!has_mm) { min_d = max_d = d; has_mm = true; }
-                            else { if (d < min_d) min_d = d; if (d > max_d) max_d = d; }
-                        }
-                    }
-                } else if (is_str) {
-                    // MIN/MAX only for strings; SUM/AVG undefined.
-                    for (auto idx : indices) {
-                        if (!input.IsNull(idx, arg_col)) {
-                            auto &s = input.GetStr(idx, arg_col);
-                            count++;
-                            if (!has_str) { min_s = max_s = s; has_str = true; }
-                            else {
-                                uint32_t l_min = s.GetSize() < min_s.GetSize() ? s.GetSize() : min_s.GetSize();
-                                int c_min = memcmp(s.GetData(), min_s.GetData(), l_min);
-                                if (c_min < 0 || (c_min == 0 && s.GetSize() < min_s.GetSize())) min_s = s;
-                                uint32_t l_max = s.GetSize() < max_s.GetSize() ? s.GetSize() : max_s.GetSize();
-                                int c_max = memcmp(s.GetData(), max_s.GetData(), l_max);
-                                if (c_max > 0 || (c_max == 0 && s.GetSize() > max_s.GetSize())) max_s = s;
-                            }
-                        }
-                    }
-                } else {
-                    // Fallback via Value (rare types).
-                    Value min_v, max_v;
-                    for (auto idx : indices) {
-                        auto v = input.Get(idx, arg_col);
-                        if (!v.IsNull()) {
-                            count++;
-                            auto tid = v.type().id();
-                            double d = 0;
-                            if (tid == LogicalTypeId::INTEGER) d = v.GetValue<int32_t>();
-                            else if (tid == LogicalTypeId::BIGINT) d = static_cast<double>(v.GetValue<int64_t>());
-                            else if (tid == LogicalTypeId::DOUBLE) d = v.GetValue<double>();
-                            sum += d;
-                            if (!has_mm || v < min_v) min_v = v;
-                            if (!has_mm || v > max_v) max_v = v;
-                            has_mm = true;
-                        }
-                    }
-                    Value result;
-                    if (fn == WF_COUNT) result = Value::BIGINT(count);
-                    else if (fn == WF_SUM) result = Value::BIGINT(static_cast<int64_t>(sum));
-                    else if (fn == WF_AVG) result = count > 0 ? Value::DOUBLE(sum / count) : Value();
-                    else if (fn == WF_MIN) result = has_mm ? min_v : Value();
-                    else if (fn == WF_MAX) result = has_mm ? max_v : Value();
-                    for (auto idx : indices) output[idx][out_col] = result;
-                    break;
-                }
-
-                // Build result from typed accumulators.
-                Value result;
-                if (fn == WF_COUNT) {
-                    result = Value::BIGINT(count);
-                } else if (is_str) {
-                    if (fn == WF_MIN) result = has_str ? Value::VARCHAR(std::string(min_s.GetData(), min_s.GetSize())) : Value();
-                    else if (fn == WF_MAX) result = has_str ? Value::VARCHAR(std::string(max_s.GetData(), max_s.GetSize())) : Value();
-                    else result = Value();  // SUM/AVG on string not defined
-                } else {
-                    if (fn == WF_SUM) result = Value::BIGINT(static_cast<int64_t>(sum));
-                    else if (fn == WF_AVG) result = count > 0 ? Value::DOUBLE(sum / count) : Value();
-                    else if (fn == WF_MIN) {
-                        if (!has_mm) result = Value();
-                        else if (arg_tid == LogicalTypeId::INTEGER) result = Value::INTEGER(static_cast<int32_t>(min_d));
-                        else if (arg_tid == LogicalTypeId::BIGINT) result = Value::BIGINT(static_cast<int64_t>(min_d));
-                        else result = Value::DOUBLE(min_d);
-                    }
-                    else if (fn == WF_MAX) {
-                        if (!has_mm) result = Value();
-                        else if (arg_tid == LogicalTypeId::INTEGER) result = Value::INTEGER(static_cast<int32_t>(max_d));
-                        else if (arg_tid == LogicalTypeId::BIGINT) result = Value::BIGINT(static_cast<int64_t>(max_d));
-                        else result = Value::DOUBLE(max_d);
-                    }
-                }
+                // Aggregate over the whole partition, broadcast to rows:
+                // the same computation as the main path's (exact integer
+                // sums, NULL for no value; Stage 8, #12).
+                WinInfo wi;
+                wi.fn = fn;
+                wi.arg_col = arg_col;
+                wi.arg_tid = (arg_col != INVALID_INDEX && arg_col < input.types.size())
+                                 ? input.types[arg_col] : LogicalTypeId::SQLNULL;
+                Value result = ComputePartitionAggregate(wi, indices);
                 for (auto idx : indices) output[idx][out_col] = result;
                 break;
             }
@@ -6260,6 +6192,11 @@ private:
             return static_cast<double>(reinterpret_cast<const int64_t *>(vec.GetData())[row]);
         case LogicalTypeId::DOUBLE:  return reinterpret_cast<const double *>(vec.GetData())[row];
         case LogicalTypeId::FLOAT:   return static_cast<double>(reinterpret_cast<const float *>(vec.GetData())[row]);
+        // These read as 0 before (Stage 8, #12): MIN and MAX of a BOOLEAN
+        // were false, a SUM of SMALLINT 0.
+        case LogicalTypeId::BOOLEAN: return reinterpret_cast<const bool *>(vec.GetData())[row] ? 1.0 : 0.0;
+        case LogicalTypeId::TINYINT: return static_cast<double>(reinterpret_cast<const int8_t *>(vec.GetData())[row]);
+        case LogicalTypeId::SMALLINT: return static_cast<double>(reinterpret_cast<const int16_t *>(vec.GetData())[row]);
         default: return 0.0;
         }
     }
@@ -12504,7 +12441,18 @@ private:
                                         state.count++;
                                         auto &x = state.extras();
                                         x.bool_or = x.bool_or || (val != 0.0);
+                                    } else {
+                                        // STRING_AGG and the rest were skipped,
+                                        // so their result was NULL (Stage 8).
+                                        throw NotImplementedException("Aggregate " + info.name +
+                                                                      " of an expression is not supported");
                                     }
+                                } else {
+                                    // A VARCHAR, DATE, ... expression was
+                                    // skipped: MIN('hello') was NULL (Stage 8).
+                                    throw NotImplementedException("Aggregate " + info.name + " of a " +
+                                                                  arg_val.type().ToString() +
+                                                                  " expression is not supported");
                                 }
                             }
                         }
@@ -12566,7 +12514,15 @@ private:
                                 auto v = chunk.GetValue(info.col_idx, i);
                                 if (!v.IsNull()) {
                                     auto &x = state.extras();
-                                    if (x.str_started) x.str_agg += x.str_delim.empty() ? "," : x.str_delim;
+                                    if (!x.str_started) {
+                                        // The separator, a string constant
+                                        // (the binder's check), else ','.
+                                        auto &fx = static_cast<BoundFunction &>(*aggregates_[a]);
+                                        x.str_delim = fx.arguments.size() > 1
+                                            ? static_cast<BoundConstant &>(*fx.arguments[1]).value.ToString()
+                                            : std::string(",");
+                                    }
+                                    if (x.str_started) x.str_agg += x.str_delim;
                                     x.str_agg += v.ToString();
                                     x.str_started = true;
                                 }
@@ -12586,10 +12542,30 @@ private:
                             ExpressionExecutor::Execute(*agg_expr.arguments[0], row_chunk, res, 1);
                             arg_val = res.GetValue(0);
                         }
+                        // Only COUNT, SUM and AVG are computed here; any
+                        // other aggregate of an expression gave NULL, and
+                        // a non-DOUBLE value was read as a double (Stage
+                        // 8, #12).
+                        if (info.name != "COUNT" && info.name != "SUM" && info.name != "AVG") {
+                            throw NotImplementedException("Aggregate " + info.name +
+                                                          " of this expression is not supported");
+                        }
                         if (info.name == "COUNT" && !arg_val.IsNull()) state.count++;
                         else if ((info.name == "SUM" || info.name == "AVG") && !arg_val.IsNull()) {
+                            double d;
+                            switch (arg_val.type().id()) {
+                            case LogicalTypeId::DOUBLE: d = arg_val.GetValue<double>(); break;
+                            case LogicalTypeId::FLOAT: d = arg_val.GetValue<float>(); break;
+                            case LogicalTypeId::INTEGER: d = arg_val.GetValue<int32_t>(); break;
+                            case LogicalTypeId::SMALLINT: d = arg_val.GetValue<int16_t>(); break;
+                            case LogicalTypeId::TINYINT: d = arg_val.GetValue<int8_t>(); break;
+                            default:
+                                throw NotImplementedException("Aggregate " + info.name + " of a " +
+                                                              arg_val.type().ToString() +
+                                                              " expression is not supported");
+                            }
                             state.count++;
-                            state.sum += arg_val.GetValue<double>();
+                            state.sum += d;
                         }
                     }
                 }
@@ -12848,7 +12824,9 @@ public:
                 auto &key_vec = probe_chunk_.GetVector(probe_join_col_);
                 std::vector<idx_t> *match_list = nullptr;
 
-                if (use_i64_hash_) {
+                if (nested_loop_) {
+                    match_list = &all_build_rows_;
+                } else if (use_i64_hash_) {
                     // Typed int path - read directly from the Vector data.
                     // NULL-in-probe-key never matches in equi-join semantics.
                     const bool null_probe = !key_vec.GetValidity().RowIsValid(current_probe_row_);
@@ -12885,6 +12863,8 @@ public:
                     }
                     // match_list stays nullptr when null_probe - falls through
                     // to the usual "no match" logic below.
+                } else if (!key_vec.GetValidity().RowIsValid(current_probe_row_)) {
+                    // A NULL probe key matches nothing.
                 } else if (use_linear_cache_ && key_vec.GetType().id() == LogicalTypeId::VARCHAR) {
                     // Ultra-fast: direct bytes from string_t, linear memcmp.
                     auto &s = reinterpret_cast<const string_t *>(key_vec.GetData())[current_probe_row_];
@@ -12975,7 +12955,9 @@ public:
 
     // --- Fuse interface: used by PhysicalHashAggregate to bypass materialization. ---
     void FuseBuild() { if (!built_) { BuildHashTable(); built_ = true; } }
-    bool FuseIsInner() const { return join_type_ == JoinType::INNER; }
+    // The fused path probes the hash table alone: only for an inner join
+    // whose whole condition is one column = column equality.
+    bool FuseIsInner() const { return join_type_ == JoinType::INNER && IsSingleEquiCondition(); }
     bool FuseBuildIsRight() const { return build_is_right_; }
     PhysicalOperator *FuseProbeChild() { return probe_child_; }
     const std::vector<std::vector<Value>> &FuseBuildRows() const { return build_rows_; }
@@ -12997,9 +12979,7 @@ private:
         // this, the build side parses every column even if the consumer only
         // wants one or two - wasteful for wide tables. We derive the join
         // columns from the AST and union them with needed_cols_ (if any).
-        if (!needed_cols_.empty() &&
-            condition_ &&
-            condition_->GetExpressionType() == BoundExpressionType::COMPARISON) {
+        if (!needed_cols_.empty() && IsSingleEquiCondition()) {
             auto &cmp = static_cast<BoundComparison &>(*condition_);
             idx_t left_key = 0, right_key = 0;
             // Classify each side of the equi-join as LEFT- or RIGHT-table
@@ -13165,6 +13145,7 @@ private:
         // of the comparison is classified by its combined column index.
         idx_t left_join_col = 0, right_join_col = 0;
         residual_preds_.clear();
+        nested_loop_ = false;
         auto classify = [&](BoundExpression *e, idx_t &local) -> int {
             if (!e || e->GetExpressionType() != BoundExpressionType::COLUMN_REF) return -1;
             idx_t combined = static_cast<BoundColumnRef &>(*e).column_index;
@@ -13214,6 +13195,35 @@ private:
                 if (!key_set && try_equi_key(c)) { key_set = true; continue; }
                 residual_preds_.push_back(c);
             }
+            nested_loop_ = !key_set;
+        } else {
+            nested_loop_ = true;
+        }
+        if (condition_ && condition_->GetExpressionType() == BoundExpressionType::COMPARISON &&
+            !IsSingleEquiCondition()) {
+            nested_loop_ = true;
+        }
+        if (nested_loop_) {
+            // No equality between a column of each side (`ON i < k`, `ON
+            // TRUE`, `ON i = 1`, `ON a OR b`): every build row is a
+            // candidate for every probe row, and the whole condition is
+            // checked per pair. Before, the hash key defaulted to column 0
+            // of each side and the condition was dropped (Stage 8, #12).
+            residual_preds_.clear();
+            if (condition_) {
+                std::function<void(BoundExpression *)> flatten_all = [&](BoundExpression *e) {
+                    if (e->GetExpressionType() == BoundExpressionType::CONJUNCTION) {
+                        auto &cj = static_cast<BoundConjunction &>(*e);
+                        if (cj.op == "AND" && cj.left && cj.right) {
+                            flatten_all(cj.left.get());
+                            flatten_all(cj.right.get());
+                            return;
+                        }
+                    }
+                    residual_preds_.push_back(e);
+                };
+                flatten_all(condition_.get());
+            }
         }
         // Combined [left][right] schema for residual evaluation.
         if (!residual_preds_.empty()) {
@@ -13254,7 +13264,11 @@ private:
         }
         use_i64_hash_ = is_int_tid(build_key_type) && is_int_tid(probe_key_type_);
 
-        if (use_i64_hash_) {
+        if (nested_loop_) {
+            use_i64_hash_ = false;
+            all_build_rows_.resize(build_rows_.size());
+            for (idx_t i = 0; i < build_rows_.size(); i++) all_build_rows_[i] = i;
+        } else if (use_i64_hash_) {
             // Typed int path - no string allocation per key. Note the build
             // side stores Values (union over all int widths); we have to
             // coerce on the stored type, not blindly call GetValue<int64_t>
@@ -13281,6 +13295,9 @@ private:
             hash_table_i64_.reserve(build_rows_.size() * 2);
         } else {
             for (idx_t i = 0; i < build_rows_.size(); i++) {
+                // NULL never matches in an equi-join (`ToString` of NULL is
+                // "NULL", which would match the string 'NULL').
+                if (build_rows_[i][build_join_col].IsNull()) continue;
                 auto key = build_rows_[i][build_join_col].ToString();
                 hash_table_[key].push_back(i);
             }
@@ -13289,7 +13306,7 @@ private:
         // Build a linear cache for fast low-cardinality probe lookups - faster
         // than a hash map for dimension tables with <256 unique keys. Applies
         // to both the int64 and string paths.
-        use_linear_cache_ = build_rows_.size() <= 256;
+        use_linear_cache_ = !nested_loop_ && build_rows_.size() <= 256;
         if (use_linear_cache_) {
             if (use_i64_hash_) {
                 for (auto &kv : hash_table_i64_) {
@@ -13306,7 +13323,7 @@ private:
 
         // Push projection down to probe child: only the join column + columns
         // that appear in the output and are needed by the caller.
-        if (!needed_cols_.empty()) {
+        if (!needed_cols_.empty() && !nested_loop_ && residual_preds_.empty()) {
             idx_t probe_col_count = probe_child_->GetTypes().size();
             std::vector<bool> probe_needed(probe_col_count, false);
             probe_needed[probe_join_col_] = true;
@@ -13335,7 +13352,23 @@ private:
     }
 
 private:
+    // Whether the condition is exactly one `=` between a column of the left
+    // side and a column of the right side.
+    bool IsSingleEquiCondition() const {
+        if (!condition_ || condition_->GetExpressionType() != BoundExpressionType::COMPARISON) return false;
+        auto &cmp = static_cast<const BoundComparison &>(*condition_);
+        if (cmp.op != "=") return false;
+        auto side = [&](const BoundExpression *e) -> int {
+            if (!e || e->GetExpressionType() != BoundExpressionType::COLUMN_REF) return -1;
+            return static_cast<const BoundColumnRef &>(*e).column_index >= left_col_count_ ? 1 : 0;
+        };
+        int ls = side(cmp.left.get()), rs = side(cmp.right.get());
+        return (ls == 0 && rs == 1) || (ls == 1 && rs == 0);
+    }
+
     // Member state for streaming probe.
+    bool nested_loop_ = false;
+    std::vector<idx_t> all_build_rows_;
     bool build_is_right_ = false;
     std::vector<std::vector<Value>> build_rows_;
     std::unordered_map<std::string, std::vector<idx_t>> hash_table_;
@@ -14422,8 +14455,66 @@ PhysicalOpPtr PhysicalPlanner::PlanDeleteOp(const LogicalDeleteOp &op) {
     return std::make_unique<PhysicalDelete>(op.table, std::move(mutable_op.where_clause));
 }
 
+// Shapes of a window query PhysicalWindow computed wrongly, refused before
+// it runs (Stage 8, #12; design L21). A window function nested in an
+// expression is the executor's error already.
+static void CheckWindowQuery(const std::vector<BoundExprPtr> &select_list, const BoundExprPtr &qualify) {
+    std::vector<const BoundWindowExpression *> wins;
+    for (auto &e : select_list)
+        if (e->GetExpressionType() == BoundExpressionType::WINDOW)
+            wins.push_back(static_cast<const BoundWindowExpression *>(e.get()));
+    if (qualify) {
+        // Only `window <op> constant` (either side): any other QUALIFY was
+        // not applied at all.
+        bool simple = false;
+        if (qualify->GetExpressionType() == BoundExpressionType::COMPARISON) {
+            auto &cmp = static_cast<const BoundComparison &>(*qualify);
+            auto t = [](const BoundExprPtr &e) { return e ? e->GetExpressionType() : BoundExpressionType::CONSTANT; };
+            if (t(cmp.left) == BoundExpressionType::WINDOW && t(cmp.right) == BoundExpressionType::CONSTANT) {
+                simple = true;
+                wins.push_back(static_cast<const BoundWindowExpression *>(cmp.left.get()));
+            } else if (t(cmp.right) == BoundExpressionType::WINDOW && t(cmp.left) == BoundExpressionType::CONSTANT) {
+                simple = true;
+                wins.push_back(static_cast<const BoundWindowExpression *>(cmp.right.get()));
+            }
+        }
+        if (!simple) {
+            throw NotImplementedException("QUALIFY other than a window function compared with a constant "
+                                          "is not supported");
+        }
+    }
+    // Windows over different partitions or orders take a path that gives
+    // an aggregate its whole partition, not its running frame.
+    auto key = [](const BoundWindowExpression &w) {
+        std::string k;
+        for (auto &p : w.partition_by) {
+            if (p->GetExpressionType() != BoundExpressionType::COLUMN_REF) return std::string("?");
+            k += std::to_string(static_cast<const BoundColumnRef &>(*p).column_index) + ",";
+        }
+        k += "|";
+        for (auto &o : w.order_by) {
+            k += std::to_string(static_cast<const BoundColumnRef &>(*o.expression).column_index) +
+                 (o.ascending ? "a," : "d,");
+        }
+        return k;
+    };
+    bool same = true;
+    for (auto *w : wins)
+        if (key(*w) != key(*wins.front()) || key(*w) == "?") same = false;
+    if (same) return;
+    for (auto *w : wins) {
+        const auto &n = w->function_name;
+        bool aggregate = n == "SUM" || n == "COUNT" || n == "AVG" || n == "MIN" || n == "MAX";
+        if (aggregate && !w->order_by.empty()) {
+            throw NotImplementedException("Window function " + n + " with ORDER BY beside windows over "
+                                          "another partition or order is not supported");
+        }
+    }
+}
+
 PhysicalOpPtr PhysicalPlanner::PlanWindow(const LogicalWindow &op) {
     auto &mutable_op = const_cast<LogicalWindow &>(op);
+    CheckWindowQuery(mutable_op.select_list, mutable_op.qualify);
     auto result = std::make_unique<PhysicalWindow>(
         std::move(mutable_op.select_list), std::move(mutable_op.qualify), op.GetTypes());
     result->children.push_back(Plan(*op.children[0]));

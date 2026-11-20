@@ -255,7 +255,10 @@ std::string FormatValue(const Value &v) {
     case LogicalTypeId::DATE:
         return FormatDays(v.GetValue<int32_t>());
     case LogicalTypeId::TIME: {
-        int64_t us = v.GetValue<int64_t>() % 86400000000LL;
+        // DuckDB's TIME holds 24:00:00 too.
+        int64_t us = v.GetValue<int64_t>();
+        if (us == 86400000000LL) return "24:00:00";
+        us %= 86400000000LL;
         if (us < 0) us += 86400000000LL;
         return FormatTimeOfDay(us);
     }

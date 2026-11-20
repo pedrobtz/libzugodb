@@ -58,6 +58,7 @@ struct Script {
     std::string left_out;  // empty when the file runs; otherwise why not
     std::vector<Case> cases;  // statements and queries, and restarts between them
     size_t static_cases = 0;  // `statement` and `query` records in the file, unexpanded
+    size_t regex_cases = 0;   // queries left out for a regex result (design L20), unexpanded
     size_t CaseCount() const;  // statements and queries after expansion
 };
 
@@ -125,6 +126,7 @@ struct FileRun {
     std::vector<int> lines;           // the line of each case
     std::vector<std::string> sqls;    // the SQL of each case
     std::string crash_note;           // how the child ended, when it did not finish
+    size_t regex_cases = 0;           // queries left out for a regex result (design L20)
 };
 
 struct DriverOptions {

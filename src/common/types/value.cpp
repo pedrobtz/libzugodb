@@ -95,58 +95,55 @@ static void DaysToYMD(int64_t days, int64_t &y, unsigned &m, unsigned &d) {
     y = yr + (m <= 2);
 }
 
-// Format a TIMESTAMP value (microseconds since 1970-01-01) as
-// "YYYY-MM-DD HH:MM:SS[.uuuuuu]". Avoids gmtime so this is reentrant
-// and works the same on every platform.
-static std::string FormatTimestamp(int64_t micros) {
-    int64_t secs = micros / 1000000;
-    int64_t us = micros - secs * 1000000;
-    if (us < 0) { secs -= 1; us += 1000000; }
-    int64_t days = secs / 86400;
-    int64_t tod = secs - days * 86400;
-    if (tod < 0) { days -= 1; tod += 86400; }
+// DuckDB's text for a date: the year with at least four digits, and a
+// year before 1 as its positive BC year with " (BC)" after the day.
+static std::string FormatDateParts(int64_t days) {
     int64_t y; unsigned m, d;
     DaysToYMD(days, y, m, d);
-    int hh = static_cast<int>(tod / 3600);
-    int mm = static_cast<int>((tod / 60) % 60);
-    int ss = static_cast<int>(tod % 60);
-    char buf[64];
-    if (us == 0) {
-        std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u %02d:%02d:%02d",
-                      static_cast<long long>(y), m, d, hh, mm, ss);
-    } else {
-        std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u %02d:%02d:%02d.%06d",
-                      static_cast<long long>(y), m, d, hh, mm, ss, static_cast<int>(us));
-    }
+    bool bc = y <= 0;
+    if (bc) y = 1 - y;
+    char buf[48];
+    std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u%s", static_cast<long long>(y), m, d,
+                  bc ? " (BC)" : "");
     return std::string(buf);
 }
 
-static std::string FormatDate(int32_t days) {
-    int64_t y; unsigned m, d;
-    DaysToYMD(days, y, m, d);
+// DuckDB's text for a time of day: HH:MM:SS, then the microseconds with
+// their trailing zeros cut. 24:00:00 is a TIME of its own.
+static std::string FormatTimeOfDay(int64_t tod) {
+    int64_t secs = tod / 1000000;
+    int us = static_cast<int>(tod % 1000000);
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%04lld-%02u-%02u", static_cast<long long>(y), m, d);
-    return std::string(buf);
+    int n = std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d", static_cast<int>(secs / 3600),
+                          static_cast<int>((secs / 60) % 60), static_cast<int>(secs % 60));
+    std::string out(buf, static_cast<size_t>(n));
+    if (us != 0) {
+        char frac[8];
+        std::snprintf(frac, sizeof(frac), "%06d", us);
+        std::string f(frac);
+        while (!f.empty() && f.back() == '0') f.pop_back();
+        out += "." + f;
+    }
+    return out;
 }
+
+// Format a TIMESTAMP value (microseconds since 1970-01-01) as DuckDB
+// does. Avoids gmtime so this is reentrant and works the same on every
+// platform.
+static std::string FormatTimestamp(int64_t micros) {
+    int64_t days = micros / 86400000000LL;
+    int64_t tod = micros % 86400000000LL;
+    if (tod < 0) { tod += 86400000000LL; days -= 1; }
+    return FormatDateParts(days) + " " + FormatTimeOfDay(tod);
+}
+
+static std::string FormatDate(int32_t days) { return FormatDateParts(days); }
 
 static std::string FormatTime(int64_t micros) {
-    // Floor division by a second, then the second of the day, without
-    // the overflow of micros - us at INT64_MIN.
-    int64_t secs = micros / 1000000;
-    int64_t us = micros % 1000000;
-    if (us < 0) { us += 1000000; secs -= 1; }
-    secs %= 86400;
-    if (secs < 0) secs += 86400;
-    int hh = static_cast<int>(secs / 3600);
-    int mm = static_cast<int>((secs / 60) % 60);
-    int ss = static_cast<int>(secs % 60);
-    char buf[32];
-    if (us == 0)
-        std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d", hh, mm, ss);
-    else
-        std::snprintf(buf, sizeof(buf), "%02d:%02d:%02d.%06d",
-                      hh, mm, ss, static_cast<int>(us));
-    return std::string(buf);
+    if (micros >= 0 && micros <= 86400000000LL) return FormatTimeOfDay(micros);
+    int64_t tod = micros % 86400000000LL;
+    if (tod < 0) tod += 86400000000LL;
+    return FormatTimeOfDay(tod);
 }
 
 Value::Value() : type_(LogicalType::SQLNULL()), is_null_(true), bigint_(0) {}
@@ -238,64 +235,265 @@ Value Value::TIMESTAMP(int64_t micros) {
     return result;
 }
 
-// Days from civil 1970-01-01 to civil (y,m,d). Inverse of DaysToYMD above.
-// Algorithm by Howard Hinnant; valid for any proleptic Gregorian date.
-static int32_t DaysFromYMD(int y, unsigned m, unsigned d) {
+// ---------------------------------------------------------------------------
+// DuckDB's grammar for dates, times and timestamps (design L19).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+using PR = Value::ParseResult;
+
+bool IsSpaceChar(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\v' || c == '\f'; }
+bool IsDigitChar(char c) { return c >= '0' && c <= '9'; }
+
+// One or two digits (Date::ParseDoubleDigit).
+bool ParseDoubleDigit(const char *buf, size_t len, size_t &pos, int32_t &result) {
+    if (pos < len && IsDigitChar(buf[pos])) {
+        result = buf[pos++] - '0';
+        if (pos < len && IsDigitChar(buf[pos])) result = buf[pos++] - '0' + result * 10;
+        return true;
+    }
+    return false;
+}
+
+bool IsLeapYear(int64_t y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
+
+int32_t DaysInMonth(int64_t y, int32_t m) {
+    static const int32_t kDays[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    return m == 2 && IsLeapYear(y) ? 29 : kDays[m - 1];
+}
+
+// DuckDB's DATE range: 5877642-06-25 (BC) to 5881580-07-10, the days
+// strictly inside int32 (its infinities are the two ends).
+constexpr int64_t kMinDateDays = -2147483646;
+constexpr int64_t kMaxDateDays = 2147483646;
+// DuckDB's TIMESTAMP range: 290309-12-22 (BC) 00:00:00 to
+// 294247-01-10 04:00:54.775806.
+constexpr int64_t kMinTimestampMicros = -9223372022400000000LL;
+constexpr int64_t kMaxTimestampMicros = 9223372036854775806LL;
+constexpr int64_t kMicrosPerDay = 86400000000LL;
+
+int64_t DaysFromCivil(int64_t y, int32_t m, int32_t d) {
     y -= (m <= 2);
-    int era = (y >= 0 ? y : y - 399) / 400;
-    unsigned yoe = static_cast<unsigned>(y - era * 400);
-    unsigned doy = (153u * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
-    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    return era * 146097 + static_cast<int>(doe) - 719468;
+    int64_t era = (y >= 0 ? y : y - 399) / 400;
+    int64_t yoe = y - era * 400;
+    int64_t doy = (153 * (m > 2 ? m - 3 : m + 9) + 2) / 5 + d - 1;
+    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+bool MatchWord(const char *buf, size_t len, size_t pos, const char *word) {
+    size_t n = std::strlen(word);
+    if (len - pos < n) return false;
+    for (size_t i = 0; i < n; i++) {
+        char c = buf[pos + i];
+        if (c >= 'A' && c <= 'Z') c = static_cast<char>(c + 32);
+        if (c != word[i]) return false;
+    }
+    return true;
+}
+
+// Date::TryConvertDate. `strict`: nothing but spaces may follow; otherwise
+// anything but a digit may (a timestamp's time). `pos` is left after the
+// date.
+PR ParseDateAt(const char *buf, size_t len, size_t &pos, int32_t &out, bool strict) {
+    pos = 0;
+    if (len == 0) return PR::Invalid;
+    while (pos < len && IsSpaceChar(buf[pos])) pos++;
+    if (pos >= len) return PR::Invalid;
+    bool yearneg = false;
+    if (buf[pos] == '-') {
+        yearneg = true;
+        pos++;
+        if (pos >= len) return PR::Invalid;
+    }
+    if (!IsDigitChar(buf[pos])) {
+        // 'infinity', '-infinity' and 'epoch' are DuckDB's special
+        // values; the engine has no infinite DATE. Any other word is
+        // refused too rather than guessed invalid.
+        if (!yearneg && MatchWord(buf, len, pos, "epoch")) {
+            size_t p = pos + 5;
+            while (p < len && IsSpaceChar(buf[p])) p++;
+            if (p == len) {
+                pos = p;
+                out = 0;
+                return PR::Ok;
+            }
+        }
+        (void)strict;
+        return PR::Unsupported;
+    }
+    int64_t year = 0;
+    while (pos < len && IsDigitChar(buf[pos])) {
+        if (year >= 100000000) return PR::Invalid;
+        year = (buf[pos] - '0') + year * 10;
+        pos++;
+    }
+    if (yearneg) year = -year;
+    if (pos >= len) return PR::Invalid;
+    char sep = buf[pos++];
+    if (sep != ' ' && sep != '-' && sep != '/' && sep != '\\') return PR::Invalid;
+    int32_t month = -1, day = -1;
+    if (!ParseDoubleDigit(buf, len, pos, month)) return PR::Invalid;
+    if (pos >= len) return PR::Invalid;
+    if (buf[pos++] != sep) return PR::Invalid;
+    if (pos >= len) return PR::Invalid;
+    if (!ParseDoubleDigit(buf, len, pos, day)) return PR::Invalid;
+    // An optional " (BC)".
+    if (len - pos >= 5 && IsSpaceChar(buf[pos]) && buf[pos + 1] == '(' &&
+        (buf[pos + 2] == 'b' || buf[pos + 2] == 'B') && (buf[pos + 3] == 'c' || buf[pos + 3] == 'C') &&
+        buf[pos + 4] == ')') {
+        if (yearneg || year == 0) return PR::Invalid;
+        year = -year + 1;
+        pos += 5;
+    }
+    // A digit straight after the day is never a date. Other text after
+    // it is a time to DuckDB's DATE cast, which the engine does not take
+    // apart there: refused, not guessed.
+    if (pos < len && IsDigitChar(buf[pos])) return PR::Invalid;
+    if (strict) {
+        while (pos < len && IsSpaceChar(buf[pos])) pos++;
+        if (pos < len) return PR::Unsupported;
+    }
+    if (month < 1 || month > 12 || day < 1 || day > DaysInMonth(year, month)) return PR::Invalid;
+    int64_t days = DaysFromCivil(year, month, day);
+    if (days < kMinDateDays || days > kMaxDateDays) return PR::Invalid;
+    // DuckDB's dates reach 5877642 BC and 5881580; the engine's date
+    // functions (strftime, date_diff, date_trunc, ...) were written for
+    // years 1 to 9999, so a date outside them is refused.
+    if (year < 1 || year > 9999) return PR::Unsupported;
+    out = static_cast<int32_t>(days);
+    return PR::Ok;
+}
+
+// Time::TryConvertInternal: H[...]:[MM[:[SS[.f...]]]], hours up to 24
+// (24:00:00 itself), fractions past microseconds cut. `pos` is left
+// after the time; `strict` as for dates.
+PR ParseTimeAt(const char *buf, size_t len, size_t &pos, int64_t &out, bool strict) {
+    pos = 0;
+    while (pos < len && IsSpaceChar(buf[pos])) pos++;
+    if (pos >= len) return PR::Invalid;
+    if (!IsDigitChar(buf[pos])) return IsSpaceChar(buf[pos]) ? PR::Invalid : PR::Unsupported;
+    int64_t hour = 0;
+    int digits = 0;
+    while (pos < len && IsDigitChar(buf[pos])) {
+        if (++digits > 9) return PR::Invalid;
+        hour = hour * 10 + (buf[pos] - '0');
+        pos++;
+    }
+    if (pos >= len || buf[pos] != ':') return PR::Invalid;
+    pos++;
+    int32_t min = 0, sec = 0;
+    int64_t micros = 0;
+    if (pos < len && !IsSpaceChar(buf[pos])) {
+        if (!ParseDoubleDigit(buf, len, pos, min)) return PR::Invalid;
+        if (pos < len && buf[pos] == ':') {
+            pos++;
+            if (pos < len && !IsSpaceChar(buf[pos])) {
+                if (!ParseDoubleDigit(buf, len, pos, sec)) return PR::Invalid;
+                if (pos < len && buf[pos] == '.') {
+                    pos++;
+                    int64_t mult = 100000;
+                    for (; pos < len && IsDigitChar(buf[pos]); pos++, mult /= 10) {
+                        if (mult > 0) micros += (buf[pos] - '0') * mult;
+                    }
+                }
+            }
+        }
+    }
+    if (strict) {
+        size_t p = pos;
+        while (p < len && IsSpaceChar(buf[p])) p++;
+        // Text after a time: DuckDB may read it (a time zone, a date
+        // after all); the engine does not guess.
+        if (p < len) return PR::Unsupported;
+        pos = p;
+    }
+    if (min >= 60 || sec >= 60) return PR::Invalid;
+    if (hour > 24 || (hour == 24 && (min != 0 || sec != 0 || micros != 0))) return PR::Invalid;
+    out = ((hour * 60 + min) * 60 + sec) * 1000000 + micros;
+    return PR::Ok;
+}
+
+} // namespace
+
+Value::ParseResult Value::ParseDate(const char *s, size_t len, int32_t &out_days) {
+    size_t pos = 0;
+    return ParseDateAt(s, len, pos, out_days, true);
+}
+
+Value::ParseResult Value::ParseTimestamp(const char *s, size_t len, int64_t &out_micros) {
+    size_t pos = 0;
+    int32_t days = 0;
+    auto r = ParseDateAt(s, len, pos, days, false);
+    if (r != PR::Ok) return r;
+    int64_t tod = 0;
+    if (pos < len) {
+        if (s[pos] == ' ' || s[pos] == 'T') pos++;
+        size_t time_pos = 0;
+        r = ParseTimeAt(s + pos, len - pos, time_pos, tod, false);
+        if (r != PR::Ok) return r;
+        pos += time_pos;
+        if (pos < len && s[pos] == 'Z') pos++;
+        while (pos < len && IsSpaceChar(s[pos])) pos++;
+        // A UTC offset or a time zone name: not taken apart.
+        if (pos < len) return PR::Unsupported;
+    }
+    constexpr int64_t kMaxDays = kMaxTimestampMicros / kMicrosPerDay;  // 106751991
+    if (days < -kMaxDays || days > kMaxDays) return PR::Invalid;
+    int64_t micros = static_cast<int64_t>(days) * kMicrosPerDay;
+    if (micros > kMaxTimestampMicros - tod) return PR::Invalid;
+    micros += tod;
+    if (micros < kMinTimestampMicros) return PR::Invalid;
+    out_micros = micros;
+    return PR::Ok;
+}
+
+Value::ParseResult Value::ParseTime(const char *s, size_t len, int64_t &out_micros) {
+    size_t pos = 0;
+    auto r = ParseTimeAt(s, len, pos, out_micros, true);
+    if (r != PR::Invalid) return r;
+    // DuckDB then reads the text as a timestamp and keeps its time.
+    int64_t ts = 0;
+    auto t = ParseTimestamp(s, len, ts);
+    if (t != PR::Ok) return t;
+    int64_t tod = ts % kMicrosPerDay;
+    if (tod < 0) tod += kMicrosPerDay;
+    out_micros = tod;
+    return PR::Ok;
+}
+
+Value Value::ParseTemporal(const std::string &str, LogicalTypeId to) {
+    ParseResult r;
+    Value out;
+    if (to == LogicalTypeId::DATE) {
+        int32_t days = 0;
+        r = ParseDate(str.data(), str.size(), days);
+        out = Value::DATE(days);
+    } else if (to == LogicalTypeId::TIME) {
+        int64_t micros = 0;
+        r = ParseTime(str.data(), str.size(), micros);
+        out = Value::TIME(micros);
+    } else {
+        int64_t micros = 0;
+        r = ParseTimestamp(str.data(), str.size(), micros);
+        out = Value::TIMESTAMP(micros);
+    }
+    auto name = LogicalType(to).ToString();
+    if (r == PR::Ok) return out;
+    if (r == PR::Unsupported) {
+        throw NotImplementedException("Cannot read '" + str + "' as " + name +
+                                      ": a form or value the engine does not support");
+    }
+    throw ConversionException("Could not convert string '" + str + "' to " + name);
 }
 
 bool Value::TryParseTimestampMicros(const char *s, size_t len, int64_t &out_micros) {
-    // Strict: 'YYYY-MM-DD HH:MM:SS' (19 chars) or with '.ffffff' suffix (1-6 digits).
-    if (len < 19) return false;
-    auto digit = [&](size_t i) { return s[i] >= '0' && s[i] <= '9'; };
-    static const size_t kDigitPos[] = {0,1,2,3, 5,6, 8,9, 11,12, 14,15, 17,18};
-    for (size_t i : kDigitPos)
-        if (!digit(i)) return false;
-    if (s[4] != '-' || s[7] != '-' || s[10] != ' ' || s[13] != ':' || s[16] != ':')
-        return false;
-    int y = (s[0]-'0')*1000 + (s[1]-'0')*100 + (s[2]-'0')*10 + (s[3]-'0');
-    unsigned mo = (s[5]-'0')*10 + (s[6]-'0');
-    unsigned d  = (s[8]-'0')*10 + (s[9]-'0');
-    unsigned hh = (s[11]-'0')*10 + (s[12]-'0');
-    unsigned mm = (s[14]-'0')*10 + (s[15]-'0');
-    unsigned ss = (s[17]-'0')*10 + (s[18]-'0');
-    if (mo < 1 || mo > 12 || d < 1 || d > 31 || hh > 23 || mm > 59 || ss > 59)
-        return false;
-    int64_t frac_us = 0;
-    if (len > 19) {
-        if (s[19] != '.') return false;
-        size_t fd = 0;
-        while (19 + 1 + fd < len && fd < 6 && digit(19 + 1 + fd)) {
-            frac_us = frac_us * 10 + (s[19 + 1 + fd] - '0');
-            fd++;
-        }
-        if (fd == 0 || 19 + 1 + fd != len) return false;
-        for (size_t i = fd; i < 6; i++) frac_us *= 10;
-    }
-    int64_t days = DaysFromYMD(y, mo, d);
-    int64_t secs = days * 86400 + static_cast<int64_t>(hh) * 3600
-                 + static_cast<int64_t>(mm) * 60 + static_cast<int64_t>(ss);
-    out_micros = secs * 1000000 + frac_us;
-    return true;
+    return ParseTimestamp(s, len, out_micros) == PR::Ok;
 }
 
 bool Value::TryParseDateStringEpochDays(const char *s, size_t len, int32_t &out_days) {
-    if (len != 10) return false;
-    auto digit = [&](size_t i) { return s[i] >= '0' && s[i] <= '9'; };
-    if (!digit(0) || !digit(1) || !digit(2) || !digit(3) ||
-        !digit(5) || !digit(6) || !digit(8) || !digit(9)) return false;
-    if (s[4] != '-' || s[7] != '-') return false;
-    int y = (s[0]-'0')*1000 + (s[1]-'0')*100 + (s[2]-'0')*10 + (s[3]-'0');
-    unsigned mo = (s[5]-'0')*10 + (s[6]-'0');
-    unsigned d  = (s[8]-'0')*10 + (s[9]-'0');
-    if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
-    out_days = DaysFromYMD(y, mo, d);
-    return true;
+    return ParseDate(s, len, out_days) == PR::Ok;
 }
 
 Value Value::TIME(int64_t micros) {

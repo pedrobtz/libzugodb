@@ -37,6 +37,46 @@
     to the second);
   - `substring` takes `BIGINT` bounds, which overflowed an `INTEGER`
     buffer, and bounds past the 32-bit range.
+- Fewer wrong answers on the pinned subset (#12; the rest are sub-issues
+  of v0.3.0). Each was fixed, or its shape is now an error:
+  - a join whose `ON` has no equality between a column of each side
+    (`ON TRUE`, `ON i = 1`, `ON i < k`, `ON a OR b`) joined on the first
+    column of each side; it is now checked pair by pair. The fused join
+    and aggregate path ignored every conjunct after the first, and a
+    `NULL` key matched the string `'NULL'`;
+  - `NATURAL JOIN` (it joined on the first columns) and a join other than
+    `CROSS` without `ON` are errors;
+  - text to `DATE`, `TIME` and `TIMESTAMP` is read by DuckDB's grammar
+    (design L19): every `TIME` from text was 00:00:00 and `TIME '...'`
+    was refused (#25), `2001-02-29` became 2001-03-01, and `TRY_CAST` gave
+    NULL for `2004/02/29`. What DuckDB may read but the engine cannot
+    (`infinity`, a year outside 1 to 9999, a time zone) is an error, under
+    `TRY_CAST` too. Dates before year 1 print with ` (BC)`, fractions of
+    a second without trailing zeros;
+  - `DECIMAL` and `NUMERIC` are refused (#26): they were `DOUBLE`s. So are
+    `TIMESTAMP_S`, `_MS`, `_NS`, `TIMESTAMPTZ`, `TIMETZ` and `TIMESTAMP(p)`
+    other than 4 to 6, which were the engine's `TIMESTAMP`;
+  - window functions: every shape the window operator does not compute is
+    refused (design L21), where it gave NULL, read an expression argument
+    as 0, ignored `DISTINCT`, `FILTER` or `LAG`'s default, found peers by
+    the first `ORDER BY` key, or took the whole partition as the frame;
+    window sums over integers are exact, and NULL over no value;
+  - `SUBSTRING`, `LEFT`, `RIGHT`, `INSTR`, `STRPOS`, `TRANSLATE` and
+    `LIKE`'s `_` count characters, `STRLEN` bytes, with DuckDB's
+    `SUBSTRING` offsets and bounds; `UPPER`, `LOWER`, `ILIKE`, `LENGTH`
+    and `REVERSE` are refused where Unicode case mapping or grapheme
+    clusters could change the answer (design L22); `REPEAT`'s count must
+    be an integer;
+  - `STRING_AGG` honours its separator; `MIN` and `MAX` of a `BOOLEAN`
+    and `SUM` of a `TINYINT` or `SMALLINT` read their values (they were
+    0); an aggregate the engine skipped (`MIN('hello')`, `STRING_AGG` of
+    an expression, DuckDB's `mode`, `any_value`, `product`, ...) is an
+    error, and so is a `BIGINT` `SUM` past 2^53, which was rounded;
+  - a `TINYINT` or `SMALLINT` operand of floating-point arithmetic was
+    read as a double's bytes (`1::TINYINT + 1::REAL` was 1).
+
+  The conformance runner leaves out a query whose expected result is a
+  regex in any column (an `EXPLAIN` plan; design L20).
 - Remove `bench/correctness/`, SlothDB's Python harness, which ran
   SlothDB's published wheel rather than this tree.
 

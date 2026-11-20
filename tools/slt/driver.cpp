@@ -198,6 +198,7 @@ std::vector<FileRun> RunFiles(const std::vector<std::pair<std::string, std::stri
             run.left_out = script.left_out;
             continue;
         }
+        run.regex_cases = script.regex_cases;
         for (auto &c : script.cases) {
             if (c.kind == Case::Kind::Restart) continue;
             run.lines.push_back(c.line);
@@ -340,11 +341,16 @@ std::string TotalsTsv(const std::vector<FileRun> &runs) {
     size_t files_run = 0, cases = 0;
     std::map<Outcome, std::pair<size_t, size_t>> n;  // files, cases
     std::map<std::string, size_t> left_out;
+    size_t regex_files = 0, regex_cases = 0;
     for (auto &run : runs) {
         if (!run.left_out.empty()) {
             std::string reason = run.left_out;
             left_out[reason]++;
             continue;
+        }
+        if (run.regex_cases > 0) {
+            regex_files++;
+            regex_cases += run.regex_cases;
         }
         files_run++;
         cases += run.results.size();
@@ -362,6 +368,8 @@ std::string TotalsTsv(const std::vector<FileRun> &runs) {
     for (auto &[reason, files] : left_out) lo += files;
     out << "left out\t" << lo << "\t\n";
     for (auto &[reason, files] : left_out) out << "left out: " << reason << "\t" << files << "\t\n";
+    // Queries left out of files that run (design L20).
+    out << "queries left out: regex results\t" << regex_files << "\t" << regex_cases << "\n";
     return out.str();
 }
 

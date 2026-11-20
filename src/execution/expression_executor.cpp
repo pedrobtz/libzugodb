@@ -70,6 +70,8 @@ static int64_t IntegerArg(const Value &v, const char *fn) {
 }
 
 static bool LikeMatch(const std::string &str, const std::string &pattern);
+static void RefuseNonAscii(const std::string &s, const char *fn);
+static void RefuseUnsureIlike(const std::string &str, const std::string &pattern);
 
 // Self-contained SHA-512 (FIPS 180-4) over arbitrary-length bytes.
 // 64-bit state, 80 rounds, 128-bit big-endian length pad. Output
@@ -428,6 +430,40 @@ void ExpressionExecutor::Execute(const BoundExpression &expr, DataChunk &input,
     }
 }
 
+// A cast to DATE, TIME or TIMESTAMP (design L19). Text is read by DuckDB's
+// grammar (Value::ParseDate and friends): text DuckDB rejects too is a
+// ConversionException (NULL under TRY_CAST), text it may read but the
+// engine cannot is a NotImplementedException. TIMESTAMP to DATE and to
+// TIME take the day and the time of day; any other source type is not a
+// cast DuckDB has.
+static Value CastToTemporal(const Value &val, LogicalTypeId from_type, LogicalTypeId to_type) {
+    const int64_t kMicrosPerDay = 86400000000LL;
+    auto name = LogicalType(to_type).ToString();
+    if (from_type == LogicalTypeId::VARCHAR) return Value::ParseTemporal(val.StringRef(), to_type);
+    if (from_type == to_type) return val;
+    bool from_ts = from_type == LogicalTypeId::TIMESTAMP || from_type == LogicalTypeId::TIMESTAMP_TZ;
+    if (from_ts) {
+        int64_t micros = val.GetValue<int64_t>();
+        int64_t days = micros / kMicrosPerDay;
+        int64_t tod = micros % kMicrosPerDay;
+        if (tod < 0) { tod += kMicrosPerDay; days -= 1; }
+        if (to_type == LogicalTypeId::DATE) return Value::DATE(static_cast<int32_t>(days));
+        if (to_type == LogicalTypeId::TIME) return Value::TIME(tod);
+        return Value::TIMESTAMP(micros);
+    }
+    if (from_type == LogicalTypeId::DATE &&
+        (to_type == LogicalTypeId::TIMESTAMP || to_type == LogicalTypeId::TIMESTAMP_TZ)) {
+        int64_t days = val.GetValue<int32_t>();
+        // Every DATE past 294247-01-10 is beyond a TIMESTAMP.
+        if (days > 106751991 || days < -106751991) {
+            throw ConversionException("Date out of range for TIMESTAMP");
+        }
+        return Value::TIMESTAMP(days * kMicrosPerDay);
+    }
+    throw NotImplementedException("Unimplemented cast from " + LogicalType(from_type).ToString() +
+                                  " to " + name);
+}
+
 Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
     if (expr.GetExpressionType() == BoundExpressionType::CONSTANT) {
         return static_cast<const BoundConstant &>(expr).value;
@@ -618,27 +654,11 @@ Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
             }
         }
         case LogicalTypeId::VARCHAR: return Value::VARCHAR(str);
-        case LogicalTypeId::DATE: {
-            int32_t days;
-            if (!Value::TryParseDateStringEpochDays(str.data(), str.size(), days)) {
-                throw ConversionException(
-                    "Could not convert string '" + str + "' to DATE");
-            }
-            return Value::DATE(days);
-        }
+        case LogicalTypeId::DATE:
+        case LogicalTypeId::TIME:
         case LogicalTypeId::TIMESTAMP:
-        case LogicalTypeId::TIMESTAMP_TZ: {
-            int64_t micros;
-            if (!Value::TryParseTimestampMicros(str.data(), str.size(), micros)) {
-                int32_t days;
-                if (!Value::TryParseDateStringEpochDays(str.data(), str.size(), days)) {
-                    throw ConversionException(
-                        "Could not convert string '" + str + "' to TIMESTAMP");
-                }
-                micros = static_cast<int64_t>(days) * 86400LL * 1000000LL;
-            }
-            return Value::TIMESTAMP(micros);
-        }
+        case LogicalTypeId::TIMESTAMP_TZ:
+            return CastToTemporal(child_val, child_val.type().id(), cast.GetReturnType().id());
         default: return Value::VARCHAR(str);
         }
     }
@@ -854,6 +874,7 @@ void ExpressionExecutor::ExecuteComparison(const BoundComparison &expr, DataChun
         if (pat_is_constant && count > 0 && right.GetValidity().RowIsValid(0)) {
             std::string pattern = right.GetData<string_t>()[0].GetString();
             if (case_insensitive) {
+                RefuseUnsureIlike("", pattern);
                 for (auto &c : pattern) c = static_cast<char>(std::tolower(c));
             }
             bool contains_shape = false;
@@ -897,6 +918,7 @@ void ExpressionExecutor::ExecuteComparison(const BoundComparison &expr, DataChun
                 } else {
                     auto str = left.GetData<string_t>()[i].GetString();
                     if (case_insensitive) {
+                        RefuseUnsureIlike(str, "");
                         for (auto &c : str) c = static_cast<char>(std::tolower(c));
                     }
                     bool m = LikeMatch(str, pattern);
@@ -913,6 +935,7 @@ void ExpressionExecutor::ExecuteComparison(const BoundComparison &expr, DataChun
                 auto str = left.GetData<string_t>()[i].GetString();
                 auto pattern = right.GetData<string_t>()[i].GetString();
                 if (case_insensitive) {
+                    RefuseUnsureIlike(str, pattern);
                     for (auto &c : str) c = static_cast<char>(std::tolower(c));
                     for (auto &c : pattern) c = static_cast<char>(std::tolower(c));
                 }
@@ -1258,6 +1281,19 @@ static Vector CoerceVector(Vector &&src, const LogicalType &target_type, idx_t c
             for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
             copy_validity(); return out;
         }
+        // These sat in a second DOUBLE branch below that this one hid, so a
+        // TINYINT or SMALLINT operand of a DOUBLE operation was read as a
+        // double's bytes (Stage 8, #12).
+        if (src_id == LogicalTypeId::TINYINT) {
+            auto *s = src.GetData<int8_t>();
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            copy_validity(); return out;
+        }
+        if (src_id == LogicalTypeId::SMALLINT) {
+            auto *s = src.GetData<int16_t>();
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            copy_validity(); return out;
+        }
     } else if (dst_id == LogicalTypeId::INTEGER) {
         // ResolveArithmeticType promotes TINYINT+TINYINT and SMALLINT+
         // SMALLINT to INTEGER. Without these typed widenings, the
@@ -1314,16 +1350,14 @@ static Vector CoerceVector(Vector &&src, const LogicalType &target_type, idx_t c
             for (idx_t i = 0; i < count; i++) o[i] = static_cast<float>(s[i]);
             copy_validity(); return out;
         }
-    } else if (dst_id == LogicalTypeId::DOUBLE) {
-        auto *o = out.GetData<double>();
         if (src_id == LogicalTypeId::TINYINT) {
             auto *s = src.GetData<int8_t>();
-            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<float>(s[i]);
             copy_validity(); return out;
         }
         if (src_id == LogicalTypeId::SMALLINT) {
             auto *s = src.GetData<int16_t>();
-            for (idx_t i = 0; i < count; i++) o[i] = static_cast<double>(s[i]);
+            for (idx_t i = 0; i < count; i++) o[i] = static_cast<float>(s[i]);
             copy_validity(); return out;
         }
     }
@@ -1665,6 +1699,126 @@ void ExpressionExecutor::ExecuteUnaryMinus(const BoundUnaryMinus &expr, DataChun
 // Function execution (CASE, IN, scalar functions)
 // ============================================================================
 
+
+// ---------------------------------------------------------------------------
+// UTF-8 (Stage 8, #12; design L22). DuckDB's string functions count code
+// points (SUBSTRING, LEFT, RIGHT, INSTR, TRANSLATE, LIKE's '_') or
+// grapheme clusters (LENGTH, REVERSE), and map case with utf8proc's tables
+// (UPPER, LOWER, ILIKE). The engine has neither the grapheme rules nor the
+// case tables: where they could change the answer, it refuses.
+// ---------------------------------------------------------------------------
+
+// The byte offset of each code point of `s`, then s.size(). A byte that
+// does not start a sequence counts as one code point.
+static std::vector<size_t> CodePointStarts(const std::string &s) {
+    std::vector<size_t> starts;
+    starts.reserve(s.size() + 1);
+    for (size_t i = 0; i < s.size(); i++) {
+        if ((static_cast<unsigned char>(s[i]) & 0xC0) != 0x80) starts.push_back(i);
+    }
+    starts.push_back(s.size());
+    return starts;
+}
+
+static bool HasNonAscii(const std::string &s) {
+    for (unsigned char c : s)
+        if (c >= 0x80) return true;
+    return false;
+}
+
+static uint32_t DecodeCodePoint(const std::string &s, size_t pos, size_t end) {
+    auto b = static_cast<unsigned char>(s[pos]);
+    size_t n = end - pos;
+    if (b < 0x80 || n < 2) return b;
+    if ((b & 0xE0) == 0xC0) return ((b & 0x1Fu) << 6) | (static_cast<unsigned char>(s[pos + 1]) & 0x3Fu);
+    if ((b & 0xF0) == 0xE0 && n >= 3)
+        return ((b & 0x0Fu) << 12) | ((static_cast<unsigned char>(s[pos + 1]) & 0x3Fu) << 6) |
+               (static_cast<unsigned char>(s[pos + 2]) & 0x3Fu);
+    if ((b & 0xF8) == 0xF0 && n >= 4)
+        return ((b & 0x07u) << 18) | ((static_cast<unsigned char>(s[pos + 1]) & 0x3Fu) << 12) |
+               ((static_cast<unsigned char>(s[pos + 2]) & 0x3Fu) << 6) |
+               (static_cast<unsigned char>(s[pos + 3]) & 0x3Fu);
+    return 0xFFFD;
+}
+
+// Whether each code point of `s` is a grapheme cluster of its own, for
+// sure: every one is printable ASCII or in a block with no combining,
+// joining or modifying code point (Latin-1 to Latin Extended-B, Greek and
+// Cyrillic letters, CJK ideographs, Hangul syllables, the emoji pictographs
+// without their skin tone modifiers), and there is no "\r\n".
+static bool IsSimpleGraphemes(const std::string &s) {
+    auto starts = CodePointStarts(s);
+    for (size_t k = 0; k + 1 < starts.size(); k++) {
+        uint32_t cp = DecodeCodePoint(s, starts[k], starts[k + 1]);
+        if (cp == '\r' && k + 2 < starts.size() && s[starts[k + 1]] == '\n') return false;
+        bool simple = cp < 0x300 || (cp >= 0x370 && cp <= 0x482) || (cp >= 0x48A && cp <= 0x52F) ||
+                      (cp >= 0x4E00 && cp <= 0x9FFF) || (cp >= 0xAC00 && cp <= 0xD7A3) ||
+                      (cp >= 0x1F300 && cp <= 0x1F3FA) || (cp >= 0x1F400 && cp <= 0x1FAFF);
+        if (!simple) return false;
+    }
+    return true;
+}
+
+static void RefuseUnlessSimpleGraphemes(const std::string &s, const char *fn) {
+    if (!IsSimpleGraphemes(s)) {
+        throw NotImplementedException(std::string(fn) +
+                                      " of a string with combining or joining characters is not supported");
+    }
+}
+
+static void RefuseNonAscii(const std::string &s, const char *fn) {
+    if (HasNonAscii(s)) {
+        throw NotImplementedException(std::string(fn) + " of a string with non-ASCII characters is not supported");
+    }
+}
+
+// The 1-based code point position of the first `sub` in `s`, 0 if none.
+static int64_t CodePointPosition(const std::string &s, const std::string &sub) {
+    auto pos = s.find(sub);
+    if (pos == std::string::npos) return 0;
+    int64_t n = 1;
+    for (size_t i = 0; i < pos; i++)
+        if ((static_cast<unsigned char>(s[i]) & 0xC0) != 0x80) n++;
+    return n;
+}
+
+// DuckDB's substring range over `size` characters: the offset is 1-based,
+// negative from the end, 0 one before the first; a negative length goes
+// backwards; the range is then cut to the string. False when empty.
+// Offset and length are within +-2^32, so nothing overflows.
+static bool SubstringRange(int64_t size, int64_t offset, int64_t length, int64_t &start, int64_t &end) {
+    if (offset > 0) {
+        start = offset - 1;
+    } else if (offset < 0) {
+        start = size + offset;
+    } else {
+        start = 0;
+        length--;
+        if (length <= 0) return false;
+    }
+    if (length == 0) return false;
+    if (length > 0) {
+        end = start + length;
+    } else {
+        end = start;
+        start = start + length;
+    }
+    start = std::max<int64_t>(start, 0);
+    end = std::min<int64_t>(end, size);
+    return start < end;
+}
+
+// ILIKE lowercases both sides with utf8proc's tables. An ASCII pattern
+// against a string is lowercased right by ASCII rules unless the string
+// holds a character whose lowercase is ASCII: U+0130 (to 'i') or U+212A
+// (KELVIN SIGN, to 'k').
+static void RefuseUnsureIlike(const std::string &str, const std::string &pattern) {
+    RefuseNonAscii(pattern, "ILIKE");
+    if (str.find("\xC4\xB0") != std::string::npos || str.find("\xE2\x84\xAA") != std::string::npos) {
+        throw NotImplementedException("ILIKE of a string with U+0130 or U+212A is not supported");
+    }
+}
+
 static bool LikeMatch(const std::string &str, const std::string &pattern) {
     // SQL LIKE pattern matching:
     //   %       any sequence of zero or more characters
@@ -1702,7 +1856,9 @@ static bool LikeMatch(const std::string &str, const std::string &pattern) {
                 continue;
             }
             if (is_meta && pc == '_') {
+                // One code point, not one byte.
                 si++;
+                while (si < str.size() && (static_cast<unsigned char>(str[si]) & 0xC0) == 0x80) si++;
                 pi += step;
                 continue;
             }
@@ -1720,6 +1876,7 @@ static bool LikeMatch(const std::string &str, const std::string &pattern) {
             // anyway).
             pi = star_p + 1;
             si = ++star_s;
+            while (si < str.size() && (static_cast<unsigned char>(str[si]) & 0xC0) == 0x80) si = ++star_s;
         } else {
             return false;
         }
@@ -1907,9 +2064,13 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 }
             }
             uint32_t cp;
-            if (ascii) {
+            if (ascii || name == "STRLEN") {
+                // STRLEN is DuckDB's byte count.
                 cp = n;
             } else {
+                // LENGTH counts grapheme clusters in DuckDB: code points
+                // where each is a cluster of its own (design L22).
+                RefuseUnlessSimpleGraphemes(std::string(d, n), "LENGTH");
                 cp = 0;
                 for (uint32_t j = 0; j < n; j++) {
                     if ((static_cast<unsigned char>(d[j]) & 0xC0) != 0x80) cp++;
@@ -2255,6 +2416,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 result.GetValidity().SetInvalid(i);
             } else {
                 auto s = arg.GetData<string_t>()[i].GetString();
+                RefuseNonAscii(s, name.c_str());
                 for (auto &c : s) {
                     c = name == "UPPER" ? static_cast<char>(std::toupper(c))
                                         : static_cast<char>(std::tolower(c));
@@ -2294,50 +2456,28 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 continue;
             }
             auto s = sv.GetValue<std::string>();
-            int64_t start_raw = IntegerArg(start_vec.GetValue(i), "substring");
-            // SQL standard: positions are 1-based; positions <1 are
-            // clipped but the "missing" characters STILL count against
-            // len in the 3-arg form. SUBSTRING('hello', -2, 5) covers
-            // logical positions -2,-1,0,1,2 → physical "he". A negative
-            // len produces empty. Out-of-range start produces empty.
-            //
-            // 2-arg form (no length): suffix from max(start,1) to end
-            // of string. Previously len was set to s.size() and then
-            // added to start, so SUBSTRING('hello', -2) clipped to
-            // 'he' instead of returning 'hello'.
-            int64_t s_size_i = static_cast<int64_t>(s.size());
-            int64_t effective_start = std::max<int64_t>(1, start_raw);
-            int64_t effective_end;
-            if (has_len) {
-                int64_t len_raw = IntegerArg(len_vec.GetValue(i), "substring");
-                if (len_raw <= 0) {
-                    result.SetValue(i, Value::VARCHAR(""));
-                    continue;
-                }
-                // start + len overflows only upwards (len > 0); past the
-                // end of any string is the same as INT64_MAX.
-                effective_end = start_raw > 0 &&
-                                len_raw > std::numeric_limits<int64_t>::max() - start_raw
-                    ? std::numeric_limits<int64_t>::max()
-                    : start_raw + len_raw;
-            } else {
-                effective_end = s_size_i + 1;
-            }
-            if (effective_end <= 1) {
-                result.SetValue(i, Value::VARCHAR(""));
+            int64_t offset = IntegerArg(start_vec.GetValue(i), "substring");
+            int64_t length = has_len ? IntegerArg(len_vec.GetValue(i), "substring")
+                                     : static_cast<int64_t>(std::numeric_limits<uint32_t>::max());
+            // DuckDB's limits, so that offset + length cannot overflow.
+            if (offset > 4294967295LL || offset < -4294967296LL)
+                throw OutOfRangeException("Substring offset outside of supported range");
+            if (length > 4294967295LL || length < -4294967296LL)
+                throw OutOfRangeException("Substring length outside of supported range");
+            // Code points of a string, bytes of a blob (DuckDB's).
+            bool blob = Arg(expr, 0)->GetReturnType().id() == LogicalTypeId::BLOB;
+            std::vector<size_t> starts;
+            if (!blob) starts = CodePointStarts(s);
+            int64_t size = blob ? static_cast<int64_t>(s.size()) : static_cast<int64_t>(starts.size()) - 1;
+            int64_t from = 0, to = 0;
+            if (!SubstringRange(size, offset, length, from, to)) {
+                result.SetValue(i, blob ? Value::BLOB("") : Value::VARCHAR(""));
                 continue;
             }
-            int64_t out_start = effective_start - 1;
-            int64_t out_len = effective_end - effective_start;
-            int64_t s_size = static_cast<int64_t>(s.size());
-            if (out_start >= s_size || out_len <= 0) {
-                result.SetValue(i, Value::VARCHAR(""));
-                continue;
-            }
-            out_len = std::min<int64_t>(out_len, s_size - out_start);
-            result.SetValue(i, Value::VARCHAR(
-                s.substr(static_cast<size_t>(out_start),
-                         static_cast<size_t>(out_len))));
+            size_t b0 = blob ? static_cast<size_t>(from) : starts[static_cast<size_t>(from)];
+            size_t b1 = blob ? static_cast<size_t>(to) : starts[static_cast<size_t>(to)];
+            auto piece = s.substr(b0, b1 - b0);
+            result.SetValue(i, blob ? Value::BLOB(piece) : Value::VARCHAR(piece));
         }
         return;
     }
@@ -2701,8 +2841,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             }
             auto s = sv.GetValue<std::string>();
             auto sub = subv.GetValue<std::string>();
-            auto pos = s.find(sub);
-            result.SetValue(i, Value::INTEGER(pos == std::string::npos ? 0 : static_cast<int32_t>(pos + 1)));
+            result.SetValue(i, Value::INTEGER(static_cast<int32_t>(CodePointPosition(s, sub))));
         }
         return;
     }
@@ -2720,26 +2859,15 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 continue;
             }
             auto s = sv.GetValue<std::string>();
-            auto n = nv.GetValue<int32_t>();
-            // Postgres semantics for negative n:
-            //   LEFT(s, -k)  = s[: len(s)-k] (drop last k)
-            //   RIGHT(s, -k) = s[k :]        (drop first k)
-            // Clamps to empty when k >= len(s).
-            if (n < 0) {
-                int64_t drop = -static_cast<int64_t>(n);
-                int64_t keep = static_cast<int64_t>(s.size()) - drop;
-                if (keep <= 0) {
-                    result.SetValue(i, Value::VARCHAR(""));
-                } else {
-                    auto k = static_cast<size_t>(keep);
-                    result.SetValue(i, Value::VARCHAR(
-                        name == "LEFT" ? s.substr(0, k) : s.substr(s.size() - k)));
-                }
-                continue;
-            }
-            auto un = static_cast<size_t>(n);
-            result.SetValue(i, Value::VARCHAR(
-                name == "LEFT" ? s.substr(0, un) : s.substr(s.size() > un ? s.size() - un : 0)));
+            int64_t n = IntegerArg(nv, name == "LEFT" ? "left" : "right");
+            // In code points. LEFT(s, -k) drops the last k, RIGHT(s, -k)
+            // the first k.
+            auto starts = CodePointStarts(s);
+            int64_t size = static_cast<int64_t>(starts.size()) - 1;
+            int64_t keep = n >= 0 ? std::min<int64_t>(n, size) : (n <= -size ? 0 : size + n);
+            size_t cut = name == "LEFT" ? starts[static_cast<size_t>(keep)]
+                                        : starts[static_cast<size_t>(size - keep)];
+            result.SetValue(i, Value::VARCHAR(name == "LEFT" ? s.substr(0, cut) : s.substr(cut)));
         }
         return;
     }
@@ -2832,8 +2960,14 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 continue;
             }
             auto s = v.GetValue<std::string>();
-            std::reverse(s.begin(), s.end());
-            result.SetValue(i, Value::VARCHAR(s));
+            // DuckDB reverses grapheme clusters: by code point where each
+            // is a cluster of its own, refused otherwise.
+            RefuseUnlessSimpleGraphemes(s, "REVERSE");
+            auto starts = CodePointStarts(s);
+            std::string r;
+            r.reserve(s.size());
+            for (size_t k = starts.size() - 1; k > 0; k--) r.append(s, starts[k - 1], starts[k] - starts[k - 1]);
+            result.SetValue(i, Value::VARCHAR(r));
         }
         return;
     }
@@ -2851,11 +2985,11 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 continue;
             }
             auto s = sv.GetValue<std::string>();
-            auto n = nv.GetValue<int32_t>();
+            int64_t n = IntegerArg(nv, "repeat");
             if (n < 0) n = 0;
             if (n > 65536) throw InvalidInputException("REPEAT count too large (max: 65536)");
             std::string r;
-            for (int j = 0; j < n; j++) r += s;
+            for (int64_t j = 0; j < n; j++) r += s;
             result.SetValue(i, Value::VARCHAR(r));
         }
         return;
@@ -2878,9 +3012,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             }
             auto s = sv.GetValue<std::string>();
             auto sub = subv.GetValue<std::string>();
-            auto pos = s.find(sub);
-            result.SetValue(i, Value::INTEGER(pos == std::string::npos
-                                              ? 0 : static_cast<int32_t>(pos + 1)));
+            result.SetValue(i, Value::INTEGER(static_cast<int32_t>(CodePointPosition(s, sub))));
         }
         return;
     }
@@ -3022,13 +3154,23 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto s = sv.GetValue<std::string>();
             auto from = fv.GetValue<std::string>();
             auto to = tv.GetValue<std::string>();
+            // Code point by code point: the first occurrence in `from`
+            // maps to the code point at its index in `to`, or is deleted.
+            auto ss = CodePointStarts(s), fs = CodePointStarts(from), ts = CodePointStarts(to);
+            auto cp = [](const std::string &str, const std::vector<size_t> &st, size_t k) {
+                return str.substr(st[k], st[k + 1] - st[k]);
+            };
+            std::vector<std::string> fcp, tcp;
+            for (size_t k = 0; k + 1 < fs.size(); k++) fcp.push_back(cp(from, fs, k));
+            for (size_t k = 0; k + 1 < ts.size(); k++) tcp.push_back(cp(to, ts, k));
             std::string out;
             out.reserve(s.size());
-            for (char c : s) {
-                auto p = from.find(c);
-                if (p == std::string::npos) out.push_back(c);
-                else if (p < to.size()) out.push_back(to[p]);
-                // else: delete (no counterpart)
+            for (size_t k = 0; k + 1 < ss.size(); k++) {
+                auto c = cp(s, ss, k);
+                size_t p = 0;
+                while (p < fcp.size() && fcp[p] != c) p++;
+                if (p == fcp.size()) out += c;
+                else if (p < tcp.size()) out += tcp[p];
             }
             result.SetValue(i, Value::VARCHAR(out));
         }
@@ -5025,30 +5167,12 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
             }
             case LogicalTypeId::VARCHAR:
                 result.SetValue(i, Value::VARCHAR(str)); break;
-            case LogicalTypeId::DATE: {
-                int32_t days;
-                if (!Value::TryParseDateStringEpochDays(str.data(), str.size(), days)) {
-                    throw ConversionException(
-                        "Could not convert string '" + str + "' to DATE");
-                }
-                result.SetValue(i, Value::DATE(days));
-                break;
-            }
+            case LogicalTypeId::DATE:
+            case LogicalTypeId::TIME:
             case LogicalTypeId::TIMESTAMP:
-            case LogicalTypeId::TIMESTAMP_TZ: {
-                int64_t micros;
-                if (!Value::TryParseTimestampMicros(str.data(), str.size(), micros)) {
-                    // Fall back to DATE-only string (midnight TIMESTAMP).
-                    int32_t days;
-                    if (!Value::TryParseDateStringEpochDays(str.data(), str.size(), days)) {
-                        throw ConversionException(
-                            "Could not convert string '" + str + "' to TIMESTAMP");
-                    }
-                    micros = static_cast<int64_t>(days) * 86400LL * 1000000LL;
-                }
-                result.SetValue(i, Value::TIMESTAMP(micros));
+            case LogicalTypeId::TIMESTAMP_TZ:
+                result.SetValue(i, CastToTemporal(val, from_type, to_type));
                 break;
-            }
             case LogicalTypeId::BOOLEAN: {
                 // Case-insensitive bool parse matching DuckDB/Postgres:
                 // 't', 'true', 'yes', 'y', '1' -> true
@@ -5074,6 +5198,10 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
             default:
                 result.SetValue(i, Value::VARCHAR(str)); break;
             }
+        } catch (const NotImplementedException &) {
+            // Text DuckDB may read but the engine cannot: an error under
+            // TRY_CAST too, not a NULL that may be wrong (design L19).
+            throw;
         } catch (...) {
             if (expr.is_try) {
                 result.GetValidity().SetInvalid(i); // TRY_CAST returns NULL
