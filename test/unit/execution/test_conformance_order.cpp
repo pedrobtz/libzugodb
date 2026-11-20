@@ -74,3 +74,33 @@ TEST_CASE("Stage 8: DATE and TIMESTAMP values sort and deduplicate") {
     CHECK(Run(conn, "SELECT d FROM p QUALIFY rank() OVER (PARTITION BY plant ORDER BY d DESC) = 2") ==
           Rows{{"2019-01-03"}});
 }
+
+// ---------------------------------------------------------------------------
+// NULLs in an ORDER BY (#38). DuckDB's default_null_order is nulls_last,
+// after ASC and DESC alike; the engine put them first after DESC. A
+// window's ORDER BY compared a NULL's bytes as a value, ORDER BY x LIMIT
+// k dropped the NULL rows, and with two keys it chose among the first
+// key's ties as they came.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: NULLs sort last, in ORDER BY, under LIMIT and in a window") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE p(g INT, m INT)");
+    conn.Query("INSERT INTO p VALUES (1, 3), (1, NULL), (1, 1), (1, 2)");
+    CHECK(Run(conn, "SELECT m FROM p ORDER BY m DESC") == Rows{{"3"}, {"2"}, {"1"}, {"NULL"}});
+    CHECK(Run(conn, "SELECT m FROM p ORDER BY m DESC NULLS FIRST") ==
+          Rows{{"NULL"}, {"3"}, {"2"}, {"1"}});
+    CHECK(Run(conn, "SELECT m FROM p ORDER BY m LIMIT 4") == Rows{{"1"}, {"2"}, {"3"}, {"NULL"}});
+    CHECK(Run(conn, "SELECT m FROM p ORDER BY m NULLS FIRST LIMIT 2") == Rows{{"NULL"}, {"1"}});
+    CHECK(Run(conn, "SELECT m, row_number() OVER (ORDER BY m), sum(m) OVER (ORDER BY m) "
+                    "FROM p ORDER BY m") ==
+          Rows{{"1", "1", "1"}, {"2", "2", "3"}, {"3", "3", "6"}, {"NULL", "4", "6"}});
+    CHECK(Run(conn, "SELECT m FROM p QUALIFY row_number() OVER (PARTITION BY g ORDER BY m DESC) = 1") ==
+          Rows{{"3"}});
+    std::string values;
+    for (int i = 1; i <= 100; i++) values += (i > 1 ? ", (1, " : "(1, ") + std::to_string(i) + ")";
+    conn.Query("CREATE TABLE t(a INT, b INT)");
+    conn.Query("INSERT INTO t VALUES " + values);
+    CHECK(Run(conn, "SELECT b FROM t ORDER BY a, b DESC LIMIT 3") == Rows{{"100"}, {"99"}, {"98"}});
+}
