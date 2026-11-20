@@ -190,6 +190,19 @@ TEST_CASE("slt: a file that needs what the runner does not do is left out") {
     CHECK(ParseScript("require 64bit\n\nrequire vector_size 512\n\nstatement ok\nSELECT 1\n", "a").left_out.empty());
 }
 
+TEST_CASE("slt: a query with a regex in any column of its result is left out alone (L20)") {
+    Script s = ParseScript("statement ok\nCREATE TABLE t(i INTEGER)\n\n"
+                           "query TT\nEXPLAIN SELECT * FROM t\n----\nphysical_plan\t<!REGEX>:.*WINDOW.*\n\n"
+                           "query I\nSELECT 1\n----\n<REGEX>:1\n\n"
+                           "query I\nSELECT 2\n----\n2\n",
+                           "a");
+    REQUIRE(s.left_out.empty());
+    CHECK(s.regex_cases == 2);
+    REQUIRE(s.CaseCount() == 2);
+    CHECK(s.cases[0].sql == "CREATE TABLE t(i INTEGER)");
+    CHECK(s.cases[1].sql == "SELECT 2");
+}
+
 TEST_CASE("slt: loops, foreach, skipif and mode skip expand as DuckDB's runner does") {
     Script s = ParseScript("loop i 0 3\n\nstatement ok\nSELECT {i}\n\nendloop\n\n"
                            "foreach t <signed> varchar\n\nstatement ok\nSELECT '{t}'\n\nendloop\n\n"
