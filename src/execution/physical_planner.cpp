@@ -5999,7 +5999,10 @@ private:
     std::vector<int64_t> sort_i64_;
     std::vector<double> sort_d_;
     std::vector<string_t> sort_s_;
-    std::vector<bool> partition_sorted_;
+    // One byte per partition, not std::vector<bool>: Setup() sorts
+    // partitions on several workers, and each sets its own flag, so the
+    // flags must not share a word.
+    std::vector<uint8_t> partition_sorted_;
     // Streaming RANK/DENSE_RANK state, reset per partition.
     int64_t rank_cur_ = 1;
     idx_t rank_prev_ = INVALID_INDEX;
