@@ -27,8 +27,11 @@ public:
     // Number of rows.
     idx_t size() const { return count_; }
 
-    void SetCardinality(idx_t count) { count_ = count; }
-    void SetCardinality(const DataChunk &other) { count_ = other.count_; }
+    // A count past the capacity of any of its vectors is an
+    // InternalException (libzugodb Stage 10): rows written past a buffer
+    // are refused when the chunk is sized, not handed on.
+    void SetCardinality(idx_t count);
+    void SetCardinality(const DataChunk &other) { SetCardinality(other.count_); }
 
     // Reset to empty (0 rows), keeping column structure.
     void Reset();

@@ -659,7 +659,37 @@ chunk boundary.
   or is recorded as already correct, with the reason.
 - `v0.3.0` is tagged and released.
 
-**Design.** [zugodb §4.2][zdesign] and [zugodb Stage 8][zroadmap].
+**Deviations (2026-11-20).**
+
+- The audit counts 88 chunks, not 31: every `DataChunk::Initialize` in
+  `src/`, 85 at the default capacity and 3 sized; zugodb's design gave a
+  count of 31 and no list. Each is in L27's table with what
+  bounds it and the case that drives it; none was seen to fail, so each is
+  recorded as already correct with its reason. The sites no SQL reaches
+  (`COPY`, live views, the CSV scans and the SQLite, Avro and Arrow
+  readers) are recorded as unreachable, with what refuses them, not
+  tested: Stage 11 removes them.
+- Beyond the audit, a guard (L27): `Vector::SetValue` and
+  `DataChunk::SetCardinality` past a vector's capacity are an
+  `InternalException`, with doctests at the capacity and one past it.
+- The tests run 4095 and 4096 rows as well, the second boundary's limit
+  and limit minus one. The Parquet table case runs the roadmap's four
+  sizes and leaves out the cases whose fast paths are wrong on a file the
+  engine's writer made, at any size (#50; recorded, not fixed, as Stage 11
+  removes them).
+- The boundary tests found wrong answers that are not capacity bugs, and
+  this stage fixes or refuses them, each with its issue and doctests:
+  NULL keys grouped with 0 or `''` (#47); `|`-joined keys, set operations
+  keeping repeated left rows, and an ignored `PARTITION BY` expression
+  (#48); `MERGE` (#49), narrowed in `docs/dialect.md`.
+- The SQL fuzzer's schema gains a 2049-row table, built through the C++
+  API.
+- `v0.3.0` is tagged and released by the maintainer after the merge, not
+  in the pull request.
+- The counts: COUNTS_PLACEHOLDER
+
+**Design.** [zugodb §4.2][zdesign] and [zugodb Stage 8][zroadmap], L27 in
+[§8](design.md#8-decisions).
 
 ## Stage 11 — Cut the engine's file readers
 

@@ -611,6 +611,102 @@ minor version.
     `src/parser/parser.cpp`, against a floor in the workflow (800; the
     first run reached 894 of 3,894).
 
+- **L27 (2026-11-20, Stage 10, decided with an advisor).** Chunk capacity.
+  A `DataChunk` holds `VECTOR_SIZE` (2048) rows unless its creator sizes
+  it, and the operator contract is that `GetData` gives at most that many.
+  The audit below found every one of the 88 `DataChunk::Initialize` calls in
+  `src/` (85 at the default capacity, 3 sized) bounded: filled by
+  `DataTable::Scan` or a child's `GetData`, by an emit loop that stops at
+  `VECTOR_SIZE`, row for row from one input chunk, with one row, or in
+  batches of at most `VECTOR_SIZE`; the one larger chunk is
+  `PhysicalInsert`'s, sized by its `VALUES` list since #45. None was seen to
+  fail: `test/unit/execution/test_chunks.cpp` drives each reachable one
+  with 2047, 2048, 2049, 4095, 4096 and 4097 rows and NULLs on each side of
+  each boundary, against the same query over a `UNION ALL` of two halves
+  (row count, an order-independent checksum, the NULL count) and the count
+  the query must give, under ASan and UBSan in CI, and a coverage build
+  confirmed which sites those queries reach.
+  - A guard, since only a check keeps a later operator from breaking the
+    contract silently. A `Vector` records its capacity (0 for one wrapping
+    data it does not own); `Vector::SetValue` past it and
+    `DataChunk::SetCardinality` past any column's are an
+    `InternalException`. The fast paths that write `GetData<T>()[i]` are
+    not checked before the write, only when the chunk is sized after it,
+    and by ASan in CI. `ValidityMask` writes are not checked: they are in
+    the per-row loops and the mask knows its size only in words.
+  - What the boundary tests found was not a capacity bug but wrong answers
+    at any size, fixed or refused here as the invariants ask: a NULL key
+    grouped and partitioned with 0 or `''` (#47); keys joined with `|`, so
+    rows that differ were one group, one `DISTINCT` row or one partition,
+    set operations that kept rows repeated on their left, and a `PARTITION
+    BY` expression ignored (#48), now one key encoding
+    (`include/slothdb/execution/group_key.hpp`); `MERGE` doing other than
+    it was asked (#49), now refused outside the shape it does right
+    (`docs/dialect.md`). The Parquet fast paths give no rows or crash on a
+    file `ParquetWriter` wrote (#50); no SQL reaches them and Stage 11
+    removes them, so the Parquet run of `test_chunks.cpp` leaves those
+    cases out and names the issue.
+  - The audit. "Scan" is a loop over `DataTable::Scan`, at most
+    `VECTOR_SIZE` rows a call; "child" a loop over a child's `GetData`;
+    "emit" a loop that stops at `VECTOR_SIZE`; "row for row" at most the
+    rows of one input chunk; "one row" a chunk of one row for an
+    expression; "unreachable" a site no SQL reaches, with what refuses it,
+    each removed in Stage 11 with the readers. Cases are those of
+    `test_chunks.cpp`.
+
+    | Site | Filled | Driven by |
+    | --- | --- | --- |
+    | `main/connection.cpp` `BulkLoadRows` | batches of `VECTOR_SIZE` from rows | every derived table, CTE and set operation (`derived`, `cte`, `union`) |
+    | `connection.cpp` `ALTER TABLE ADD COLUMN`, two chunks | scan; the new chunk row for row | `ALTER TABLE` |
+    | `connection.cpp` `ALTER TABLE DROP COLUMN`, two chunks | scan; row for row | `ALTER TABLE` |
+    | `connection.cpp` `ALTER TABLE RENAME COLUMN` | scan | `ALTER TABLE` |
+    | `connection.cpp` `INSERT ... SELECT` `build_coerced_chunk` | row for row from a child chunk | the four `INSERT ... SELECT` subcases |
+    | `connection.cpp` `COPY TO`, three chunks (Parquet, JSON, CSV) | scan | unreachable: `COPY` is refused by the parser (`RefuseFileAccess`) |
+    | `connection.cpp` `MERGE`, source and target | scan | `MERGE` |
+    | `connection.cpp` `MERGE` rebuild | now `BulkLoadRows` (one row each before) | `MERGE` |
+    | `connection.cpp` live view incremental CSV read | `FastCSVReader::ReadChunk`, at most `VECTOR_SIZE` | unreachable: `CREATE LIVE VIEW` refused |
+    | `connection.cpp` `GENERATE_SERIES` | one row | row generators |
+    | `connection.cpp` recursive CTE `make_table` | batches of `VECTOR_SIZE` | row generators (recursive CTE) |
+    | `connection.cpp` `Connection::Scan` | scan | the C++ scan |
+    | `catalog/table_catalog_entry.cpp` `CheckPrimaryKeyForChunk` | scan | `VALUES` into a table with a primary key |
+    | `storage/data_table.cpp` `ParallelScan` | one morsel, at most `VECTOR_SIZE` | `ParallelExecutor` only, which no query reaches (`test_threads.cpp`) |
+    | `storage/checkpoint.cpp` `Save` | scan | a database file reads back |
+    | `checkpoint.cpp` `ReadTable` | sized by its batch, at most `VECTOR_SIZE` | a database file reads back |
+    | `execution/parallel_executor.cpp`, filter and projection | row for row from a morsel | as `ParallelScan` |
+    | `execution/count_group_agg.cpp` | child | `group-two`, `distinct-two` (COUNT only) |
+    | `execution/literal_emit_filter.cpp`, `Init` and `GetData` | child; emit | `literal-emit` |
+    | `optimizer/optimizer.cpp` `EvaluateConstant` | no column, one row | constant folding (any test) |
+    | `physical_planner.cpp` `PhysicalTableScan` | scan | every case |
+    | `PhysicalFilter`, input and result | child; row for row | `filter-*` |
+    | `PhysicalProjection`, input and result | child; row for row | `projection` and most cases |
+    | `PhysicalOrderBy` emit | emit | `order*` |
+    | `PhysicalOrderBy` top-k, typed key and generic | child | `topk-*`, `group-order-limit` |
+    | `PhysicalOrderBy::CollectFull` | child | `order*` |
+    | `PhysicalLimit`, input and result | child; row for row | `limit*`, `topk-offset` |
+    | `PhysicalInsert` | sized by the `VALUES` list (#45) | `INSERT ... VALUES` |
+    | `PhysicalWindow` fallback emit and vectorised emit | emit | `window-*`, `qualify` |
+    | `PhysicalWindow` per-row expression, partition expression (two), fallback rows | one row | `window-expression`, `window-partition-expression`, `window-two-windows-expression` |
+    | `PhysicalWindow::ReadInput` | child | `window-*` |
+    | `PhysicalDistinct`, input and result | child; row for row | `distinct-*` |
+    | `PhysicalHashAggregate` emit | emit | `group-*` |
+    | `PhysicalHashAggregate::ComputeAggregates` chunk | child | `group-*`, `aggregate*` |
+    | `PhysicalHashAggregate`, per-row expression arguments (three) | one row | `aggregate-case*` |
+    | `PhysicalHashAggregate` Parquet multi-column path | sized, batches of `VECTOR_SIZE` | Parquet only; its cases are left out (#50) |
+    | `PhysicalHashAggregate` CSV workers (three) and the fused join-aggregate CSV worker | `FastCSVReader::ReadChunk` | unreachable: they need a CSV file scan, refused |
+    | `PhysicalFileScan`, `PhysicalCountScan` | `ReadChunk`; one row | unreachable: CSV table functions refused |
+    | `PhysicalParquetScan` | slices of a row group, at most `VECTOR_SIZE` | the Parquet table case (row groups of the file, and of 2047 rows) |
+    | `PhysicalHashJoin` cross emit and streaming result (two) | emit; the probe loop checks `out < VECTOR_SIZE` per row | `join-*` |
+    | `PhysicalHashJoin` probe chunk | child | `join-*` |
+    | `PhysicalHashJoin` cross join collect (two) | child | `join-cross` |
+    | `PhysicalHashJoin` build, left first and right after (two) | child | `join-*`; `join-left-large*` (a left side of more than 100,000 rows) |
+    | `PhysicalHashJoin` build by file sizes | child | unreachable: both sides CSV file scans |
+    | `PhysicalHashJoin::ResidualPasses` | one row | `join-two-keys` |
+    | `PhysicalUpdate`, scan, filter, assignment, insert | scan; one row each | `UPDATE` |
+    | `PhysicalDelete`, scan, filter, keep | scan; one row each | `DELETE` |
+    | `PhysicalDummyScan` | no column | `scalar-subquery` and any `SELECT` without `FROM` |
+    | `storage/fast_csv_reader.cpp`, `csv_reader.cpp`, `json_reader.cpp` (five) | `ReadChunk` and the JSON parse stop at `VECTOR_SIZE` | the C++ API only; no doctest crosses 2048 rows, recorded as bounded by the loop (Stage 11 removes them) |
+    | `storage/sqlite_scanner.cpp`, `avro_reader.cpp`, `arrow_ipc.cpp` (six) | flush at `VECTOR_SIZE` | unreachable: refused in their constructors |
+
 ## 9. Open questions
 
 - **LQ1 (settled 2026-11-20, Stage 6).** Which DuckDB tag is pinned, and
