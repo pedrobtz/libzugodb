@@ -131,3 +131,28 @@ TEST_CASE("Stage 8: the TIMESTAMP variants are refused") {
                     "'2020-01-01 01:23:45'::DATETIME") ==
           Rows{{"2020-01-01 01:23:45.123456", "2020-01-01 01:23:45"}});
 }
+
+// ---------------------------------------------------------------------------
+// DECIMAL and NUMERIC (#26; types/decimal/*.test) bound to DOUBLE, so
+// '0.1'::DECIMAL printed 0.1 for DuckDB's 0.100, sums lost digits and
+// overflow went unchecked: refused until a fixed-point type exists.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: DECIMAL and NUMERIC are refused") {
+    Database db;
+    Connection conn(db);
+    const char *queries[] = {
+        "SELECT '0.1'::DECIMAL::VARCHAR",
+        "SELECT CAST(0.1 AS DECIMAL(10,2)) + CAST(0.2 AS DECIMAL(10,2))",
+        "SELECT TRY_CAST('9.99' AS DECIMAL(1,0))",
+        "SELECT 1::NUMERIC(3,1)",
+        "CREATE TABLE t(d DECIMAL(18,3))",
+        "CREATE TABLE t(d NUMERIC)",
+    };
+    for (auto *q : queries) {
+        CAPTURE(q);
+        CHECK_THROWS(conn.Query(q));
+    }
+    // A decimal literal is a DOUBLE, as before.
+    CHECK(Run(conn, "SELECT 0.5 + 1") == Rows{{"1.5"}});
+}

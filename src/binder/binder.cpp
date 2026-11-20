@@ -2100,14 +2100,11 @@ LogicalType Binder::ResolveTypeName(const std::string &name) {
     if (base == "TIMESTAMP" || base == "DATETIME") return LogicalType::TIMESTAMP();
 
     if (base == "DECIMAL" || base == "NUMERIC") {
-        // SlothDB has no native DECIMAL execution path: INSERT into
-        // DECIMAL columns silently stored zeros, SUM/AVG returned 0,
-        // and CAST AS DECIMAL produced 0. Until a real fixed-point
-        // codepath lands, alias DECIMAL/NUMERIC to DOUBLE so the
-        // queries work with approximate semantics instead of silent
-        // wrong results. Width/scale parameters are parsed and
-        // discarded (matches MySQL's "approximate DECIMAL" pragma).
-        return LogicalType::DOUBLE();
+        // The engine has no fixed-point type: DECIMAL(p,s) bound to DOUBLE
+        // and dropped p and s, so its arithmetic, rounding, text and
+        // overflow were a double's, not DuckDB's. Refused until a real
+        // DECIMAL exists (#26). Decimal literals (1.5) stay DOUBLE.
+        throw NotImplementedException(base + " is not supported");
     }
 
     throw BinderException(ErrorCode::TYPE_MISMATCH, "Unknown type: " + name);
