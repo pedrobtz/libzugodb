@@ -36,7 +36,7 @@ issue closed. zugodb then moves its pin.
 | 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | [#28](https://github.com/pedrobtz/libzugodb/pull/28) | 2026-11-20 |
 | 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | [#29](https://github.com/pedrobtz/libzugodb/pull/29) | 2026-11-20 |
 | 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | [#30](https://github.com/pedrobtz/libzugodb/pull/30), [#41](https://github.com/pedrobtz/libzugodb/pull/41) | 2026-11-20 |
-| 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | | |
+| 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | [#46](https://github.com/pedrobtz/libzugodb/pull/46) | 2026-11-20 |
 | 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | | |
 | 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | | |
 | 11.1 | [Host-supplied function providers](#stage-111--host-supplied-function-providers) | 0.4.0 | ci | [#40](https://github.com/pedrobtz/libzugodb/issues/40) | | |
@@ -585,8 +585,33 @@ engine accepts is written down.
 - Every `**Tests.**` line exists and was seen to fail.
 - The subset's counts did not get worse.
 
-**Design.** [§3](design.md#3-dialect), [§4](design.md#4-parser) and L2, L4
-in [§8](design.md#8-decisions).
+**Deviations (2026-11-20).**
+
+- The stage grew past the parser, decided with an advisor (design L26):
+  checking each MySQL form against DuckDB found wrong answers in the
+  functions beside them, and the fuzzer in the binder, so the stage adds
+  a function registry with DuckDB's argument counts and types, refuses
+  every name outside it, and fixes or refuses what the checks found
+  (`DATE_DIFF`, `STRFTIME`, `DAYNAME`, conditions of another type,
+  `CASE`'s types, `GENERATE_SERIES`, `NTILE`, `DESCRIBE`, `SHOW`).
+- Identifiers match ignoring ASCII case, as DuckDB's, which the roadmap did
+  not name: two tables `t` and `T` was an accepted state DuckDB refuses.
+  It let the subset reach cases it could not before (`Scoreboard` was
+  `ScoreBoard` in `window/test_ntile.test`).
+- `BEGIN`, `COMMIT` and `ROLLBACK` are refused (L26), beyond "no statement
+  is skipped silently": with no undo, a statement after a failed one in a
+  transaction was kept.
+- The quoted-identifier cases added to the subset are eight files
+  (`test/conformance/subset.txt`); most of their cases are refused (schemas,
+  enums, structs), none is wrong or accepted.
+- The fuzzer's reach is measured on `src/parser/parser.cpp`, the stage's
+  subject, though it reaches the binder and executor too; the bugs it found
+  were there.
+- The SQL harness's oracle is a class and a shape at thread caps 1 and 2,
+  not values, as the subset's (L16).
+
+**Design.** [§3](design.md#3-dialect), [§4](design.md#4-parser) and L2, L4,
+L26 in [§8](design.md#8-decisions).
 
 ## Stage 10 — Chunk capacity audit
 

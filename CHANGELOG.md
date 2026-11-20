@@ -157,6 +157,53 @@
   `TINYINT` or `SMALLINT` were 0. `LN`, `LOG`, `LOG2`, `LOG10` and `EXP`
   give DuckDB's infinities (`ln(0)` is `-inf`, `exp(1000)` is `inf`)
   where they gave NULL, and refuse a NaN.
+- The parser is hardened and the dialect written down (#13, design L26):
+  - quoted identifiers read the `""` escape, so a name may hold `"`;
+    backticks delimit a name as in DuckDB; an empty quoted name is an
+    error. Names match ignoring ASCII case and keep their spelling, as
+    DuckDB's: `SELECT foo FROM Foo` works and names its column as the
+    table does, `t` and `T` are one table, and two columns of one name are
+    refused (or renamed `name_1` in a subquery, a view or `CREATE TABLE
+    AS`). A database file holding two such names, or an empty one, is
+    refused when opened;
+  - a parser error's message ends with its line and column; a statement
+    ends at `;` or the end of the text (`SELECT 1 SELECT 2` ran as two);
+    a CTE's column aliases name its columns (they were skipped, so `WITH
+    t(b, a) AS (SELECT 1 AS a, 2 AS b) SELECT a FROM t` gave 1);
+  - every function is in one registry with DuckDB's argument counts and
+    types, and any other name, count or type is an error at bind time.
+    Refused: MySQL's and other forms DuckDB does not have (`NVL`, `IIF`,
+    `GETDATE`, `CURDATE`, `DATE_FORMAT`, `DATEADD`, `TIMESTAMPADD`,
+    `TIMESTAMPDIFF`, `SUBDATE`, the two-argument `DATEDIFF`, ...),
+    `RANDOM` and `UUID` (a host's provider, L25), `NOW`,
+    `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `TO_TIMESTAMP` and `AGE` (a time
+    zone or a type the engine has not), `DATE_ADD`, `DATE_SUB`, `VERSION`
+    and `CURRENT_DATABASE`, `TIMESTAMP ± INTEGER`, `TIMESTAMP - TIMESTAMP`
+    and `DATE + BIGINT`;
+  - `DATE_DIFF` counts part boundaries as DuckDB's (`date_diff('month',
+    2020-01-31, 2020-02-01)` is 1, not 0); `STRFTIME` formats DuckDB's
+    specifiers (the C library's `%c`, `%x`, `%g` and `%z` differed);
+    `DAYNAME` and `MONTHNAME` of a `DATE` are right (every `DATE` was a
+    Thursday in January); `NTILE` with more buckets than rows, and a count
+    below 1, are DuckDB's;
+  - a condition of another type is cast to `BOOLEAN` (`NOT 10` was true,
+    `CASE WHEN 2` took the `ELSE`); `CASE`, `COALESCE`, `NULLIF`,
+    `GREATEST` and `LEAST` keep `BOOLEAN`, `DATE` and `FLOAT` branches as
+    they are (they were `INTEGER` or `DOUBLE`); `GENERATE_SERIES` takes
+    negative literals and steps;
+  - `BEGIN`, `COMMIT` and `ROLLBACK` are refused: with no undo, a
+    statement after a failed one in a transaction was kept where DuckDB
+    rolls it back. `DESCRIBE` and `PRAGMA table_info` report `NOT NULL`
+    and `PRIMARY KEY`, `SHOW TABLES` is in DuckDB's order, and `PRAGMA
+    database_list`, `SHOW COLUMNS` and `SHOW ... LIKE` are refused;
+  - `docs/dialect.md` lists the statements, types and functions accepted
+    and what is refused; `tools/check_dialect.sh`, run by the `ci` jobs,
+    checks its functions against the binder's. A libFuzzer harness over
+    SQL text, `fuzz/sql.cpp`, joins the `fuzz` job, seeded from the
+    subset's statements (`fuzz/make_sql_corpus.sh`). The subset gains
+    DuckDB's files on quoted identifiers and identifier case. For
+    `tools/vendor.yaml`, no path under `src/` or `include/` is added or
+    moved.
 
 ## libzugodb 0.2.0
 
