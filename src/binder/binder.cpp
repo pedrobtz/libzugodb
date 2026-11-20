@@ -1062,29 +1062,13 @@ BoundExprPtr Binder::BindConstant(const ConstantExpression &expr) {
         return std::make_unique<BoundConstant>(Value::BOOLEAN(true));
     case TokenType::KW_FALSE:
         return std::make_unique<BoundConstant>(Value::BOOLEAN(false));
-    case TokenType::KW_DATE: {
-        // SQL-92 typed literal DATE 'YYYY-MM-DD' — parsed at the
-        // expression-grammar level so the binder receives a string
-        // tagged with the DATE token; convert via the existing helper.
-        int32_t days;
-        if (!Value::TryParseDateStringEpochDays(expr.value.data(), expr.value.size(), days)) {
-            throw ParserException("Invalid DATE literal '" + expr.value + "'");
-        }
-        return std::make_unique<BoundConstant>(Value::DATE(days));
-    }
-    case TokenType::KW_TIMESTAMP: {
-        int64_t micros;
-        if (!Value::TryParseTimestampMicros(expr.value.data(), expr.value.size(), micros)) {
-            int32_t days;
-            if (!Value::TryParseDateStringEpochDays(expr.value.data(), expr.value.size(), days)) {
-                throw ParserException("Invalid TIMESTAMP literal '" + expr.value + "'");
-            }
-            micros = static_cast<int64_t>(days) * 86400LL * 1000000LL;
-        }
-        return std::make_unique<BoundConstant>(Value::TIMESTAMP(micros));
-    }
+    case TokenType::KW_DATE:
+        // SQL-92 typed literals, read by DuckDB's grammar (design L19).
+        return std::make_unique<BoundConstant>(Value::ParseTemporal(expr.value, LogicalTypeId::DATE));
+    case TokenType::KW_TIMESTAMP:
+        return std::make_unique<BoundConstant>(Value::ParseTemporal(expr.value, LogicalTypeId::TIMESTAMP));
     case TokenType::KW_TIME:
-        throw NotImplementedException("TIME literal not yet supported");
+        return std::make_unique<BoundConstant>(Value::ParseTemporal(expr.value, LogicalTypeId::TIME));
     default:
         throw InternalException("Unknown constant literal type");
     }

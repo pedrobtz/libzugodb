@@ -428,6 +428,40 @@ void ExpressionExecutor::Execute(const BoundExpression &expr, DataChunk &input,
     }
 }
 
+// A cast to DATE, TIME or TIMESTAMP (design L19). Text is read by DuckDB's
+// grammar (Value::ParseDate and friends): text DuckDB rejects too is a
+// ConversionException (NULL under TRY_CAST), text it may read but the
+// engine cannot is a NotImplementedException. TIMESTAMP to DATE and to
+// TIME take the day and the time of day; any other source type is not a
+// cast DuckDB has.
+static Value CastToTemporal(const Value &val, LogicalTypeId from_type, LogicalTypeId to_type) {
+    const int64_t kMicrosPerDay = 86400000000LL;
+    auto name = LogicalType(to_type).ToString();
+    if (from_type == LogicalTypeId::VARCHAR) return Value::ParseTemporal(val.StringRef(), to_type);
+    if (from_type == to_type) return val;
+    bool from_ts = from_type == LogicalTypeId::TIMESTAMP || from_type == LogicalTypeId::TIMESTAMP_TZ;
+    if (from_ts) {
+        int64_t micros = val.GetValue<int64_t>();
+        int64_t days = micros / kMicrosPerDay;
+        int64_t tod = micros % kMicrosPerDay;
+        if (tod < 0) { tod += kMicrosPerDay; days -= 1; }
+        if (to_type == LogicalTypeId::DATE) return Value::DATE(static_cast<int32_t>(days));
+        if (to_type == LogicalTypeId::TIME) return Value::TIME(tod);
+        return Value::TIMESTAMP(micros);
+    }
+    if (from_type == LogicalTypeId::DATE &&
+        (to_type == LogicalTypeId::TIMESTAMP || to_type == LogicalTypeId::TIMESTAMP_TZ)) {
+        int64_t days = val.GetValue<int32_t>();
+        // Every DATE past 294247-01-10 is beyond a TIMESTAMP.
+        if (days > 106751991 || days < -106751991) {
+            throw ConversionException("Date out of range for TIMESTAMP");
+        }
+        return Value::TIMESTAMP(days * kMicrosPerDay);
+    }
+    throw NotImplementedException("Unimplemented cast from " + LogicalType(from_type).ToString() +
+                                  " to " + name);
+}
+
 Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
     if (expr.GetExpressionType() == BoundExpressionType::CONSTANT) {
         return static_cast<const BoundConstant &>(expr).value;
@@ -618,27 +652,11 @@ Value ExpressionExecutor::ExecuteScalar(const BoundExpression &expr) {
             }
         }
         case LogicalTypeId::VARCHAR: return Value::VARCHAR(str);
-        case LogicalTypeId::DATE: {
-            int32_t days;
-            if (!Value::TryParseDateStringEpochDays(str.data(), str.size(), days)) {
-                throw ConversionException(
-                    "Could not convert string '" + str + "' to DATE");
-            }
-            return Value::DATE(days);
-        }
+        case LogicalTypeId::DATE:
+        case LogicalTypeId::TIME:
         case LogicalTypeId::TIMESTAMP:
-        case LogicalTypeId::TIMESTAMP_TZ: {
-            int64_t micros;
-            if (!Value::TryParseTimestampMicros(str.data(), str.size(), micros)) {
-                int32_t days;
-                if (!Value::TryParseDateStringEpochDays(str.data(), str.size(), days)) {
-                    throw ConversionException(
-                        "Could not convert string '" + str + "' to TIMESTAMP");
-                }
-                micros = static_cast<int64_t>(days) * 86400LL * 1000000LL;
-            }
-            return Value::TIMESTAMP(micros);
-        }
+        case LogicalTypeId::TIMESTAMP_TZ:
+            return CastToTemporal(child_val, child_val.type().id(), cast.GetReturnType().id());
         default: return Value::VARCHAR(str);
         }
     }
@@ -5025,30 +5043,12 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
             }
             case LogicalTypeId::VARCHAR:
                 result.SetValue(i, Value::VARCHAR(str)); break;
-            case LogicalTypeId::DATE: {
-                int32_t days;
-                if (!Value::TryParseDateStringEpochDays(str.data(), str.size(), days)) {
-                    throw ConversionException(
-                        "Could not convert string '" + str + "' to DATE");
-                }
-                result.SetValue(i, Value::DATE(days));
-                break;
-            }
+            case LogicalTypeId::DATE:
+            case LogicalTypeId::TIME:
             case LogicalTypeId::TIMESTAMP:
-            case LogicalTypeId::TIMESTAMP_TZ: {
-                int64_t micros;
-                if (!Value::TryParseTimestampMicros(str.data(), str.size(), micros)) {
-                    // Fall back to DATE-only string (midnight TIMESTAMP).
-                    int32_t days;
-                    if (!Value::TryParseDateStringEpochDays(str.data(), str.size(), days)) {
-                        throw ConversionException(
-                            "Could not convert string '" + str + "' to TIMESTAMP");
-                    }
-                    micros = static_cast<int64_t>(days) * 86400LL * 1000000LL;
-                }
-                result.SetValue(i, Value::TIMESTAMP(micros));
+            case LogicalTypeId::TIMESTAMP_TZ:
+                result.SetValue(i, CastToTemporal(val, from_type, to_type));
                 break;
-            }
             case LogicalTypeId::BOOLEAN: {
                 // Case-insensitive bool parse matching DuckDB/Postgres:
                 // 't', 'true', 'yes', 'y', '1' -> true
@@ -5074,6 +5074,10 @@ void ExpressionExecutor::ExecuteCast(const BoundCast &expr, DataChunk &input,
             default:
                 result.SetValue(i, Value::VARCHAR(str)); break;
             }
+        } catch (const NotImplementedException &) {
+            // Text DuckDB may read but the engine cannot: an error under
+            // TRY_CAST too, not a NULL that may be wrong (design L19).
+            throw;
         } catch (...) {
             if (expr.is_try) {
                 result.GetValidity().SetInvalid(i); // TRY_CAST returns NULL

@@ -808,8 +808,9 @@ TEST_CASE("Load - the extreme DATE and TIMESTAMP values a file can hold render")
         REQUIRE(r.RowCount() == 2);
         CHECK(r.GetValue(0, 0).ToString() == "5881580-07-11");
         CHECK(r.GetValue(0, 1).ToString() == "294247-01-10 04:00:54.775807");
-        CHECK(r.GetValue(1, 0).ToString() == "-5877641-06-23");
-        CHECK(r.GetValue(1, 1).ToString() == "-290308-12-21 19:59:05.224192");
+        // A year before 1 as DuckDB writes it (Stage 8, design L19).
+        CHECK(r.GetValue(1, 0).ToString() == "5877642-06-23 (BC)");
+        CHECK(r.GetValue(1, 1).ToString() == "290309-12-21 (BC) 19:59:05.224192");
     }
     std::remove(HAND_DB_PATH);
 }

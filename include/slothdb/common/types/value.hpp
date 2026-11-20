@@ -59,14 +59,26 @@ public:
     static Value TIMESTAMP(int64_t micros_since_epoch);
     static Value TIME(int64_t micros_since_midnight);
 
-    // Parse 'YYYY-MM-DD HH:MM:SS[.ffffff]' into epoch microseconds. Returns
-    // false on any deviation from the strict shape; on success out_micros
-    // is the UTC epoch-microseconds value. Used by CSV type inference.
+    // Text to DATE, TIME and TIMESTAMP by DuckDB's grammar at the pinned
+    // tag (Date::TryConvertDate, Time::TryConvertTime and
+    // Timestamp::TryConvertTimestamp; libzugodb design L19). Ok: `out` is
+    // the value. Invalid: DuckDB rejects the text too (TRY_CAST gives
+    // NULL). Unsupported: DuckDB may accept it but the engine cannot hold
+    // or read it ('infinity', a time zone name, trailing text after a
+    // time), so a cast of it is an error even under TRY_CAST.
+    enum class ParseResult { Ok, Invalid, Unsupported };
+    static ParseResult ParseDate(const char *s, size_t len, int32_t &out_days);
+    static ParseResult ParseTime(const char *s, size_t len, int64_t &out_micros);
+    static ParseResult ParseTimestamp(const char *s, size_t len, int64_t &out_micros);
+
+    // The value of `text` as a DATE, TIME or TIMESTAMP (`to`): Invalid is
+    // a ConversionException, Unsupported a NotImplementedException.
+    static Value ParseTemporal(const std::string &text, LogicalTypeId to);
+
+    // ParseTimestamp(...) == Ok: epoch microseconds.
     static bool TryParseTimestampMicros(const char *s, size_t len, int64_t &out_micros);
 
-    // Strict 'YYYY-MM-DD' (length 10) → days since 1970-01-01. Used by binder
-    // to coerce date string literals against parquet date columns stored as
-    // USMALLINT/INTEGER days-since-epoch (e.g. ClickBench EventDate).
+    // ParseDate(...) == Ok: days since 1970-01-01.
     static bool TryParseDateStringEpochDays(const char *s, size_t len, int32_t &out_days);
 
     bool IsNull() const { return is_null_; }
