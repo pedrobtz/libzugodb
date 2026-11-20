@@ -6192,6 +6192,11 @@ private:
             return static_cast<double>(reinterpret_cast<const int64_t *>(vec.GetData())[row]);
         case LogicalTypeId::DOUBLE:  return reinterpret_cast<const double *>(vec.GetData())[row];
         case LogicalTypeId::FLOAT:   return static_cast<double>(reinterpret_cast<const float *>(vec.GetData())[row]);
+        // These read as 0 before (Stage 8, #12): MIN and MAX of a BOOLEAN
+        // were false, a SUM of SMALLINT 0.
+        case LogicalTypeId::BOOLEAN: return reinterpret_cast<const bool *>(vec.GetData())[row] ? 1.0 : 0.0;
+        case LogicalTypeId::TINYINT: return static_cast<double>(reinterpret_cast<const int8_t *>(vec.GetData())[row]);
+        case LogicalTypeId::SMALLINT: return static_cast<double>(reinterpret_cast<const int16_t *>(vec.GetData())[row]);
         default: return 0.0;
         }
     }
@@ -12436,7 +12441,18 @@ private:
                                         state.count++;
                                         auto &x = state.extras();
                                         x.bool_or = x.bool_or || (val != 0.0);
+                                    } else {
+                                        // STRING_AGG and the rest were skipped,
+                                        // so their result was NULL (Stage 8).
+                                        throw NotImplementedException("Aggregate " + info.name +
+                                                                      " of an expression is not supported");
                                     }
+                                } else {
+                                    // A VARCHAR, DATE, ... expression was
+                                    // skipped: MIN('hello') was NULL (Stage 8).
+                                    throw NotImplementedException("Aggregate " + info.name + " of a " +
+                                                                  arg_val.type().ToString() +
+                                                                  " expression is not supported");
                                 }
                             }
                         }
@@ -12498,7 +12514,15 @@ private:
                                 auto v = chunk.GetValue(info.col_idx, i);
                                 if (!v.IsNull()) {
                                     auto &x = state.extras();
-                                    if (x.str_started) x.str_agg += x.str_delim.empty() ? "," : x.str_delim;
+                                    if (!x.str_started) {
+                                        // The separator, a string constant
+                                        // (the binder's check), else ','.
+                                        auto &fx = static_cast<BoundFunction &>(*aggregates_[a]);
+                                        x.str_delim = fx.arguments.size() > 1
+                                            ? static_cast<BoundConstant &>(*fx.arguments[1]).value.ToString()
+                                            : std::string(",");
+                                    }
+                                    if (x.str_started) x.str_agg += x.str_delim;
                                     x.str_agg += v.ToString();
                                     x.str_started = true;
                                 }
@@ -12518,10 +12542,30 @@ private:
                             ExpressionExecutor::Execute(*agg_expr.arguments[0], row_chunk, res, 1);
                             arg_val = res.GetValue(0);
                         }
+                        // Only COUNT, SUM and AVG are computed here; any
+                        // other aggregate of an expression gave NULL, and
+                        // a non-DOUBLE value was read as a double (Stage
+                        // 8, #12).
+                        if (info.name != "COUNT" && info.name != "SUM" && info.name != "AVG") {
+                            throw NotImplementedException("Aggregate " + info.name +
+                                                          " of this expression is not supported");
+                        }
                         if (info.name == "COUNT" && !arg_val.IsNull()) state.count++;
                         else if ((info.name == "SUM" || info.name == "AVG") && !arg_val.IsNull()) {
+                            double d;
+                            switch (arg_val.type().id()) {
+                            case LogicalTypeId::DOUBLE: d = arg_val.GetValue<double>(); break;
+                            case LogicalTypeId::FLOAT: d = arg_val.GetValue<float>(); break;
+                            case LogicalTypeId::INTEGER: d = arg_val.GetValue<int32_t>(); break;
+                            case LogicalTypeId::SMALLINT: d = arg_val.GetValue<int16_t>(); break;
+                            case LogicalTypeId::TINYINT: d = arg_val.GetValue<int8_t>(); break;
+                            default:
+                                throw NotImplementedException("Aggregate " + info.name + " of a " +
+                                                              arg_val.type().ToString() +
+                                                              " expression is not supported");
+                            }
                             state.count++;
-                            state.sum += arg_val.GetValue<double>();
+                            state.sum += d;
                         }
                     }
                 }

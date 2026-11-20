@@ -1310,10 +1310,35 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         name = "LENGTH";
     }
     bool is_agg = IsAggregateFunction(name);
+    // DuckDB's aggregates the engine does not have. Bound as an unknown
+    // scalar function, one was an error per row, so over no rows it gave
+    // no row where DuckDB gives one (Stage 8, #12).
+    static const char *const kMissingAggregates[] = {
+        "ANY_VALUE", "ARBITRARY", "FIRST", "LAST", "ARG_MAX", "ARG_MIN", "ARGMAX", "ARGMIN",
+        "MAX_BY", "MIN_BY", "ARG_MAX_NULL", "ARG_MIN_NULL", "APPROX_COUNT_DISTINCT",
+        "APPROX_QUANTILE", "APPROX_TOP_K", "RESERVOIR_QUANTILE", "MEAN", "BIT_AND", "BIT_OR",
+        "BIT_XOR", "BITSTRING_AGG", "COUNT_IF", "COUNTIF", "CORR", "COVAR_POP", "COVAR_SAMP",
+        "ENTROPY", "FAVG", "FSUM", "SUMKAHAN", "KAHAN_SUM", "GEOMEAN", "GEOMETRIC_MEAN",
+        "HISTOGRAM", "HISTOGRAM_EXACT", "KURTOSIS", "KURTOSIS_POP", "LIST", "ARRAY_AGG", "MAD",
+        "MODE", "PRODUCT", "QUANTILE", "QUANTILE_CONT", "QUANTILE_DISC", "PERCENTILE_CONT",
+        "PERCENTILE_DISC", "REGR_AVGX", "REGR_AVGY", "REGR_COUNT", "REGR_INTERCEPT", "REGR_R2",
+        "REGR_SLOPE", "REGR_SXX", "REGR_SXY", "REGR_SYY", "SEM", "SKEWNESS", "SUM_NO_OVERFLOW",
+        "WEIGHTED_AVG", "WAVG", "BOOL_XOR"};
+    for (auto *m : kMissingAggregates) {
+        if (name == m) throw NotImplementedException("Aggregate function " + name + " is not supported");
+    }
 
     std::vector<BoundExprPtr> args;
     for (auto &arg : expr.arguments) {
         args.push_back(BindExpression(*arg, context));
+    }
+    // STRING_AGG's separator: a constant string (NULL and a column are
+    // not computed as DuckDB does).
+    if ((name == "STRING_AGG" || name == "LISTAGG" || name == "GROUP_CONCAT") && args.size() == 2) {
+        bool ok = args[1]->GetExpressionType() == BoundExpressionType::CONSTANT &&
+                  !static_cast<const BoundConstant &>(*args[1]).value.IsNull() &&
+                  static_cast<const BoundConstant &>(*args[1]).value.type().id() == LogicalTypeId::VARCHAR;
+        if (!ok) throw NotImplementedException(name + " with a separator other than a string constant is not supported");
     }
 
     // Reject nested aggregates (`SUM(COUNT(*))`, `AVG(SUM(x))`). SQL

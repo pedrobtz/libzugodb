@@ -1,0 +1,61 @@
+// Aggregates of the pinned DuckDB subset that gave a wrong answer
+// (libzugodb Stage 8, #12). Each test runs the smallest SQL of the case's
+// shape and expects DuckDB's recorded result from the corpus file it names
+// (test/conformance/corpus/test/sql/...), or an error where the engine
+// refuses the statement.
+
+#include "doctest.h"
+#include "../conformance_rows.hpp"
+#include "slothdb/main/database.hpp"
+
+using namespace zugodb;
+using namespace zugodb::conformance;
+
+// ---------------------------------------------------------------------------
+// aggregate/aggregates/test_aggregate_types.test, string_agg_union.test,
+// test_aggregate_types_scalar.test: STRING_AGG ignored its separator, MIN
+// and MAX of a BOOLEAN read every value as false, and an aggregate of a
+// non-numeric expression (MIN('hello'), STRING_AGG(s || 'x', '-')) was
+// NULL.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: STRING_AGG's separator, and MIN and MAX of a BOOLEAN") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE strings(g INTEGER, s VARCHAR)");
+    conn.Query("INSERT INTO strings VALUES (1, 'hello'), (2, 'world'), (2, 'r'), (3, NULL)");
+    CHECK(Run(conn, "SELECT STRING_AGG(s, ' '), STRING_AGG(s, ''), STRING_AGG(s) FROM strings") ==
+          Rows{{"hello world r", "helloworldr", "hello,world,r"}});
+    CHECK(Run(conn, "SELECT g, STRING_AGG(s, ', ') FROM strings GROUP BY g ORDER BY g") ==
+          Rows{{"1", "hello"}, {"2", "world, r"}, {"3", "NULL"}});
+    CHECK_THROWS(conn.Query("SELECT STRING_AGG(s, NULL) FROM strings"));
+    CHECK_THROWS(conn.Query("SELECT STRING_AGG(s, s) FROM strings"));
+    conn.Query("CREATE TABLE booleans(g INTEGER, b BOOLEAN)");
+    conn.Query("INSERT INTO booleans VALUES (1, false), (1, true), (2, false), (3, NULL)");
+    CHECK(Run(conn, "SELECT MIN(b), MAX(b) FROM booleans") == Rows{{"false", "true"}});
+    CHECK(Run(conn, "SELECT g, MIN(b), MAX(b) FROM booleans GROUP BY g ORDER BY g") ==
+          Rows{{"1", "false", "true"}, {"2", "false", "false"}, {"3", "NULL", "NULL"}});
+}
+
+TEST_CASE("Stage 8: an aggregate the engine does not compute is an error, not NULL") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE t(i INTEGER, s VARCHAR)");
+    conn.Query("INSERT INTO t VALUES (1, 'a'), (2, 'b')");
+    const char *queries[] = {
+        "SELECT MIN('hello')",
+        "SELECT STRING_AGG('hello', ' ')",
+        "SELECT MIN(s || 'x') FROM t",
+        "SELECT STRING_AGG(s || 'x', '-') FROM t",
+        // DuckDB's aggregates the engine lacks: over no rows they gave no
+        // row (mode_rewrite.test, test_any_value_noninlined.test).
+        "SELECT mode(i) FROM t WHERE false",
+        "SELECT any_value(s) FROM t WHERE i = 0",
+        "SELECT product(i) FROM t",
+    };
+    for (auto *q : queries) {
+        CAPTURE(q);
+        CHECK_THROWS(conn.Query(q));
+    }
+    CHECK(Run(conn, "SELECT MIN(i + 1), MAX(i * 2), SUM(i + 1) FROM t") == Rows{{"2", "4", "5"}});
+}
