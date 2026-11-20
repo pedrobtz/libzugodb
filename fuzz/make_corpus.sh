@@ -12,14 +12,14 @@
 set -eu
 
 out=fuzz/corpus/checkpoint_load
-cmake -S . -B build-fixtures -DCMAKE_BUILD_TYPE=Release -DSLOTHDB_BUILD_SHELL=ON > /dev/null
-cmake --build build-fixtures --target slothdb -j4 > /dev/null 2>&1
+cmake -S . -B build-fixtures -DCMAKE_BUILD_TYPE=Release -DZUGODB_BUILD_SHELL=ON > /dev/null
+cmake --build build-fixtures --target zugodb_shell -j4 > /dev/null 2>&1
 mkdir -p "$out"
 rm -f "$out"/*.db
 
 seed() { # name, then the SQL on stdin
     rm -f "$out/$1.db" "$out/$1.db.tmp"
-    build-fixtures/src/slothdb "$out/$1.db" > /dev/null
+    build-fixtures/src/zugodb "$out/$1.db" > /dev/null
     echo "$out/$1.db: $(wc -c < "$out/$1.db" | tr -d ' ') bytes"
 }
 

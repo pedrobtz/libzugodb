@@ -1,6 +1,6 @@
-#include "slothdb/parser/parser.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/string_util.hpp"
+#include "zugodb/parser/parser.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/string_util.hpp"
 
 namespace zugodb {
 
@@ -484,7 +484,7 @@ ParsedStmtPtr Parser::ParseSelectStatement() {
     Expect(TokenType::KW_SELECT, "");
 
     // DISTINCT or ALL (ALL is the default; consume and discard for SQL
-    // compatibility, since `SELECT ALL col` is legal but slothdb's
+    // compatibility, since `SELECT ALL col` is legal but SlothDB's
     // is_distinct=false is already the right state).
     if (MatchKeyword(TokenType::KW_DISTINCT)) {
         stmt->is_distinct = true;

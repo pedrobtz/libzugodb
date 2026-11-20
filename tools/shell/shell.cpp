@@ -1,16 +1,16 @@
 /*
- * SlothDB CLI Shell
+ * zugodb CLI shell
  *
- * Interactive SQL REPL for SlothDB.
- * Usage: slothdb [database_path]
- *        slothdb -c "SELECT ..."
+ * Interactive SQL REPL for libzugodb.
+ * Usage: zugodb [database_path]
+ *        zugodb -c "SELECT ..."
  */
 
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/catalog/catalog.hpp"
-#include "slothdb/catalog/schema_catalog_entry.hpp"
-#include "slothdb/catalog/table_catalog_entry.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/catalog/catalog.hpp"
+#include "zugodb/catalog/schema_catalog_entry.hpp"
+#include "zugodb/catalog/table_catalog_entry.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -20,7 +20,7 @@
 #include <memory>
 #include <vector>
 
-#ifdef SLOTHDB_HAS_LINENOISE
+#ifdef ZUGODB_HAS_LINENOISE
 extern "C" {
 #include "linenoise.h"
 }
@@ -30,11 +30,11 @@ using zugodb::Connection;
 using zugodb::Database;
 using zugodb::QueryResult;
 
-#ifndef SLOTHDB_SHELL_VERSION
-#define SLOTHDB_SHELL_VERSION "unknown"
+#ifndef ZUGODB_SHELL_VERSION
+#define ZUGODB_SHELL_VERSION "unknown"
 #endif
 
-static const char *kHistoryFile = ".slothdb_history";
+static const char *kHistoryFile = ".zugodb_history";
 
 // An open database and its one connection. An empty path opens an
 // in-memory database.
@@ -95,11 +95,11 @@ static void print_help() {
     printf("  ------------\n");
     printf("  .help                       Show this help\n");
     printf("  .quit / .exit               Exit the shell\n");
-    printf("  .version                    Print SlothDB version\n");
+    printf("  .version                    Print the version\n");
     printf("  .clear                      Clear the screen\n");
     printf("  .open <path>                Close current DB and open a new one\n");
     printf("                                :memory:        in-process, non-persistent\n");
-    printf("                                file.slothdb    single-file persistent DB\n");
+    printf("                                file.zugodb     single-file persistent DB\n");
     printf("  .tables [PATTERN]           List tables. PATTERN is SQL LIKE ('sales%%').\n");
     printf("  .schema [TABLE]             Show CREATE TABLE statements. No arg = all tables.\n");
     printf("\n");
@@ -128,15 +128,15 @@ static void print_help() {
     printf("  --------------\n");
     printf("  Statements run when they end with a semicolon.\n");
     printf("  Blank line cancels a partial statement.\n");
-#ifdef SLOTHDB_HAS_LINENOISE
+#ifdef ZUGODB_HAS_LINENOISE
     printf("  Arrow keys move the cursor; Up/Down browses history.\n");
-    printf("  History persists in .slothdb_history in the current directory.\n");
+    printf("  History persists in .zugodb_history in the current directory.\n");
     printf("  Ctrl+C cancels input. Ctrl+D at empty prompt exits.\n");
 #else
     printf("  On Windows, use cmd.exe's native line editing. Ctrl+C exits.\n");
 #endif
     printf("\n");
-    printf("  Docs: https://github.com/SouravRoy-ETL/slothdb\n");
+    printf("  Docs: https://github.com/pedrobtz/libzugodb\n");
     printf("\n");
 }
 
@@ -176,7 +176,7 @@ static bool like_match(const std::string &name, const std::string &pattern) {
 }
 
 // Enumerate tables via the catalog - information_schema isn't a real
-// schema in SlothDB's parser, so SQL-based introspection doesn't work.
+// schema in the parser, so SQL-based introspection doesn't work.
 static void handle_tables(Connection &conn, const std::string &arg) {
     std::string pattern = arg;
     if (pattern.size() >= 2 && (pattern.front() == '\'' || pattern.front() == '"')) {
@@ -238,7 +238,7 @@ static void handle_schema(Connection &conn, const std::string &arg) {
 }
 
 // SQL keyword completion (for linenoise TAB).
-#ifdef SLOTHDB_HAS_LINENOISE
+#ifdef ZUGODB_HAS_LINENOISE
 static const char *kSqlKeywords[] = {
     "SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "HAVING", "LIMIT",
     "INSERT INTO", "UPDATE", "DELETE FROM", "CREATE TABLE", "CREATE VIEW",
@@ -251,7 +251,7 @@ static const char *kSqlKeywords[] = {
     nullptr,
 };
 
-static void slothdb_complete(const char *buf, linenoiseCompletions *lc) {
+static void zugodb_complete(const char *buf, linenoiseCompletions *lc) {
     size_t buf_len = strlen(buf);
     if (buf_len == 0) return;
     // Find the last whitespace - we complete the word after it.
@@ -324,7 +324,7 @@ static std::string strip_invisible(const std::string &s) {
 // pasted file paths with hidden control characters parse the same as the
 // visible text the user sees.
 static bool read_line(const char *prompt, std::string &out) {
-#ifdef SLOTHDB_HAS_LINENOISE
+#ifdef ZUGODB_HAS_LINENOISE
     char *raw = linenoise(prompt);
     if (!raw) return false;
     out = strip_invisible(raw);
@@ -348,12 +348,12 @@ int main(int argc, char *argv[]) {
         if (strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
             cmd_query = argv[++i];
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
-            printf("Usage: slothdb [database_path]\n");
-            printf("       slothdb -c \"SELECT ...\"\n");
+            printf("Usage: zugodb [database_path]\n");
+            printf("       zugodb -c \"SELECT ...\"\n");
             printf("Opens an in-memory database if no path is given.\n");
             return 0;
         } else if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
-            printf("%s\n", SLOTHDB_SHELL_VERSION);
+            printf("%s\n", ZUGODB_SHELL_VERSION);
             return 0;
         } else {
             db_path = argv[i];
@@ -361,7 +361,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (!cmd_query) {
-        printf("SlothDB Shell v%s\n", SLOTHDB_SHELL_VERSION);
+        printf("zugodb shell v%s\n", ZUGODB_SHELL_VERSION);
         printf("Type .help for help, .quit to exit.\n\n");
     }
 
@@ -379,15 +379,15 @@ int main(int argc, char *argv[]) {
     if (strlen(db_path) > 0) printf("Connected to: %s\n", db_path);
     else                      printf("Connected to in-memory database\n");
 
-#ifdef SLOTHDB_HAS_LINENOISE
+#ifdef ZUGODB_HAS_LINENOISE
     linenoiseHistorySetMaxLen(1000);
     linenoiseHistoryLoad(kHistoryFile);
-    linenoiseSetCompletionCallback(slothdb_complete);
+    linenoiseSetCompletionCallback(zugodb_complete);
 #endif
 
     std::string buffer;
     while (true) {
-        const char *prompt = buffer.empty() ? "slothdb> " : "   ...> ";
+        const char *prompt = buffer.empty() ? "zugodb> " : "   ...> ";
 
         std::string line;
         if (!read_line(prompt, line)) break; // EOF / Ctrl+D.
@@ -404,7 +404,7 @@ int main(int argc, char *argv[]) {
 
             if (cmd == ".quit" || cmd == ".exit") break;
             if (cmd == ".help") { print_help(); continue; }
-            if (cmd == ".version") { printf("%s\n", SLOTHDB_SHELL_VERSION); continue; }
+            if (cmd == ".version") { printf("%s\n", ZUGODB_SHELL_VERSION); continue; }
             if (cmd == ".tables") { handle_tables(*session.conn, arg); continue; }
             if (cmd == ".schema") { handle_schema(*session.conn, arg); continue; }
             if (cmd == ".clear") { printf("\033[2J\033[H"); fflush(stdout); continue; }
@@ -428,7 +428,7 @@ int main(int argc, char *argv[]) {
                         ends_with(".parquet") || ends_with(".json") ||
                         ends_with(".arrow") || ends_with(".xlsx")) {
                         fprintf(stderr,
-                            "Hint: .open is for persistent .slothdb files. "
+                            "Hint: .open is for persistent .zugodb files. "
                             "To query a data file, use:\n"
                             "  SELECT * FROM '%s';\n", arg.c_str());
                     }
@@ -458,7 +458,7 @@ int main(int argc, char *argv[]) {
         buffer.clear();
     }
 
-#ifdef SLOTHDB_HAS_LINENOISE
+#ifdef ZUGODB_HAS_LINENOISE
     linenoiseHistorySave(kHistoryFile);
 #endif
 

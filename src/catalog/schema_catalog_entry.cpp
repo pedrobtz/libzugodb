@@ -1,5 +1,5 @@
-#include "slothdb/catalog/schema_catalog_entry.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/catalog/schema_catalog_entry.hpp"
+#include "zugodb/common/exception.hpp"
 
 namespace zugodb {
 

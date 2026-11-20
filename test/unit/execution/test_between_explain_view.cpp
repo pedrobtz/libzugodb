@@ -1,9 +1,9 @@
 #include "doctest.h"
 #include "../refused_files.hpp"
-#include "slothdb/catalog/catalog.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
+#include "zugodb/catalog/catalog.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -200,7 +200,7 @@ TEST_CASE("VARCHAR(n) - a length that is not a number is an engine error") {
     auto engine_error = [&](const std::string &sql) {
         try {
             conn.Query(sql);
-        } catch (const SlothDBException &) {
+        } catch (const ZugodbException &) {
             return true;
         } catch (...) {
             return false;
@@ -232,7 +232,7 @@ TEST_CASE("VARCHAR without length stays unbounded") {
 // ============================================================================
 
 TEST_CASE("LIVE VIEW - refused over a file that exists") {
-    auto dir = std::filesystem::temp_directory_path() / "slothdb_live_view";
+    auto dir = std::filesystem::temp_directory_path() / "zugodb_live_view";
     std::filesystem::create_directories(dir);
     auto csv = (dir / "data.csv").string();
     auto tsv = (dir / "data.tsv").string();

@@ -11,9 +11,9 @@
 // reaches each.
 
 #include "doctest.h"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
 
 #include <cstdint>
 #include <cstdio>

@@ -5,26 +5,26 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(SLOTHDB_BUILD_TESTS "Build tests" ON)
-option(SLOTHDB_BUILD_SHELL "Build CLI shell" OFF)
-option(SLOTHDB_SANITIZERS "Enable ASan/UBSan" OFF)
-option(SLOTHDB_FUZZ "Build the libFuzzer harnesses in fuzz/ (clang only)" OFF)
-option(SLOTHDB_TSAN "Enable ThreadSanitizer" OFF)
+option(ZUGODB_BUILD_TESTS "Build tests" ON)
+option(ZUGODB_BUILD_SHELL "Build CLI shell" OFF)
+option(ZUGODB_SANITIZERS "Enable ASan/UBSan" OFF)
+option(ZUGODB_FUZZ "Build the libFuzzer harnesses in fuzz/ (clang only)" OFF)
+option(ZUGODB_TSAN "Enable ThreadSanitizer" OFF)
 # The conformance runner in tools/slt (POSIX only: it forks a child per file).
 if(WIN32)
-    set(SLOTHDB_BUILD_SLT OFF CACHE BOOL "Build the conformance runner (tools/slt)")
+    set(ZUGODB_BUILD_SLT OFF CACHE BOOL "Build the conformance runner (tools/slt)")
 else()
-    option(SLOTHDB_BUILD_SLT "Build the conformance runner (tools/slt)" ON)
+    option(ZUGODB_BUILD_SLT "Build the conformance runner (tools/slt)" ON)
 endif()
 
-if(SLOTHDB_TSAN AND (SLOTHDB_SANITIZERS OR SLOTHDB_FUZZ))
+if(ZUGODB_TSAN AND (ZUGODB_SANITIZERS OR ZUGODB_FUZZ))
     # TSan cannot be combined with ASan in one binary.
-    message(FATAL_ERROR "SLOTHDB_TSAN excludes SLOTHDB_SANITIZERS and SLOTHDB_FUZZ")
+    message(FATAL_ERROR "ZUGODB_TSAN excludes ZUGODB_SANITIZERS and ZUGODB_FUZZ")
 endif()
 
-if(SLOTHDB_FUZZ)
+if(ZUGODB_FUZZ)
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        message(FATAL_ERROR "SLOTHDB_FUZZ needs clang (libFuzzer); the compiler is ${CMAKE_CXX_COMPILER_ID}")
+        message(FATAL_ERROR "ZUGODB_FUZZ needs clang (libFuzzer); the compiler is ${CMAKE_CXX_COMPILER_ID}")
     endif()
     # Everything is instrumented for the fuzzer and built with ASan and
     # UBSan, which stop at the first report.
@@ -38,15 +38,15 @@ include(cmake/Platform.cmake)
 
 add_subdirectory(src)
 
-if(SLOTHDB_BUILD_SLT)
+if(ZUGODB_BUILD_SLT)
     add_subdirectory(tools/slt)
 endif()
 
-if(SLOTHDB_FUZZ)
+if(ZUGODB_FUZZ)
     add_subdirectory(fuzz)
 endif()
 
-if(SLOTHDB_BUILD_TESTS)
+if(ZUGODB_BUILD_TESTS)
     enable_testing()
     add_subdirectory(test)
 endif()

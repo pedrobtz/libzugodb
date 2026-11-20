@@ -1,8 +1,8 @@
-#include "slothdb/storage/checkpoint.hpp"
-#include "slothdb/common/string_util.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/crc32.hpp"
-#include "slothdb/common/types/value.hpp"
+#include "zugodb/storage/checkpoint.hpp"
+#include "zugodb/common/string_util.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/crc32.hpp"
+#include "zugodb/common/types/value.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>

@@ -33,8 +33,9 @@ test_*.db
 test_*.csv
 test_*.json
 test_*.parquet
-test_*.slothdb
-*.slothdb
+test_*.zugodb
+*.zugodb
+.zugodb_history
 
 # OS files
 .DS_Store
@@ -49,7 +50,7 @@ real-life-testing/sloth.parquet
 real-life-testing/sales_10m.parquet
 real-life-testing/sloth_sales.parquet
 real-life-testing/duckdb.exe
-real-life-testing/tmp.slothdb
+real-life-testing/tmp.zugodb
 real-life-testing/tiny.csv
 real-life-testing/tiny.parquet
 real-life-testing/regions.csv
@@ -66,14 +67,14 @@ _private/
 build-clean/
 
 # Abandoned experiments (flat/swiss hash sets)
-include/slothdb/util/
+include/zugodb/util/
 test/unit/util/
 topn_dbg.log
 
 # tools/make_db_fixtures.sh builds its shell here
 build-fixtures/
 
-# The fuzz harnesses (cmake -DSLOTHDB_FUZZ=ON) and what fuzz/run.sh keeps
+# The fuzz harnesses (cmake -DZUGODB_FUZZ=ON) and what fuzz/run.sh keeps
 build-fuzz/
 fuzz-work/
 fuzz-artifacts/

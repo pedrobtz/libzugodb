@@ -1,5 +1,5 @@
 #include "doctest.h"
-#include "slothdb/common/types/validity_mask.hpp"
+#include "zugodb/common/types/validity_mask.hpp"
 
 using namespace zugodb;
 

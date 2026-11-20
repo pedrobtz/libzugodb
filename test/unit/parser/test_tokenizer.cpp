@@ -1,6 +1,6 @@
 #include "doctest.h"
-#include "slothdb/parser/tokenizer.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/parser/tokenizer.hpp"
+#include "zugodb/common/exception.hpp"
 
 using namespace zugodb;
 

@@ -13,7 +13,7 @@
 
 #include "slt.hpp"
 
-#include "slothdb/common/parallel.hpp"
+#include "zugodb/common/parallel.hpp"
 
 #include <climits>
 #include <cstdio>

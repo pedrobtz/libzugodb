@@ -1,6 +1,6 @@
 #include "doctest.h"
-#include "slothdb/parser/parser.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/parser/parser.hpp"
+#include "zugodb/common/exception.hpp"
 
 using namespace zugodb;
 
@@ -288,8 +288,8 @@ TEST_CASE("Parser - function with DISTINCT") {
 // Stage 9 (#13, design §4): quoted identifiers, positions, statement ends.
 // ============================================================================
 
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
 
 #include <string>
 

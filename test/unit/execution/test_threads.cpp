@@ -17,11 +17,11 @@
 // ZUGODB_THREAD_ROUNDS set to repeat the loop at caps 2 and 4.
 
 #include "doctest.h"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/parallel.hpp"
-#include "slothdb/execution/parallel_executor.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/parallel.hpp"
+#include "zugodb/execution/parallel_executor.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
 
 #include <algorithm>
 #include <cstdint>

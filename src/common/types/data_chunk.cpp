@@ -1,5 +1,5 @@
-#include "slothdb/common/types/data_chunk.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/common/types/data_chunk.hpp"
+#include "zugodb/common/exception.hpp"
 #include <sstream>
 
 namespace zugodb {

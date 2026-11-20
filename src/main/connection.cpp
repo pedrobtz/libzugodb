@@ -1,16 +1,16 @@
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/query_materialize.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/types/blob.hpp"
-#include "slothdb/common/types/float_order.hpp"
-#include "slothdb/execution/group_key.hpp"
-#include "slothdb/parser/parser.hpp"
-#include "slothdb/binder/binder.hpp"
-#include "slothdb/planner/planner.hpp"
-#include "slothdb/execution/physical_planner.hpp"
-#include "slothdb/execution/expression_executor.hpp"
-#include "slothdb/optimizer/optimizer.hpp"
-#include "slothdb/common/string_util.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/query_materialize.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/types/blob.hpp"
+#include "zugodb/common/types/float_order.hpp"
+#include "zugodb/execution/group_key.hpp"
+#include "zugodb/parser/parser.hpp"
+#include "zugodb/binder/binder.hpp"
+#include "zugodb/planner/planner.hpp"
+#include "zugodb/execution/physical_planner.hpp"
+#include "zugodb/execution/expression_executor.hpp"
+#include "zugodb/optimizer/optimizer.hpp"
+#include "zugodb/common/string_util.hpp"
 #include <cmath>
 #include <sstream>
 #include <unordered_set>
@@ -265,7 +265,7 @@ static void ApplyDistinctSetOp(const std::string &op, std::vector<std::vector<Va
 // chain-combined row vector isn't a fully-bound DataChunk and a generic
 // expression evaluator would need to be re-bound against the result-set
 // schema. Items that don't resolve are skipped — the rows stay in
-// chain-walk order for that key, which matches what slothdb did before
+// chain-walk order for that key, which matches what SlothDB did before
 // this fix.
 //
 // LIMIT / OFFSET must be integer literals. Non-literal expressions are
@@ -585,7 +585,7 @@ QueryResult Connection::RunStatements(const std::string &sql) {
     // for the same-shape bug fixed in CREATE TABLE AS).
     auto stmt_slices = SplitTopLevelStatements(sql);
 
-    // zuslothdb: a read-only database refuses the whole batch, before any
+    // zugodb: a read-only database refuses the whole batch, before any
     // statement runs, if one of them would change the catalog or its data.
     if (db_.GetConfig().read_only) {
         for (auto &stmt : statements) {
@@ -1989,9 +1989,8 @@ QueryResult Connection::RunStatements(const std::string &sql) {
         }
 
         // Stream chunks directly into the result, avoiding per-cell Value
-        // boxing. The C API's typed-batch fetch (slothdb_column_*_buffer)
-        // reads from `chunks` directly; the per-cell path goes through
-        // QueryResult::GetValue which lazily boxes on demand.
+        // boxing: the per-cell path goes through QueryResult::GetValue,
+        // which boxes lazily, on demand.
         // 10M-row window query: drops 18 s of cell-boxing.
         DataChunk chunk;
         while (true) {
@@ -2269,11 +2268,11 @@ void Connection::RollbackTransaction() {
     }
     db_.GetTransactionManager().RollbackTransaction(*active_txn_);
     active_txn_ = nullptr;
-    // zuslothdb: the engine has no undo, so a ROLLBACK that reported
+    // zugodb: the engine has no undo, so a ROLLBACK that reported
     // success would hide that every statement since BEGIN is kept. The
     // transaction is closed, and the caller told.
     throw NotImplementedException(
-        "ROLLBACK does not undo changes in SlothDB: every statement since "
+        "ROLLBACK does not undo changes in zugodb: every statement since "
         "BEGIN is kept, and the transaction is closed");
 }
 

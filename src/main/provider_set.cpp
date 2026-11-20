@@ -1,6 +1,6 @@
-#include "slothdb/main/provider_set.hpp"
+#include "zugodb/main/provider_set.hpp"
 
-#include "slothdb/common/exception.hpp"
+#include "zugodb/common/exception.hpp"
 
 #include <cstdint>
 #include <limits>

@@ -1,7 +1,7 @@
-#include "slothdb/common/types/value.hpp"
-#include "slothdb/common/types/blob.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/types/float_order.hpp"
+#include "zugodb/common/types/value.hpp"
+#include "zugodb/common/types/blob.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/types/float_order.hpp"
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>

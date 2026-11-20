@@ -2,7 +2,7 @@
 //
 // An exception thrown on an engine worker thread used to end the process
 // with std::terminate. Each kind of thread start in src/ (WorkerSite in
-// slothdb/common/parallel.hpp) is made to throw here through the test seam,
+// zugodb/common/parallel.hpp) is made to throw here through the test seam,
 // and the exception must arrive as an exception of Connection::Query (or of
 // the API that started the workers), after which the same connection
 // answers another query correctly.
@@ -11,11 +11,11 @@
 // went (Stage 11, #16): those two are checked at their own API.
 
 #include "doctest.h"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/parallel.hpp"
-#include "slothdb/execution/parallel_executor.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/parallel.hpp"
+#include "zugodb/execution/parallel_executor.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -187,9 +187,9 @@ TEST_CASE("Worker errors - every thread start in src/ is a covered kind") {
     const std::regex start(R"(std::(j?thread)\b(?!::)|std::async\b|\.Submit\(|pthread_create|_beginthread|CreateThread\b)");
     const std::map<std::string, int> expected = {
         // WorkerGroup's thread vector, and three comments that name it.
-        {"include/slothdb/common/parallel.hpp", 4},
+        {"include/zugodb/common/parallel.hpp", 4},
         // The pool's own workers; its tasks carry exceptions in futures.
-        {"include/slothdb/common/thread_pool.hpp", 1},
+        {"include/zugodb/common/thread_pool.hpp", 1},
         // The pool's one user, under WorkerErrors (WorkerSite::POOL).
         {"src/execution/parallel_executor.cpp", 1},
     };

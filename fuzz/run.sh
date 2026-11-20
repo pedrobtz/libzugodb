@@ -4,7 +4,7 @@
 #   fuzz/run.sh <target> <seconds> <source> <floor>
 #   fuzz/run.sh checkpoint_load 120 src/storage/checkpoint.cpp 400
 #
-# Runs build-fuzz/fuzz/<target>_fuzzer (cmake -DSLOTHDB_FUZZ=ON) over the
+# Runs build-fuzz/fuzz/<target>_fuzzer (cmake -DZUGODB_FUZZ=ON) over the
 # seeds in fuzz/corpus/<target>/, keeping what it finds in
 # fuzz-work/<target>/ and any crash, hang or out-of-memory input in
 # fuzz-artifacts/<target>/. Any of those fails the run.

@@ -17,6 +17,10 @@
 # once, never regenerated, so that a file of that release is read back by
 # every later one.
 #
+# The commits written from (030f7b8, v0.3.0) predate Stage 12, so their
+# shell is built under SlothDB's names; this file is excluded from
+# tools/check_names.sh for that reason.
+#
 # Run from the repository root. The test checks the rows the SQL inserts,
 # not the bytes, so the file may differ by platform.
 
@@ -41,9 +45,9 @@ from_commit() { # commit, output file
 
 case "${1:-}" in
 "")
-    cmake -S . -B build-fixtures -DCMAKE_BUILD_TYPE=Release -DSLOTHDB_BUILD_SHELL=ON > /dev/null
-    cmake --build build-fixtures --target slothdb -j4 > /dev/null 2>&1
-    write build-fixtures/src/slothdb test/fixtures/golden_v1001.db
+    cmake -S . -B build-fixtures -DCMAKE_BUILD_TYPE=Release -DZUGODB_BUILD_SHELL=ON > /dev/null
+    cmake --build build-fixtures --target zugodb_shell -j4 > /dev/null 2>&1
+    write build-fixtures/src/zugodb test/fixtures/golden_v1001.db
     ;;
 v1)
     from_commit 030f7b8 test/fixtures/format_v1.db

@@ -1,6 +1,6 @@
-#include "slothdb/main/database.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/storage/checkpoint.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/storage/checkpoint.hpp"
 #include <cstdio>
 
 #ifdef _MSC_VER
@@ -59,7 +59,7 @@ void Database::SetProviders(const zugodb_providers *providers) {
 
 Database::~Database() {
     // If path is set, save on close (atomic: write to .tmp then rename).
-    // zuslothdb: never for a database opened read-only.
+    // zugodb: never for a database opened read-only.
     if (!config_.path.empty() && catalog_ && !config_.read_only) {
         try {
             auto tmp_path = config_.path + ".tmp";
