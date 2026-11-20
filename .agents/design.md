@@ -263,6 +263,34 @@ minor version.
   `test/fixtures/golden_v1001.db` is written by `tools/make_db_fixtures.sh`
   through the shell; a layout change without a version bump fails its
   test.
+- **L12 (2026-11-20, Stage 4, Claude's implementation call).** After the
+  checksum, `Checkpoint::Load` accepts only what `Save` could have
+  written, and reads it through one bounded reader: each fixed-width
+  read, string length and count is checked against the bytes left before
+  it is used or allocated, a count against bytes left over the least its
+  element can take (a table 21 bytes, a column 5, a row one null flag per
+  column). The header must hold Save's constants (block size 262144, block
+  count 0, catalog and data offset both 4096, zeros from 48 to 4096), the
+  tables must end at the end of the file, a table has at least one column
+  and a name no other table has. Column types are those a table made by
+  SQL can have (SQLNULL, BOOLEAN, TINYINT, SMALLINT, INTEGER, BIGINT,
+  HUGEINT, FLOAT, DOUBLE, VARCHAR, BLOB, DATE, TIME, TIMESTAMP, INTERVAL,
+  UUID); null flags are 0 or 1, BOOLEAN 0 or 1, SMALLINT (stored in 4
+  bytes) in its range. Save writes non-NULL HUGEINT, INTERVAL and UUID
+  values as text, which the loader never read back right (an INTERVAL
+  could not be stored at all, a HUGEINT or UUID came back as garbage), so
+  those are refused and only their NULLs load; a file that held such a
+  value already held a wrong one. Empty names, duplicate column names and
+  any bytes in a name or string load, since SQL can make them. Each row
+  group is allocated for the rows it gets, so the memory a load takes
+  follows the file's size. Tables reach the catalog only after the whole
+  file is read. The harness `fuzz/checkpoint_load.cpp` fixes catalog_size
+  and the checksum of each input; its oracle is that a file that opens
+  gives each table's row count by catalog, `count(*)`, `SELECT *` and a
+  storage scan alike, and reopens after its save with the same rows. Reach
+  is the edges of `src/storage/checkpoint.cpp` covered by the kept corpus,
+  as `-print_coverage=1` reports them (`fuzz/run.sh`), against a floor in
+  the workflow.
 
 ## 9. Open questions
 

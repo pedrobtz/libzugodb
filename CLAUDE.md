@@ -30,12 +30,17 @@ build/test/slothdb_tests -ltc               # list test cases
 
 - `-DSLOTHDB_SANITIZERS=ON` builds with ASan and UBSan (a CI job).
 - `-DSLOTHDB_BUILD_SHELL=ON` adds the `slothdb` shell from `tools/shell/`.
+- `-DSLOTHDB_FUZZ=ON` (clang with libFuzzer; Apple clang lacks it) builds
+  the harnesses in `fuzz/`; `fuzz/run.sh checkpoint_load 120
+  src/storage/checkpoint.cpp <floor>` runs one as the `fuzz` CI job does.
 - Sources are globbed: after adding a `.cpp`, re-run the configure step.
 - Warnings are `-Wall -Wextra -Wpedantic` (`/W4 /WX` under MSVC).
 
 CI (`.github/workflows/ci.yml`) runs the suite on Linux gcc, Linux with
 ASan and UBSan, macOS clang, and MinGW-w64 UCRT64, the toolchain of R's
-Rtools. A change must pass all four.
+Rtools. A change must pass all four, and the `fuzz` job: libFuzzer over
+the loader, 120 s per pull request and an hour weekly, with a floor on
+its reach.
 
 ## Names
 
@@ -88,7 +93,11 @@ Where the weight is, which the directory names do not show:
 - The database file is format version 1001 with a CRC-32 over the whole
   file (`Checkpoint::ComputeChecksum`; layout in design L11). A change to
   what `Checkpoint::Save` writes bumps `SLOTHDB_VERSION` in the same
-  commit, with a new golden file (`tools/make_db_fixtures.sh`).
+  commit, with a new golden file (`tools/make_db_fixtures.sh`) and a new
+  fuzz corpus (`fuzz/make_corpus.sh`). `Checkpoint::Load` reads through a
+  bounded reader and accepts only what Save could write (design L12): a
+  new field read from the file gets its bound and a doctest at the limit
+  and one past it.
 
 ## Invariants
 

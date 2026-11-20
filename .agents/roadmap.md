@@ -270,6 +270,20 @@ hang or over-allocate the loader.
 
 **Design.** [zugodb Stage 6][zroadmap] and the assessment's A8.
 
+**Deviations (2026-11-20).**
+
+- Reach is counted in edges, not lines: the edges of
+  `src/storage/checkpoint.cpp` that the kept corpus covers, as libFuzzer's
+  `-print_coverage=1` reports them (`fuzz/run.sh`). libFuzzer reports
+  edges per function without another tool; the floor is set from the
+  observed runs.
+- Beyond the loader: `RowGroup` takes a capacity, so a load allocates for
+  the rows the file holds, and the TIME, DATE and TIMESTAMP formatters in
+  `value.cpp` no longer overflow, a fault the fuzzing found (design L12).
+- The local fuzzing ran a random-mutation driver over the harness under
+  ASan and UBSan, as Apple clang has no libFuzzer and Homebrew's llvm is
+  not installed here; libFuzzer itself ran in CI.
+
 ## Stage 5 — ThreadSanitizer in CI
 
 **Issue.** [#7](https://github.com/pedrobtz/libzugodb/issues/7), sub-issue

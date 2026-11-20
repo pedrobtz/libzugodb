@@ -47,6 +47,24 @@
   file. New file for zugodb's `tools/vendor.yaml`:
   `include/slothdb/common/crc32.hpp`, a header-only CRC-32 (zlib's).
   `Checkpoint::ComputeChecksum` is public, for a fuzz harness.
+- A database file that passes the checksum but was not written by `Save`
+  is refused, not misread: `Checkpoint::Load` checks every length, count
+  and offset against the bytes left before it reads or allocates, the
+  header fields `Save` writes as constants, each column type (only those a
+  table made by SQL can have), each null flag, `BOOLEAN` and `SMALLINT`
+  range, a table name given twice and bytes after the last table, with a
+  "Damaged database file" message naming the field and its offset.
+  Non-NULL `HUGEINT`, `INTERVAL` and `UUID` values, which `Save` writes as
+  text the loader never read back correctly, are refused; their NULLs
+  load. What a load allocates follows the file's size: each table's row
+  groups are sized to its rows (`RowGroup` takes a capacity). A refused
+  file adds no table to the catalog. The 100,000-table and billion-row
+  caps go, replaced by these bounds. Found by fuzzing the loader: a
+  `TIME` of `INT64_MIN` overflowed when rendered, and a `DATE` or
+  `TIMESTAMP` far from 1970 overflowed or showed the wrong year; they
+  render correctly now. `fuzz/` holds the libFuzzer harness
+  (`-DSLOTHDB_FUZZ=ON`, clang), its seed corpus and scripts, and CI runs
+  it on every pull request and weekly; zugodb does not vendor it.
 
 ## libzugodb 0.1.1
 
