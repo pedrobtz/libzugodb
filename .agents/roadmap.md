@@ -606,9 +606,23 @@ engine accepts is written down.
   enums, structs), none is wrong or accepted.
 - The fuzzer's reach is measured on `src/parser/parser.cpp`, the stage's
   subject, though it reaches the binder and executor too; the bugs it found
-  were there.
+  were there. Its first run in the `fuzz` job reached 894 of the file's
+  3,894 edges in 120 s; the floor is 800, about nine tenths of it, as
+  `checkpoint_load`'s 240 is of its 276.
 - The SQL harness's oracle is a class and a shape at thread caps 1 and 2,
   not values, as the subset's (L16).
+- The counts, alike on both platforms: run 746 → 754 files (the eight
+  added) and 20,194 → 20,355 cases; passed 5,625 (Linux) and 5,624 (macOS)
+  → 5,733; refused 14,148 → 14,236; unreliable 421 and 422 → 386; wrong,
+  accepted, crashed and hung 0. Sixteen cases that passed are now refused,
+  on both platforms: eleven `BEGIN`, `COMMIT` and `ROLLBACK` statements in
+  `window/test_tpcds_q49`, `window/test_window_tpcds`,
+  `join/mark/test_null_safe_semi_uncommitted_stats` and
+  `function/numeric/test_random` (L26); two `random()` calls in
+  `test_random` (L25); and `YEARWEEK`, `WEEKDAY` and `WEEKOFYEAR` in
+  `function/date/date_part_stats`, which passed over an empty table only
+  because a function the executor lacks was never run on a row, and are
+  now refused at bind time.
 
 **Design.** [§3](design.md#3-dialect), [§4](design.md#4-parser) and L2, L4,
 L26 in [§8](design.md#8-decisions).

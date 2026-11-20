@@ -147,7 +147,7 @@ jobs:
       matrix:
         include:
           - { target: checkpoint_load, source: src/storage/checkpoint.cpp, floor: 240 }
-          - { target: sql, source: src/parser/parser.cpp, floor: 1 }
+          - { target: sql, source: src/parser/parser.cpp, floor: 800 }
     env:
       FUZZ_SECONDS: ${{ github.event_name == 'schedule' && '3600' || inputs.fuzz_seconds || '120' }}
     steps:

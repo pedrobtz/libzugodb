@@ -608,7 +608,8 @@ minor version.
     error) and, for a result, the same row and column counts. Values are
     not compared, as L16 compares classes. Its seeds are 2,000 statements
     of the subset (`fuzz/make_sql_corpus.sh`); its reach is the edges of
-    `src/parser/parser.cpp`, against a floor in the workflow.
+    `src/parser/parser.cpp`, against a floor in the workflow (800; the
+    first run reached 894 of 3,894).
 
 ## 9. Open questions
 
