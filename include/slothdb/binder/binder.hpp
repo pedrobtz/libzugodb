@@ -5,15 +5,18 @@
 #include "slothdb/catalog/catalog.hpp"
 #include <string>
 #include <unordered_map>
+#include "slothdb/common/string_util.hpp"
 
 namespace zugodb {
 
 // Bind context: tracks which columns are available during binding.
 struct BindContext {
     // table_name -> TableCatalogEntry*
-    std::unordered_map<std::string, TableCatalogEntry *> tables;
+    // Keys match as identifiers do, ignoring ASCII case (design L26).
+    std::unordered_map<std::string, TableCatalogEntry *, IdentifierHash, IdentifierEqual> tables;
     // column_name -> (table_name, column_index_in_combined_output)
-    std::unordered_map<std::string, std::pair<std::string, idx_t>> columns;
+    std::unordered_map<std::string, std::pair<std::string, idx_t>, IdentifierHash,
+                       IdentifierEqual> columns;
     // Table insertion order + cumulative column offset for JOINs.
     std::vector<std::pair<std::string, idx_t>> table_order; // (alias, column_offset)
 

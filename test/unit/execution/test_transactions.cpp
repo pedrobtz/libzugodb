@@ -5,75 +5,24 @@
 
 using namespace zugodb;
 
-TEST_CASE("Transaction - BEGIN and COMMIT") {
+// No transactions (design L26): BEGIN, COMMIT and ROLLBACK are refused,
+// the whole batch before any of it runs. A statement after a failed one
+// inside BEGIN ... COMMIT was kept, where DuckDB rolls the transaction back.
+TEST_CASE("Transaction - BEGIN, COMMIT and ROLLBACK are refused") {
     Database db;
     Connection conn(db);
 
     conn.Query("CREATE TABLE t (x INTEGER)");
-    conn.Query("BEGIN");
-    CHECK(conn.InTransaction());
-
-    conn.Query("INSERT INTO t VALUES (1), (2), (3)");
-    conn.Query("COMMIT");
-    CHECK_FALSE(conn.InTransaction());
-
+    for (const char *sql : {"BEGIN", "BEGIN TRANSACTION", "COMMIT", "COMMIT TRANSACTION",
+                            "ROLLBACK", "START TRANSACTION", "END", "ABORT"}) {
+        CAPTURE(sql);
+        CHECK_THROWS(conn.Query(sql));
+        CHECK_FALSE(conn.InTransaction());
+    }
+    // Nothing of a batch that holds one runs.
+    CHECK_THROWS(conn.Query("INSERT INTO t VALUES (1); BEGIN; INSERT INTO t VALUES (2); COMMIT"));
     auto r = conn.Query("SELECT COUNT(*) FROM t");
-    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 3);
-}
-
-TEST_CASE("Transaction - BEGIN TRANSACTION syntax") {
-    Database db;
-    Connection conn(db);
-
-    conn.Query("BEGIN TRANSACTION");
-    CHECK(conn.InTransaction());
-    conn.Query("COMMIT TRANSACTION");
-    CHECK_FALSE(conn.InTransaction());
-}
-
-TEST_CASE("Transaction - double BEGIN throws") {
-    Database db;
-    Connection conn(db);
-
-    conn.Query("BEGIN");
-    CHECK_THROWS_AS(conn.Query("BEGIN"), TransactionException);
-    conn.Query("COMMIT");
-}
-
-TEST_CASE("Transaction - COMMIT without BEGIN throws") {
-    Database db;
-    Connection conn(db);
-
-    CHECK_THROWS_AS(conn.Query("COMMIT"), TransactionException);
-}
-
-TEST_CASE("Transaction - ROLLBACK without BEGIN throws") {
-    Database db;
-    Connection conn(db);
-
-    CHECK_THROWS_AS(conn.Query("ROLLBACK"), TransactionException);
-}
-
-TEST_CASE("Transaction - ROLLBACK") {
-    Database db;
-    Connection conn(db);
-
-    conn.Query("CREATE TABLE t (x INTEGER)");
-    conn.Query("INSERT INTO t VALUES (1)");
-
-    conn.Query("BEGIN");
-    // Data inserted inside transaction.
-    conn.Query("INSERT INTO t VALUES (2)");
-
-    auto r = conn.Query("SELECT COUNT(*) FROM t");
-    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 2);
-
-    // zuslothdb: with no undo, ROLLBACK closes the
-    // transaction and says that nothing was undone.
-    CHECK_THROWS_AS(conn.Query("ROLLBACK"), NotImplementedException);
-    CHECK_FALSE(conn.InTransaction());
-    auto r2 = conn.Query("SELECT COUNT(*) FROM t");
-    CHECK(r2.GetValue(0, 0).GetValue<int64_t>() == 2);
+    CHECK(r.GetValue(0, 0).GetValue<int64_t>() == 0);
 }
 
 TEST_CASE("Transaction - multiple connections") {

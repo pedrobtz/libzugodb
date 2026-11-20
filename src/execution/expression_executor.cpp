@@ -1980,6 +1980,132 @@ static bool LikeMatch(const std::string &str, const std::string &pattern) {
     return pi == pattern.size();
 }
 
+// DuckDB's strftime (StrfTimeFormat at the pinned tag) for a DATE or a
+// TIMESTAMP as microseconds since 1970: every specifier DuckDB has but
+// %n (which reads past its value there), and DuckDB's errors for an empty
+// format, a trailing % and an unknown specifier.
+static std::string FormatStrftime(int64_t micros, const std::string &fmt) {
+    if (fmt.empty()) {
+        throw InvalidInputException("Failed to parse format specifier : Empty format string");
+    }
+    const int64_t kDay = 86400LL * 1000000LL;
+    int64_t days = micros / kDay;
+    int64_t rem = micros % kDay;
+    if (rem < 0) { rem += kDay; days--; }
+    auto civil = [](int64_t d, int64_t &y, int64_t &m, int64_t &dd) {
+        int64_t z = d + 719468;
+        int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+        int64_t doe = z - era * 146097;
+        int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        y = yoe + era * 400;
+        int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        int64_t mp = (5 * doy + 2) / 153;
+        dd = doy - (153 * mp + 2) / 5 + 1;
+        m = mp < 10 ? mp + 3 : mp - 9;
+        if (m <= 2) y++;
+    };
+    auto days_from_civil = [](int64_t y, int64_t m, int64_t d) {
+        y -= m <= 2;
+        int64_t era = (y >= 0 ? y : y - 399) / 400;
+        int64_t yoe = y - era * 400;
+        int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+        int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        return era * 146097 + doe - 719468;
+    };
+    int64_t year, month, day;
+    civil(days, year, month, day);
+    int64_t yday = days - days_from_civil(year, 1, 1); // 0-based
+    int64_t dow = ((days % 7) + 7 + 4) % 7;            // 0 = Sunday
+    int64_t iso_dow = dow == 0 ? 7 : dow;               // 1 = Monday
+    int64_t thursday = days - (iso_dow - 4);
+    int64_t iso_year, tm_, td_;
+    civil(thursday, iso_year, tm_, td_);
+    int64_t iso_week = (thursday - days_from_civil(iso_year, 1, 1)) / 7 + 1;
+    int64_t hour = rem / 3600000000LL;
+    int64_t minute = rem / 60000000LL % 60;
+    int64_t second = rem / 1000000LL % 60;
+    int64_t usec = rem % 1000000LL;
+    static const char *const kDays[] = {"Sunday", "Monday", "Tuesday", "Wednesday",
+                                        "Thursday", "Friday", "Saturday"};
+    static const char *const kMonths[] = {"January", "February", "March", "April",
+                                          "May", "June", "July", "August",
+                                          "September", "October", "November", "December"};
+    auto pad = [](int64_t v, int width) {
+        std::string s = std::to_string(v < 0 ? -v : v);
+        while (static_cast<int>(s.size()) < width) s.insert(s.begin(), '0');
+        return (v < 0 ? "-" : "") + s;
+    };
+    std::string out;
+    for (size_t i = 0; i < fmt.size(); i++) {
+        char c = fmt[i];
+        if (c != '%') { out += c; continue; }
+        if (i + 1 >= fmt.size()) {
+            throw InvalidInputException("Failed to parse format specifier " + fmt +
+                                        ": Trailing format character %");
+        }
+        char f = fmt[++i];
+        bool nopad = false;
+        if (f == '-' && i + 1 < fmt.size()) { nopad = true; f = fmt[++i]; }
+        int64_t h12 = hour % 12 == 0 ? 12 : hour % 12;
+        auto num = [&](int64_t v, int width) { out += nopad ? std::to_string(v) : pad(v, width); };
+        bool ok = true;
+        if (nopad) {
+            switch (f) {
+            case 'd': num(day, 2); break;
+            case 'm': num(month, 2); break;
+            case 'y': num(year % 100, 2); break;
+            case 'H': num(hour, 2); break;
+            case 'I': num(h12, 2); break;
+            case 'M': num(minute, 2); break;
+            case 'S': num(second, 2); break;
+            case 'j': num(yday + 1, 3); break;
+            default: ok = false; break;
+            }
+        } else {
+            switch (f) {
+            case 'a': out += std::string(kDays[dow]).substr(0, 3); break;
+            case 'A': out += kDays[dow]; break;
+            case 'w': out += std::to_string(dow); break;
+            case 'u': out += std::to_string(iso_dow); break;
+            case 'd': num(day, 2); break;
+            case 'b': case 'h': out += std::string(kMonths[month - 1]).substr(0, 3); break;
+            case 'B': out += kMonths[month - 1]; break;
+            case 'm': num(month, 2); break;
+            case 'y': num(year % 100, 2); break;
+            case 'Y': num(year, 4); break;
+            case 'G': num(iso_year, 4); break;
+            case 'H': num(hour, 2); break;
+            case 'I': num(h12, 2); break;
+            case 'p': out += hour < 12 ? "AM" : "PM"; break;
+            case 'M': num(minute, 2); break;
+            case 'S': num(second, 2); break;
+            case 'g': num(usec / 1000, 3); break;
+            case 'f': num(usec, 6); break;
+            case 'z': out += "+00"; break;
+            case 'Z': break;
+            case 'j': num(yday + 1, 3); break;
+            case 'U': num((yday + 7 - dow) / 7, 2); break;
+            case 'W': num((yday + 7 - (dow + 6) % 7) / 7, 2); break;
+            case 'V': num(iso_week, 2); break;
+            case 'c':
+                out += pad(year, 4) + "-" + pad(month, 2) + "-" + pad(day, 2) + " " +
+                       pad(hour, 2) + ":" + pad(minute, 2) + ":" + pad(second, 2);
+                break;
+            case 'x': out += pad(year, 4) + "-" + pad(month, 2) + "-" + pad(day, 2); break;
+            case 'X': out += pad(hour, 2) + ":" + pad(minute, 2) + ":" + pad(second, 2); break;
+            case '%': out += '%'; break;
+            default: ok = false; break;
+            }
+        }
+        if (!ok) {
+            throw InvalidInputException("Failed to parse format specifier " + fmt +
+                                        ": Unrecognized format for strftime/strptime: %" +
+                                        (nopad ? "-" : "") + std::string(1, f));
+        }
+    }
+    return out;
+}
+
 void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &input,
                                           Vector &result, idx_t count) {
     auto &name = expr.function_name;
@@ -3780,76 +3906,79 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         return;
     }
 
-    if (name == "DATE_DIFF" || name == "DATEDIFF" || name == "TIMESTAMPDIFF") {
-        // MySQL 2-arg form DATEDIFF(d1, d2) = whole-day difference
-        // (d1 - d2). The 3-arg form below is DATEDIFF(unit, d1, d2).
-        // Previously the 2-arg form hit "Expression executor for type"
-        // by reading a non-existent unit/third argument.
-        if (expr.arguments.size() == 2) {
-            Vector a1(Arg(expr, 0)->GetReturnType(), count);
-            Vector a2(Arg(expr, 1)->GetReturnType(), count);
-            Execute(*Arg(expr, 0), input, a1, count);
-            Execute(*Arg(expr, 1), input, a2, count);
-            for (idx_t i = 0; i < count; i++) {
-                auto v1 = a1.GetValue(i), v2 = a2.GetValue(i);
-                if (v1.IsNull() || v2.IsNull()) {
-                    result.GetValidity().SetInvalid(i); continue;
-                }
-                int64_t d1 = to_micros_any(v1) / (86400LL * 1000000LL);
-                int64_t d2 = to_micros_any(v2) / (86400LL * 1000000LL);
-                result.SetValue(i, Value::BIGINT(d1 - d2));
-            }
-            return;
-        }
+    if (name == "DATE_DIFF" || name == "DATEDIFF") {
+        // DuckDB's date_diff(part, start, end): the number of `part`
+        // boundaries between the two, each operand reduced to that part
+        // first (DuckDB's DateDiff operators at the pinned tag). It counted
+        // whole elapsed units (date_diff('month', 2020-01-31, 2020-02-01)
+        // was 0 where DuckDB gives 1), and took MySQL's DATEDIFF(d1, d2),
+        // which DuckDB has no function for; the binder refuses that form
+        // (Stage 9, design L4).
         auto part = StringUtil::Upper(
             ExpressionExecutor::ExecuteScalar(*Arg(expr, 0)).GetValue<std::string>());
+        enum class Part { YEAR, QUARTER, MONTH, DAY, DECADE, CENTURY, MILLENNIUM,
+                          HOUR, MINUTE, SECOND, MILLISECOND, MICROSECOND };
+        Part p;
+        if (part == "YEAR" || part == "YEARS") p = Part::YEAR;
+        else if (part == "QUARTER" || part == "QUARTERS") p = Part::QUARTER;
+        else if (part == "MONTH" || part == "MONTHS") p = Part::MONTH;
+        else if (part == "DAY" || part == "DAYS") p = Part::DAY;
+        else if (part == "DECADE" || part == "DECADES") p = Part::DECADE;
+        else if (part == "CENTURY" || part == "CENTURIES") p = Part::CENTURY;
+        else if (part == "MILLENNIUM" || part == "MILLENNIA") p = Part::MILLENNIUM;
+        else if (part == "HOUR" || part == "HOURS") p = Part::HOUR;
+        else if (part == "MINUTE" || part == "MINUTES") p = Part::MINUTE;
+        else if (part == "SECOND" || part == "SECONDS") p = Part::SECOND;
+        else if (part == "MILLISECOND" || part == "MILLISECONDS") p = Part::MILLISECOND;
+        else if (part == "MICROSECOND" || part == "MICROSECONDS") p = Part::MICROSECOND;
+        else {
+            throw NotImplementedException("date_diff with the part '" + part +
+                                          "' is not supported");
+        }
         Vector ts1(Arg(expr, 1)->GetReturnType(), count);
         Vector ts2(Arg(expr, 2)->GetReturnType(), count);
         Execute(*Arg(expr, 1), input, ts1, count);
         Execute(*Arg(expr, 2), input, ts2, count);
+        const int64_t kDay = 86400LL * 1000000LL;
+        auto floor_div = [](int64_t v, int64_t unit) {
+            int64_t q = v / unit;
+            if (v % unit < 0) q--;
+            return q;
+        };
+        auto floor_days = [&](int64_t micros) { return floor_div(micros, kDay); };
         for (idx_t i = 0; i < count; i++) {
             auto v1 = ts1.GetValue(i), v2 = ts2.GetValue(i);
             if (v1.IsNull() || v2.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
             int64_t m1 = to_micros_any(v1);
             int64_t m2 = to_micros_any(v2);
-            int64_t diff_micros = m2 - m1;
-            int64_t diff_sec = diff_micros / 1000000;
             int64_t r = 0;
-            if (part == "SECOND") r = diff_sec;
-            else if (part == "MINUTE") r = diff_sec / 60;
-            else if (part == "HOUR") r = diff_sec / 3600;
-            else if (part == "DAY") r = diff_sec / 86400;
-            else if (part == "WEEK" || part == "WEEKS") r = diff_sec / (86400 * 7);
-            else if (part == "MILLISECOND" || part == "MILLISECONDS") r = diff_micros / 1000;
-            else if (part == "MICROSECOND" || part == "MICROSECONDS") r = diff_micros;
-            else if (part == "MONTH" || part == "MONTHS" ||
-                     part == "QUARTER" || part == "QUARTERS" ||
-                     part == "YEAR" || part == "YEARS") {
-                // Calendar-aware month/quarter/year diff. Convert both
-                // operands to civil (Y, M, D), then:
-                //   month_diff = (Y2-Y1)*12 + (M2-M1)
-                //              - (D2 < D1 ? 1 : 0)
-                // matches Postgres semantics: "full months elapsed".
-                int64_t days1 = m1 / (86400LL * 1000000LL);
-                if (m1 < 0 && (m1 % (86400LL * 1000000LL)) != 0) days1--;
-                int64_t days2 = m2 / (86400LL * 1000000LL);
-                if (m2 < 0 && (m2 % (86400LL * 1000000LL)) != 0) days2--;
-                int y1, y2; unsigned mo1, mo2, d1, d2;
-                days_to_civil(days1, y1, mo1, d1);
-                days_to_civil(days2, y2, mo2, d2);
-                int64_t month_diff = (int64_t)(y2 - y1) * 12 +
-                                     (int64_t)mo2 - (int64_t)mo1;
-                if (month_diff > 0 && d2 < d1) month_diff--;
-                if (month_diff < 0 && d2 > d1) month_diff++;
-                if (part == "MONTH" || part == "MONTHS") r = month_diff;
-                else if (part == "QUARTER" || part == "QUARTERS") r = month_diff / 3;
-                else r = month_diff / 12;  // YEAR/YEARS
+            switch (p) {
+            case Part::MICROSECOND: r = m2 - m1; break;
+            // Each operand cut to its part, rounding down (before 1970 too).
+            case Part::MILLISECOND: r = floor_div(m2, 1000) - floor_div(m1, 1000); break;
+            case Part::SECOND: r = floor_div(m2, 1000000) - floor_div(m1, 1000000); break;
+            case Part::MINUTE: r = floor_div(m2, 60000000) - floor_div(m1, 60000000); break;
+            case Part::HOUR:
+                r = floor_div(m2, 3600000000LL) - floor_div(m1, 3600000000LL);
+                break;
+            case Part::DAY: r = floor_days(m2) - floor_days(m1); break;
+            default: {
+                int y1, y2;
+                unsigned mo1, mo2, d1, d2;
+                days_to_civil(floor_days(m1), y1, mo1, d1);
+                days_to_civil(floor_days(m2), y2, mo2, d2);
+                switch (p) {
+                case Part::YEAR: r = int64_t(y2) - y1; break;
+                case Part::MONTH: r = (int64_t(y2) * 12 + mo2) - (int64_t(y1) * 12 + mo1); break;
+                case Part::QUARTER:
+                    r = (int64_t(y2) * 4 + (mo2 - 1) / 3) - (int64_t(y1) * 4 + (mo1 - 1) / 3);
+                    break;
+                case Part::DECADE: r = int64_t(y2) / 10 - int64_t(y1) / 10; break;
+                case Part::CENTURY: r = int64_t(y2) / 100 - int64_t(y1) / 100; break;
+                case Part::MILLENNIUM: r = int64_t(y2) / 1000 - int64_t(y1) / 1000; break;
+                default: break;
+                }
             }
-            else {
-                throw NotImplementedException(
-                    "DATE_DIFF unit '" + part + "' not yet supported "
-                    "(supported: SECOND, MINUTE, HOUR, DAY, WEEK, MONTH, "
-                    "QUARTER, YEAR, MILLISECOND, MICROSECOND)");
             }
             result.SetValue(i, Value::BIGINT(r));
         }
@@ -3986,35 +4115,12 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 result.GetValidity().SetInvalid(i);
                 continue;
             }
-            int64_t seconds_total;
-            auto tid = v.type().id();
-            if (tid == LogicalTypeId::DATE) {
-                seconds_total = static_cast<int64_t>(v.GetValue<int32_t>()) * 86400LL;
-            } else if (tid == LogicalTypeId::TIMESTAMP ||
-                       tid == LogicalTypeId::TIMESTAMP_TZ) {
-                seconds_total = v.GetValue<int64_t>() / 1000000LL;
-            } else if (tid == LogicalTypeId::BIGINT) {
-                int64_t raw = v.GetValue<int64_t>();
-                int64_t abs_raw = raw < 0 ? -raw : raw;
-                seconds_total = (abs_raw >= 10000000000000LL)
-                    ? raw / 1000000LL : raw;
-            } else if (tid == LogicalTypeId::INTEGER) {
-                seconds_total = v.GetValue<int32_t>();
-            } else {
-                result.GetValidity().SetInvalid(i);
-                continue;
-            }
-            auto seconds_t = static_cast<time_t>(seconds_total);
-            struct tm tm_buf;
-#ifdef _WIN32
-            gmtime_s(&tm_buf, &seconds_t);
-#else
-            gmtime_r(&seconds_t, &tm_buf);
-#endif
-            auto fmt = fv.GetValue<std::string>();
-            char buf[128];
-            std::strftime(buf, sizeof(buf), fmt.c_str(), &tm_buf);
-            result.SetValue(i, Value::VARCHAR(std::string(buf)));
+            // DuckDB's strftime specifiers, formatted here: the C
+            // library's strftime gave its own %c, %x and %g, its local
+            // time zone for %z, ignored %f, and an empty string past 128
+            // bytes (Stage 9). The binder takes a DATE or a TIMESTAMP.
+            result.SetValue(i, Value::VARCHAR(
+                FormatStrftime(to_micros_any(v), fv.GetValue<std::string>())));
         }
         return;
     }
@@ -4726,22 +4832,24 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         for (idx_t i = 0; i < count; i++) {
             auto val = arg.GetValue(i);
             if (val.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
-            int64_t micros = val.GetValue<int64_t>();
-            auto seconds = micros / 1000000;
-            auto time_t_val = static_cast<time_t>(seconds);
-            struct tm tm_buf;
-#ifdef _WIN32
-            gmtime_s(&tm_buf, &time_t_val);
-#else
-            gmtime_r(&time_t_val, &tm_buf);
-#endif
+            // A DATE is days, a TIMESTAMP microseconds: a DATE was read
+            // as microseconds, so every DATE of 1970 to 2100 was a
+            // Thursday in January (Stage 9). The day and month come from
+            // the day number, Hinnant's civil_from_days, with no gmtime.
+            int64_t micros = to_micros_any(val);
+            int64_t days = micros / 86400000000LL;
+            if (micros % 86400000000LL < 0) days--;
             if (name == "MONTHNAME") {
-                int m = tm_buf.tm_mon;
-                if (m < 0) m = 0; if (m > 11) m = 11;
-                result.SetValue(i, Value::VARCHAR(month_names[m]));
+                int64_t z = days + 719468;
+                int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+                int64_t doe = z - era * 146097;
+                int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+                int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+                int64_t mp = (5 * doy + 2) / 153;
+                int64_t m = mp < 10 ? mp + 3 : mp - 9; // 1..12
+                result.SetValue(i, Value::VARCHAR(month_names[m - 1]));
             } else {
-                int d = tm_buf.tm_wday;
-                if (d < 0) d = 0; if (d > 6) d = 6;
+                int64_t d = ((days % 7) + 7 + 4) % 7; // 1970-01-01 was a Thursday
                 result.SetValue(i, Value::VARCHAR(day_names[d]));
             }
         }

@@ -9,6 +9,101 @@
 
 namespace zugodb {
 
+// BEGIN FUNCTION REGISTRY (tools/check_dialect.sh reads the names between
+// these markers; docs/dialect.md lists the same ones).
+// Each scalar function with DuckDB's argument counts (its signatures at
+// the pinned tag, where the engine computes them): a call with too few
+// read past the executor's arguments (date_part('year') overflowed a heap
+// buffer, Stage 9's SQL fuzzer), and too many were ignored.
+struct FunctionArity { const char *name; size_t lo, hi; };
+static const FunctionArity kScalarFunctions[] = {
+    // Numbers.
+    {"ABS", 1, 1}, {"ACOS", 1, 1}, {"ACOSH", 1, 1}, {"ASIN", 1, 1}, {"ASINH", 1, 1},
+    {"ATAN", 1, 1}, {"ATAN2", 2, 2}, {"ATANH", 1, 1}, {"CBRT", 1, 1}, {"CEIL", 1, 1},
+    {"CEILING", 1, 1}, {"COS", 1, 1}, {"COSH", 1, 1}, {"DEGREES", 1, 1}, {"EXP", 1, 1},
+    {"FACTORIAL", 1, 1}, {"FLOOR", 1, 1}, {"GCD", 2, 2}, {"ISFINITE", 1, 1},
+    {"ISINF", 1, 1}, {"ISNAN", 1, 1}, {"LCM", 2, 2}, {"LN", 1, 1}, {"LOG", 1, 2},
+    {"LOG10", 1, 1}, {"LOG2", 1, 1}, {"MOD", 2, 2}, {"PI", 0, 0}, {"POW", 2, 2},
+    {"POWER", 2, 2},
+    {"RADIANS", 1, 1}, {"ROUND", 1, 2}, {"SIGN", 1, 1}, {"SIN", 1, 1}, {"SINH", 1, 1},
+    {"SQRT", 1, 1}, {"TAN", 1, 1}, {"TANH", 1, 1}, {"TRUNC", 1, 2},
+    // Text and bytes.
+    {"ASCII", 1, 1}, {"BIT_LENGTH", 1, 1}, {"CHR", 1, 1}, {"CONCAT", 1, SIZE_MAX},
+    {"CONCAT_WS", 2, SIZE_MAX}, {"CONTAINS", 2, 2}, {"ENDS_WITH", 2, 2},
+    {"FROM_BASE64", 1, 1}, {"HEX", 1, 1}, {"INSTR", 2, 2}, {"LEFT", 2, 2}, {"LENGTH", 1, 1},
+    {"LOWER", 1, 1}, {"LPAD", 3, 3}, {"LTRIM", 1, 2}, {"MD5", 1, 1},
+    {"OCTET_LENGTH", 1, 1}, {"POSITION", 2, 2}, {"PREFIX", 2, 2}, {"REPEAT", 2, 2},
+    {"REPLACE", 3, 3}, {"REVERSE", 1, 1}, {"RIGHT", 2, 2}, {"RPAD", 3, 3},
+    {"RTRIM", 1, 2}, {"SHA1", 1, 1}, {"SHA256", 1, 1}, {"SPLIT_PART", 3, 3},
+    {"STARTS_WITH", 2, 2}, {"STRLEN", 1, 1}, {"STRPOS", 2, 2}, {"SUBSTR", 2, 3},
+    {"SUBSTRING", 2, 3}, {"SUFFIX", 2, 2}, {"TO_BASE64", 1, 1}, {"TO_HEX", 1, 1},
+    {"TRANSLATE", 3, 3}, {"TRIM", 1, 2}, {"UNHEX", 1, 1}, {"UPPER", 1, 1},
+    // Dates and times.
+    {"CENTURY", 1, 1}, {"DATE_DIFF", 3, 3}, {"DATEDIFF", 3, 3}, {"DATE_PART", 2, 2},
+    {"DATE_TRUNC", 2, 2}, {"DAY", 1, 1}, {"DAYNAME", 1, 1},
+    {"DAYOFMONTH", 1, 1}, {"DAYOFWEEK", 1, 1}, {"DAYOFYEAR", 1, 1}, {"DECADE", 1, 1},
+    {"EPOCH_MS", 1, 1}, {"HOUR", 1, 1}, {"ISODOW", 1, 1},
+    {"ISOYEAR", 1, 1}, {"LAST_DAY", 1, 1}, {"MAKE_DATE", 3, 3}, {"MAKE_TIMESTAMP", 6, 6},
+    {"MILLENNIUM", 1, 1}, {"MINUTE", 1, 1}, {"MONTH", 1, 1},
+    {"MONTHNAME", 1, 1}, {"QUARTER", 1, 1}, {"SECOND", 1, 1}, {"STRFTIME", 2, 2},
+    {"WEEK", 1, 1}, {"YEAR", 1, 1},
+    // Conditions and NULLs.
+    {"COALESCE", 1, SIZE_MAX}, {"GREATEST", 1, SIZE_MAX}, {"IF", 3, 3}, {"IFNULL", 2, 2},
+    {"LEAST", 1, SIZE_MAX}, {"NULLIF", 2, 2},
+    // The session.
+    {"CURRENT_SCHEMA", 0, 0},
+};
+static const char *const kAggregateFunctions[] = {
+    "AVG", "BOOL_AND", "BOOL_OR", "COUNT", "GROUP_CONCAT", "LISTAGG", "MAX", "MEDIAN", "MIN",
+    "STDDEV", "STDDEV_POP", "STDDEV_SAMP", "STRING_AGG", "SUM", "VAR_POP", "VAR_SAMP",
+    "VARIANCE",
+};
+static const char *const kWindowFunctions[] = {
+    "DENSE_RANK", "FIRST_VALUE", "LAG", "LAST_VALUE", "LEAD", "NTILE", "RANK",
+    "ROW_NUMBER",
+};
+// END FUNCTION REGISTRY
+
+// Names the parser makes for syntax (CASE, x BETWEEN a AND b, x IN (...),
+// EXTRACT(part FROM x)): not functions a query calls by name.
+static const char *const kSyntaxFunctions[] = {"CASE", "BETWEEN", "IN", "EXTRACT", "EXISTS"};
+
+static bool IsRegisteredFunction(const std::string &name) {
+    for (auto &f : kScalarFunctions) if (name == f.name) return true;
+    for (auto *f : kAggregateFunctions) if (name == f) return true;
+    for (auto *f : kWindowFunctions) if (name == f) return true;
+    for (auto *f : kSyntaxFunctions) if (name == f) return true;
+    return false;
+}
+
+// The error for a name outside the registry: why it is refused, where the
+// engine knows (design L4, L23, L25, L26).
+[[noreturn]] static void RefuseFunction(const std::string &name) {
+    static const char *const kNotDuckDB[] = {
+        "NVL", "IIF", "GETDATE", "CURDATE", "CURTIME", "FROM_UNIXTIME", "UNIX_TIMESTAMP",
+        "DATE_FORMAT", "FORMAT_TIMESTAMP", "DATEADD", "TIMESTAMPADD", "TIMESTAMPDIFF",
+        "SUBDATE", "ADDDATE", "BASE64_ENCODE", "BASE64_DECODE", "INITCAP", "SHA512",
+        "SHA2_256", "SHA2_512", "SHA_1", "RAND", "TRUNCATE", "STR_TO_DATE"};
+    for (auto *f : kNotDuckDB) {
+        if (name == f) {
+            throw BinderException(ErrorCode::TYPE_MISMATCH,
+                "Scalar Function with name " + StringUtil::Lower(name) +
+                " does not exist: DuckDB has no such function (design L4)");
+        }
+    }
+    static const char *const kProvided[] = {"RANDOM", "SETSEED", "UUID", "GEN_RANDOM_UUID",
+                                            "UUIDV4", "UUIDV7"};
+    for (auto *f : kProvided) {
+        if (name == f) {
+            throw NotImplementedException(
+                "Function " + StringUtil::Lower(name) +
+                " is not supported: random numbers and UUIDs come from a host-supplied "
+                "provider (libzugodb#40, design L25), which this engine does not have");
+        }
+    }
+    throw NotImplementedException("Function " + StringUtil::Lower(name) + " is not supported");
+}
+
 // A condition is BOOLEAN: AND, OR and NOT's operands, WHERE, HAVING,
 // QUALIFY, ON and CASE WHEN. Another type is cast to BOOLEAN, DuckDB's
 // implicit cast (10 is true, 'abc' an error). The bytes of an INTEGER
@@ -66,6 +161,12 @@ static void CoerceBesideBlob(BoundExprPtr &e, const char *what) {
 }
 
 void BindContext::AddTable(const std::string &alias, TableCatalogEntry *entry) {
+    // Two tables of one alias, in any case, are DuckDB's error (FROM t, t;
+    // FROM t AS x, t AS X); the second replaced the first's columns.
+    if (tables.count(alias)) {
+        throw BinderException(ErrorCode::AMBIGUOUS_COLUMN,
+            "Ambiguous reference to table \"" + alias + "\" (duplicate alias)");
+    }
     tables[alias] = entry;
     // Compute offset: sum of all columns from previously added tables.
     idx_t offset = 0;
@@ -128,7 +229,7 @@ LogicalType BindContext::GetColumnType(const std::string &col_name,
 
 idx_t BindContext::GetTableOffset(const std::string &alias) const {
     for (auto &[tbl_alias, offset] : table_order) {
-        if (tbl_alias == alias) return offset;
+        if (IdentifierEquals(tbl_alias, alias)) return offset;
     }
     return 0;
 }
@@ -236,7 +337,9 @@ BoundStmtPtr Binder::BindSelect(const SelectStatement &stmt) {
             auto bound = BindExpression(*expr, context);
             std::string name = expr->alias.empty()
                 ? (expr->GetExpressionType() == ExpressionType::COLUMN_REF
-                    ? static_cast<const ColumnRefExpression &>(*expr).column_name
+                    ? (bound->GetExpressionType() == BoundExpressionType::COLUMN_REF
+                           ? static_cast<const BoundColumnRef &>(*bound).column_name
+                           : static_cast<const ColumnRefExpression &>(*expr).column_name)
                     : "expr")
                 : expr->alias;
             bound->alias = name;
@@ -731,6 +834,13 @@ BoundStmtPtr Binder::BindCreateTable(const CreateTableStatement &stmt) {
     result->if_not_exists = stmt.if_not_exists;
 
     for (auto &col : stmt.columns) {
+        // Two columns of one name, in any case, are DuckDB's error; both
+        // were made, and a reference read the first (design L26).
+        for (auto &prev : result->columns) {
+            if (IdentifierEquals(prev.name, col.name)) {
+                throw CatalogException("Column with name \"" + col.name + "\" already exists");
+            }
+        }
         auto type = ResolveTypeName(col.type_name);
         // A PRIMARY KEY column is implicitly NOT NULL.
         result->columns.emplace_back(col.name, type,
@@ -1080,8 +1190,10 @@ BoundExprPtr Binder::BindColumnRef(const ColumnRefExpression &expr, BindContext 
     idx_t offset = context.GetTableOffset(table);
     idx_t local_idx = combined_idx - offset;
     CheckFileColumnReadable(*context.tables.at(table), local_idx);
-    auto type = context.tables.at(table)->GetColumns()[local_idx].type;
-    return std::make_unique<BoundColumnRef>(expr.column_name, combined_idx, type);
+    auto &column = context.tables.at(table)->GetColumns()[local_idx];
+    // The catalog's spelling, as DuckDB names the result column `Foo` for
+    // SELECT foo of a column Foo (design L26).
+    return std::make_unique<BoundColumnRef>(column.name, combined_idx, column.type);
 }
 
 BoundExprPtr Binder::BindConstant(const ConstantExpression &expr) {
@@ -1435,9 +1547,11 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
     auto right_id = right->GetReturnType().id();
     bool left_date  = (left_id  == LogicalTypeId::DATE);
     bool right_date = (right_id == LogicalTypeId::DATE);
+    // DuckDB adds an INTEGER (or narrower) to a DATE; DATE + BIGINT is no
+    // function there (Stage 9).
     auto is_int_id = [](LogicalTypeId t) {
         return t == LogicalTypeId::TINYINT  || t == LogicalTypeId::SMALLINT ||
-               t == LogicalTypeId::INTEGER  || t == LogicalTypeId::BIGINT;
+               t == LogicalTypeId::INTEGER;
     };
     if (left_date || right_date) {
         if (expr.op == "+") {
@@ -1466,42 +1580,21 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
             "Invalid DATE arithmetic: " + left->GetReturnType().ToString() +
             " " + expr.op + " " + right->GetReturnType().ToString());
     }
-    // TIMESTAMP arithmetic: integer operand is seconds.
-    //   TIMESTAMP + N -> TIMESTAMP   (commutative)
-    //   TIMESTAMP - N -> TIMESTAMP   (TIMESTAMP on left only)
-    //   TIMESTAMP - TIMESTAMP -> BIGINT (microseconds difference)
-    // Result type only — the executor needs to scale the integer
-    // operand by 1e6 (sec->micros) before the int64 add/sub; without
-    // result-type tagging here, the integer is added to a TIMESTAMP
-    // (int64 micros) and the result is rendered as raw INTEGER bytes.
+    // TIMESTAMP arithmetic. DuckDB has no TIMESTAMP + INTEGER, and its
+    // TIMESTAMP - TIMESTAMP is an INTERVAL, a type the engine does not
+    // hold; the engine took the integer as seconds and gave the
+    // difference as BIGINT seconds. Both are refused (Stage 9).
     bool left_ts  = (left_id  == LogicalTypeId::TIMESTAMP || left_id == LogicalTypeId::TIMESTAMP_TZ);
     bool right_ts = (right_id == LogicalTypeId::TIMESTAMP || right_id == LogicalTypeId::TIMESTAMP_TZ);
     if (left_ts || right_ts) {
-        auto pick_ts = [&]() -> LogicalType {
-            return LogicalType::TIMESTAMP();
-        };
-        if (expr.op == "+") {
-            if (left_ts && (is_int_id(right_id) || right_id == LogicalTypeId::SQLNULL)) {
-                return std::make_unique<BoundArithmetic>(
-                    expr.op, std::move(left), std::move(right), pick_ts());
-            }
-            if (right_ts && (is_int_id(left_id) || left_id == LogicalTypeId::SQLNULL)) {
-                return std::make_unique<BoundArithmetic>(
-                    expr.op, std::move(left), std::move(right), pick_ts());
-            }
-        } else if (expr.op == "-") {
-            if (left_ts && right_ts) {
-                return std::make_unique<BoundArithmetic>(
-                    expr.op, std::move(left), std::move(right), LogicalType::BIGINT());
-            }
-            if (left_ts && (is_int_id(right_id) || right_id == LogicalTypeId::SQLNULL)) {
-                return std::make_unique<BoundArithmetic>(
-                    expr.op, std::move(left), std::move(right), pick_ts());
-            }
+        if (expr.op == "-" && left_ts && right_ts) {
+            throw NotImplementedException(
+                "TIMESTAMP - TIMESTAMP is not supported: DuckDB's result is an INTERVAL; "
+                "date_diff gives the difference in a part");
         }
         throw BinderException(ErrorCode::TYPE_MISMATCH,
-            "Invalid TIMESTAMP arithmetic: " + left->GetReturnType().ToString() +
-            " " + expr.op + " " + right->GetReturnType().ToString());
+            "No function matches " + left->GetReturnType().ToString() + " " + expr.op + " " +
+            right->GetReturnType().ToString());
     }
     // Arithmetic of numbers only. A VARCHAR, BOOLEAN or TIME operand was
     // typed INTEGER and read as garbage (1::TINYINT + 1::VARCHAR gave 1);
@@ -1626,6 +1719,89 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         "REGEXP_MATCH", "SIMILAR_TO"};
     for (auto *f : kRegexFunctions) {
         if (name == f) RefuseRegex("Function " + StringUtil::Lower(name));
+    }
+    // The function registry (Stage 9, design L26): the names the engine
+    // computes, the list docs/dialect.md gives (tools/check_dialect.sh
+    // compares the two). Any other name is refused here; it bound with an
+    // INTEGER type and failed per row, or gave a value DuckDB never gives.
+    if (!IsRegisteredFunction(name)) {
+        RefuseFunction(name);
+    }
+    for (const auto &f : kScalarFunctions) {
+        if (name != f.name) continue;
+        size_t n = args.size();
+        if (n < f.lo || n > f.hi) {
+            throw BinderException(ErrorCode::TYPE_MISMATCH,
+                "No function matches " + StringUtil::Lower(name) + "() with " +
+                std::to_string(n) + " argument(s); it takes " +
+                (f.lo == f.hi     ? std::to_string(f.lo)
+                 : f.hi == SIZE_MAX ? "at least " + std::to_string(f.lo)
+                                    : std::to_string(f.lo) + " to " + std::to_string(f.hi)));
+        }
+        break;
+    }
+    // Date and time functions take a DATE or a TIMESTAMP, as DuckDB's do.
+    // Another argument was read as one: an INTEGER as seconds, a BIGINT as
+    // seconds or microseconds by its size, a TIME as midnight
+    // (EXTRACT(YEAR FROM bigint_col), STRFTIME(1, '%Y')), where DuckDB has
+    // no such function (Stage 9). EPOCH_MS(INTEGER), DuckDB's TIMESTAMP
+    // from milliseconds, is refused with them.
+    {
+        struct DateArgs { const char *name; int first, last; bool timestamp_only; };
+        static const DateArgs kDateArgs[] = {
+            {"DAYNAME", 0, 0, false},   {"MONTHNAME", 0, 0, false}, {"YEAR", 0, 0, false},
+            {"MONTH", 0, 0, false},     {"DAY", 0, 0, false},       {"HOUR", 0, 0, false},
+            {"MINUTE", 0, 0, false},    {"SECOND", 0, 0, false},    {"DAYOFWEEK", 0, 0, false},
+            {"DAYOFMONTH", 0, 0, false}, {"DAYOFYEAR", 0, 0, false}, {"QUARTER", 0, 0, false},
+            {"WEEK", 0, 0, false},      {"ISODOW", 0, 0, false},    {"ISOYEAR", 0, 0, false},
+            {"CENTURY", 0, 0, false},   {"DECADE", 0, 0, false},    {"MILLENNIUM", 0, 0, false},
+            {"LAST_DAY", 0, 0, false},  {"EXTRACT", 1, 1, false},   {"DATE_PART", 1, 1, false},
+            {"DATE_TRUNC", 1, 1, false}, {"DATE_DIFF", 1, 2, false}, {"DATEDIFF", 1, 2, false},
+            {"EPOCH_MS", 0, 0, true},
+        };
+        for (const auto &d : kDateArgs) {
+            if (name != d.name) continue;
+            if (name == "DATE_DIFF" || name == "DATEDIFF") {
+                if (args.size() != 3) {
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "No function matches " + StringUtil::Lower(name) + "() with " +
+                        std::to_string(args.size()) +
+                        " argument(s); it takes 3 (part, start, end), as DuckDB's (design L4)");
+                }
+            }
+            for (int k = d.first; k <= d.last; k++) {
+                if (static_cast<size_t>(k) >= args.size()) break;
+                auto t = args[k]->GetReturnType().id();
+                bool ok = t == LogicalTypeId::TIMESTAMP || t == LogicalTypeId::SQLNULL ||
+                          (!d.timestamp_only && t == LogicalTypeId::DATE);
+                if (!ok) {
+                    throw BinderException(ErrorCode::TYPE_MISMATCH,
+                        "No function matches " + StringUtil::Lower(name) + "() of a " +
+                        args[k]->GetReturnType().ToString());
+                }
+            }
+            break;
+        }
+        if (name == "STRFTIME") {
+            if (args.size() != 2) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "No function matches strftime() with " + std::to_string(args.size()) +
+                    " argument(s); it takes 2");
+            }
+            auto t0 = args[0]->GetReturnType().id(), t1 = args[1]->GetReturnType().id();
+            auto when = [](LogicalTypeId t) {
+                return t == LogicalTypeId::DATE || t == LogicalTypeId::TIMESTAMP ||
+                       t == LogicalTypeId::SQLNULL;
+            };
+            auto text = [](LogicalTypeId t) {
+                return t == LogicalTypeId::VARCHAR || t == LogicalTypeId::SQLNULL;
+            };
+            if (!((when(t0) && text(t1)) || (text(t0) && when(t1)))) {
+                throw BinderException(ErrorCode::TYPE_MISMATCH,
+                    "No function matches strftime(" + args[0]->GetReturnType().ToString() + ", " +
+                    args[1]->GetReturnType().ToString() + ")");
+            }
+        }
     }
     // A BLOB argument: the functions that read a BLOB's bytes as DuckDB
     // does. The others read it as text, gave a VARCHAR of its bytes or

@@ -712,12 +712,25 @@ TEST_CASE("Load - each value is checked against its type") {
     std::remove(HAND_DB_PATH);
 }
 
-TEST_CASE("Load - bytes after the last table, and a table name twice, are refused") {
+TEST_CASE("Load - bytes after the last table, a table name twice and a column name twice are refused") {
     CHECK(Open(Bytes().U32(1).EmptyTable("t")) == "");
     CHECK(Has(Open(Bytes().U32(1).EmptyTable("t").U8(0)), "1 bytes after the last table at offset 4123"));
     CHECK(Open(Bytes().U32(2).EmptyTable("t").EmptyTable("u")) == "");
     CHECK(Has(Open(Bytes().U32(2).EmptyTable("t").EmptyTable("t")),
               "a second table of the same name at offset 4123"));
+    // Names match ignoring ASCII case, as SQL's do (design L26): SQL
+    // cannot make `t` beside `T`, nor a column `a` beside `A`.
+    CHECK(Has(Open(Bytes().U32(2).EmptyTable("t").EmptyTable("T")),
+              "a second table of the same name at offset 4123"));
+    auto two_columns = [](const char *a, const char *b) {
+        return Bytes().U32(1).Str("t").U32(2).Str(a).U8(uint8_t(LogicalTypeId::INTEGER))
+            .Str(b).U8(uint8_t(LogicalTypeId::INTEGER)).U64(0);
+    };
+    CHECK(Open(two_columns("a", "b")) == "");
+    CHECK(Has(Open(two_columns("a", "A")), "a second column of the same name"));
+    CHECK(Has(Open(two_columns("a", "a")), "a second column of the same name"));
+    // Bytes past ASCII are not folded: these are two names.
+    CHECK(Open(two_columns("\xc3\xa9", "\xc3\x89")) == "");
     std::remove(HAND_DB_PATH);
 }
 

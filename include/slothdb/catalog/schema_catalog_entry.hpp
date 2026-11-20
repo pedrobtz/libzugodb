@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include "slothdb/common/string_util.hpp"
 
 namespace zugodb {
 
@@ -30,7 +31,8 @@ public:
     std::vector<std::string> GetTableNames() const;
 
 private:
-    std::unordered_map<std::string, std::unique_ptr<TableCatalogEntry>> tables_;
+    std::unordered_map<std::string, std::unique_ptr<TableCatalogEntry>, IdentifierHash,
+                       IdentifierEqual> tables_;
 };
 
 } // namespace zugodb

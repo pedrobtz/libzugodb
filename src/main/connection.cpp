@@ -657,6 +657,21 @@ QueryResult Connection::RunStatements(const std::string &sql) {
         }
     }
 
+    // No transactions (design L26, CLAUDE.md): BEGIN, COMMIT and ROLLBACK
+    // are refused, the whole batch before any of it runs. BEGIN and COMMIT
+    // were accepted around autocommitted statements, so a statement after
+    // a failed one inside them was kept where DuckDB rolls the whole
+    // transaction back, and later queries saw rows DuckDB's do not.
+    for (auto &stmt : statements) {
+        auto t = stmt->GetType();
+        if (t == StatementType::BEGIN_TXN || t == StatementType::COMMIT_TXN ||
+            t == StatementType::ROLLBACK_TXN) {
+            throw NotImplementedException(
+                "Transactions are not supported: every statement commits as it runs, and "
+                "BEGIN, COMMIT and ROLLBACK are refused");
+        }
+    }
+
     QueryResult final_result;
     for (auto &stmt : statements) {
         idx_t stmt_idx = static_cast<idx_t>(&stmt - statements.data());
@@ -1103,6 +1118,13 @@ QueryResult Connection::RunStatements(const std::string &sql) {
             auto old_types = entry->GetTypes();
 
             if (alter.action == AlterTableStatement::AlterAction::ADD_COLUMN) {
+                // A name the table has, in any case, is DuckDB's error.
+                for (auto &c : old_cols) {
+                    if (IdentifierEquals(c.name, alter.column_name)) {
+                        throw CatalogException("Column with name \"" + alter.column_name +
+                                               "\" already exists");
+                    }
+                }
                 // Scan all data, add NULL for new column, rebuild.
                 Binder binder(db_.GetCatalog());
                 auto new_type = binder.ResolveTypeName(alter.column_type);
@@ -1174,6 +1196,12 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 if (rename_idx == INVALID_INDEX)
                     throw CatalogException("Column '" + alter.column_name + "' not found");
 
+                for (idx_t c = 0; c < old_cols.size(); c++) {
+                    if (c != rename_idx && IdentifierEquals(old_cols[c].name, alter.new_column_name)) {
+                        throw CatalogException("Column with name \"" + alter.new_column_name +
+                                               "\" already exists");
+                    }
+                }
                 std::vector<ColumnDefinition> new_cols = old_cols;
                 new_cols[rename_idx].name = alter.new_column_name;
 

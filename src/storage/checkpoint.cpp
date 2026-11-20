@@ -1,4 +1,5 @@
 #include "slothdb/storage/checkpoint.hpp"
+#include "slothdb/common/string_util.hpp"
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/crc32.hpp"
 #include "slothdb/common/types/value.hpp"
@@ -422,6 +423,13 @@ LoadedTable ReadTable(BoundedReader &in) {
             Damaged("unknown column type " + std::to_string(tag) + At(at));
         }
         LogicalType type(static_cast<LogicalTypeId>(tag));
+        // A column name the table already has, ignoring ASCII case, is
+        // one SQL cannot make (design L26); the catalog would rename it.
+        for (auto &prev : table.columns) {
+            if (IdentifierEquals(prev.name, col_name)) {
+                Damaged("a second column of the same name" + At(at));
+            }
+        }
         table.columns.emplace_back(col_name, type);
         types.push_back(type);
     }
@@ -518,7 +526,9 @@ void Checkpoint::Load(Catalog &catalog, const std::string &path) {
     // leaves the catalog as it was.
     std::vector<LoadedTable> tables;
     tables.reserve(num_tables);
-    std::unordered_set<std::string> names;
+    // Names compare as identifiers do, ignoring ASCII case (design L26):
+    // SQL cannot make two tables `t` and `T`.
+    std::unordered_set<std::string, IdentifierHash, IdentifierEqual> names;
     for (uint32_t t = 0; t < num_tables; t++) {
         at = in.Offset();
         tables.push_back(ReadTable(in));

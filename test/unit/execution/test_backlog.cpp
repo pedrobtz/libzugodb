@@ -109,13 +109,12 @@ TEST_CASE("Trig - DEGREES and RADIANS") {
 // ============================================================================
 
 TEST_CASE("INITCAP") {
+    // DuckDB v2.0.0 has no INITCAP: refused (Stage 9, design L4).
     Database db;
     Connection conn(db);
     conn.Query("CREATE TABLE t (s VARCHAR)");
     conn.Query("INSERT INTO t VALUES ('hello world')");
-
-    auto r = conn.Query("SELECT INITCAP(s) FROM t");
-    CHECK(r.GetValue(0, 0).GetValue<std::string>() == "Hello World");
+    CHECK_THROWS(conn.Query("SELECT INITCAP(s) FROM t"));
 }
 
 // ============================================================================
