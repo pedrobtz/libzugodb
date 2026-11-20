@@ -6372,7 +6372,15 @@ private:
                         col_side = ar.right.get(); con_side = ar.left.get();
                         col_on_left = false;
                     }
-                    if (col_side && con_side && (ar.op == "+" || (ar.op == "-" && col_on_left))) {
+                    // Only over floating point: integer col + const raises
+                    // on a row that overflows, which sum + count * const
+                    // never sees (SUM(x + 1) of 2147483647 gave
+                    // 2147483648; DuckDB's error, #43).
+                    auto ar_type = ar.GetReturnType().id();
+                    bool ar_floating = ar_type == LogicalTypeId::DOUBLE ||
+                                       ar_type == LogicalTypeId::FLOAT;
+                    if (ar_floating && col_side && con_side &&
+                        (ar.op == "+" || (ar.op == "-" && col_on_left))) {
                         const auto &con = static_cast<const BoundConstant &>(*con_side);
                         if (!con.value.IsNull()) {
                             double off = 0.0;

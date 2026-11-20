@@ -137,6 +137,19 @@
   recorded row as DuckDB's runner does, dropping empty pieces.
 - Remove `bench/correctness/`, SlothDB's Python harness, which ran
   SlothDB's published wheel rather than this tree.
+- Integer arithmetic overflows as DuckDB's does (#43). `+`, `-`, `*` and
+  `%` of `TINYINT` and `SMALLINT` compute in the wider operand's type and
+  raise on overflow; they widened to `INTEGER`, so `100::TINYINT +
+  100::TINYINT` was 200 where DuckDB raises. An integer literal takes
+  the other operand's type when it fits it, as DuckDB's does, so `x + 1`
+  of a `TINYINT` column raises at 127, and `-2147483648` is an `INTEGER`.
+  Wrong values with no error are gone at every width: `2147483647 * 2`
+  gave -2 (the overflow check was optimised away), the negation of a
+  type's least value gave itself, its `% -1` gave 0, `SUM(x + 1)` added
+  `COUNT(*)` to `SUM(x)` and missed a row that overflows, and `<<` and
+  `>>` follow DuckDB (`1 << 31`, a negative operand or count past the
+  width are errors; they wrapped or gave NULL). `/` stays a `DOUBLE`
+  division.
 
 ## libzugodb 0.2.0
 
