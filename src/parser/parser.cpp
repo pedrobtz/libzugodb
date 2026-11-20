@@ -4,6 +4,34 @@
 
 namespace zugodb {
 
+// libzugodb (#4, design §2): files reach the engine as Arrow C streams,
+// through zugodb, never from SQL. Every SQL route to a file stops here, in
+// the parser, before anything is opened: the file table functions, a path
+// used as a table, DESCRIBE of either, COPY and CREATE LIVE VIEW. The
+// readers stay compiled, and tested through their C++ API, until Stage 11;
+// connection.cpp's handlers for these routes are no longer reached.
+[[noreturn]] static void RefuseFileAccess(const std::string &what) {
+    throw NotImplementedException(
+        "Reading or writing files from SQL is not supported: " + what);
+}
+
+// The table functions the engine read files with, and DuckDB's others, so
+// that each gets the refusal rather than a syntax error.
+static bool IsFileTableFunction(const std::string &name) {
+    static const char *const names[] = {
+        "READ_CSV", "READ_CSV_AUTO", "READ_PARQUET", "PARQUET_SCAN",
+        "PARQUET_METADATA", "PARQUET_SCHEMA", "PARQUET_FILE_METADATA",
+        "PARQUET_KV_METADATA", "READ_JSON", "READ_JSON_AUTO", "READ_NDJSON",
+        "READ_NDJSON_AUTO", "READ_JSON_OBJECTS", "READ_JSON_OBJECTS_AUTO",
+        "READ_NDJSON_OBJECTS", "READ_TEXT", "READ_BLOB", "READ_ARROW",
+        "READ_AVRO", "READ_XLSX", "SQLITE_SCAN", "GLOB", "SNIFF_CSV"};
+    auto upper = StringUtil::Upper(name);
+    for (const char *n : names) {
+        if (upper == n) return true;
+    }
+    return false;
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -277,50 +305,9 @@ ParsedStmtPtr Parser::ParseStatement() {
     if (Check(TokenType::IDENTIFIER) && StringUtil::Upper(Current().value) == "SHOW") {
         return ParseShowStatement();
     }
-    // COPY table TO/FROM 'file.csv' [WITH (options)]
-    // COPY (SELECT ...) TO 'file' [WITH (options)]
-    if (MatchKeyword(TokenType::KW_COPY)) {
-        auto stmt = std::make_unique<CopyStatement>();
-        if (Match(TokenType::LPAREN)) {
-            // Subquery form.
-            auto inner = ParseSelectStatement();
-            stmt->source_query = std::unique_ptr<SelectStatement>(
-                static_cast<SelectStatement *>(inner.release()));
-            Expect(TokenType::RPAREN, "after COPY subquery");
-        } else {
-            stmt->table_name = ExpectIdentifier("for table name").value;
-        }
-
-        if (MatchKeyword(TokenType::KW_TO)) {
-            stmt->is_from = false;
-        } else if (MatchKeyword(TokenType::KW_FROM)) {
-            stmt->is_from = true;
-        } else {
-            ThrowError("Expected TO or FROM after COPY table");
-        }
-
-        stmt->file_path = Expect(TokenType::STRING_LITERAL, "for file path").value;
-
-        // Optional WITH (DELIMITER ',', HEADER true)
-        if (MatchKeyword(TokenType::KW_WITH)) {
-            Expect(TokenType::LPAREN, "after WITH");
-            while (!Check(TokenType::RPAREN)) {
-                auto opt_name = StringUtil::Upper(Advance().value);
-                if (opt_name == "DELIMITER") {
-                    auto delim = Expect(TokenType::STRING_LITERAL, "for delimiter").value;
-                    if (!delim.empty()) stmt->delimiter = delim[0];
-                } else if (opt_name == "HEADER") {
-                    auto val = StringUtil::Upper(Advance().value);
-                    stmt->header = (val == "TRUE" || val == "1");
-                } else if (opt_name == "FORMAT") {
-                    stmt->format = StringUtil::Upper(Advance().value);
-                }
-                Match(TokenType::COMMA);
-            }
-            Expect(TokenType::RPAREN, "after WITH options");
-        }
-
-        return stmt;
+    // COPY table TO/FROM 'file' and COPY (SELECT ...) TO 'file'.
+    if (CheckKeyword(TokenType::KW_COPY)) {
+        RefuseFileAccess("COPY");
     }
 
     if (MatchKeyword(TokenType::KW_BEGIN)) {
@@ -727,37 +714,13 @@ std::unique_ptr<TableRef> Parser::ParseTableRef() {
         parse_optional_alias();
         parse_optional_col_alias_list();
         // Fall through to JOIN handling below.
-    } else if (Check(TokenType::IDENTIFIER) &&
-        (StringUtil::Upper(Current().value) == "READ_CSV" ||
-         StringUtil::Upper(Current().value) == "READ_CSV_AUTO" ||
-         StringUtil::Upper(Current().value) == "READ_JSON" ||
-         StringUtil::Upper(Current().value) == "READ_JSON_AUTO" ||
-         StringUtil::Upper(Current().value) == "READ_PARQUET" ||
-         StringUtil::Upper(Current().value) == "READ_ARROW" ||
-         StringUtil::Upper(Current().value) == "READ_AVRO" ||
-         StringUtil::Upper(Current().value) == "READ_XLSX" ||
-         StringUtil::Upper(Current().value) == "SQLITE_SCAN")) {
-        ref->table_name = StringUtil::Upper(Advance().value);
-        ref->is_table_function = true;
-        Expect(TokenType::LPAREN, "after table function");
-        do {
-            ref->function_args.push_back(ParseExpression());
-        } while (Match(TokenType::COMMA));
-        Expect(TokenType::RPAREN, "after table function args");
-
-        parse_optional_alias();
-        parse_optional_col_alias_list();
+    } else if (Check(TokenType::IDENTIFIER) && Peek().type == TokenType::LPAREN &&
+               IsFileTableFunction(Current().value)) {
+        // read_csv(...), read_parquet(...), read_json(...) and the like.
+        RefuseFileAccess(Current().value + "()");
     } else if (Check(TokenType::STRING_LITERAL)) {
-        // Handle string literal in FROM: SELECT * FROM 'file.csv' (auto-detect format).
-        auto file_path = Advance().value;
-        ref->table_name = "__FILE__";
-        ref->is_table_function = true;
-        ref->function_args.push_back(
-            std::make_unique<ConstantExpression>(file_path, TokenType::STRING_LITERAL));
-
-        parse_optional_alias();
-        parse_optional_col_alias_list();
-        // Fall through to JOIN handling.
+        // SELECT * FROM 'file.csv': a path used as a table, any extension.
+        RefuseFileAccess("a file path used as a table");
     } else if (CheckKeyword(TokenType::KW_GENERATE_SERIES)) {
         // Handle GENERATE_SERIES(start, stop[, step]) as a table function.
         Advance();
@@ -1666,18 +1629,16 @@ ParsedStmtPtr Parser::ParseCreateStatement() {
         }
     }
 
-    // CREATE [OR REPLACE] [LIVE] VIEW
-    bool is_live = false;
+    // CREATE [OR REPLACE] LIVE VIEW watches a file and reads it again when
+    // it changes.
     if (CheckKeyword(TokenType::KW_LIVE)) {
-        Advance();
-        is_live = true;
+        RefuseFileAccess("CREATE LIVE VIEW");
     }
 
     if (CheckKeyword(TokenType::KW_VIEW)) {
         Advance(); // consume VIEW
         auto stmt = std::make_unique<CreateViewStatement>();
         stmt->or_replace = or_replace;
-        stmt->is_live = is_live;
         stmt->view_name = ExpectIdentifier("for view name").value;
         Expect(TokenType::KW_AS, "after view name");
         auto inner = ParseSelectStatement();
@@ -1792,8 +1753,8 @@ ParsedStmtPtr Parser::ParsePragmaStatement() {
 // Syntax:
 //   DESCRIBE <select-or-with>        -- result schema of a query
 //   DESCRIBE <table_name>            -- desugars to SELECT * FROM <name>
-//   DESCRIBE '<file_path>'           -- ClickHouse-style file-schema peek
-//   DESCRIBE read_parquet('file')    -- table function form
+//   DESCRIBE '<file_path>'           -- refused, as is a path in FROM
+//   DESCRIBE read_parquet('file')    -- refused, as are the file functions
 // `DESC` is accepted as an alias for `DESCRIBE` (MySQL compatibility).
 ParsedStmtPtr Parser::ParseDescribeStatement() {
     if (CheckKeyword(TokenType::KW_DESCRIBE) || CheckKeyword(TokenType::KW_DESC)) {
@@ -1807,26 +1768,22 @@ ParsedStmtPtr Parser::ParseDescribeStatement() {
         return stmt;
     }
 
-    // Everything else desugars to SELECT * FROM <source>. Build the TableRef
-    // to match the forms the normal FROM clause accepts: bare identifier,
-    // quoted string literal (file path), or table function like
-    // `read_parquet('x.parquet')`.
+    // Everything else desugars to SELECT * FROM <source>: a bare identifier
+    // or a table function other than the file ones.
     auto select = std::make_unique<SelectStatement>();
     select->select_list.push_back(std::make_unique<StarExpression>());
     auto tref = std::make_unique<TableRef>();
 
     if (Check(TokenType::STRING_LITERAL)) {
-        // DESCRIBE 'data.csv' -> synthesize a __FILE__ table function
-        // matching what the FROM-clause parser emits for bare string literals.
-        auto lit = Advance();
-        tref->is_table_function = true;
-        tref->table_name = "__FILE__";
-        tref->function_args.push_back(
-            std::make_unique<ConstantExpression>(lit.value, TokenType::STRING_LITERAL));
+        // DESCRIBE 'data.csv'.
+        RefuseFileAccess("DESCRIBE of a file");
     } else if (Check(TokenType::IDENTIFIER)) {
+        if (Peek().type == TokenType::LPAREN && IsFileTableFunction(Current().value)) {
+            RefuseFileAccess("DESCRIBE " + Current().value + "()");
+        }
         auto name = Advance().value;
         if (Match(TokenType::LPAREN)) {
-            // Table function: DESCRIBE read_parquet('x.parquet'[, ...])
+            // Table function: DESCRIBE f(...)
             tref->is_table_function = true;
             tref->table_name = name;
             if (!Check(TokenType::RPAREN)) {

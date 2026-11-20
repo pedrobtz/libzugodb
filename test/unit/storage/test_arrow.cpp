@@ -2,8 +2,11 @@
 // format of their own after Arrow's magic bytes, not Arrow IPC, so they could
 // read no file from another Arrow implementation and wrote files none could
 // read. Both are refused; these cases replace the round trips of that format.
+// From SQL, read_arrow() and an Arrow path now meet the refusal of every
+// file route (Stage 2, #4) first.
 
 #include "doctest.h"
+#include "../refused_files.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/main/database.hpp"
 #include "slothdb/storage/arrow_ipc.hpp"
@@ -14,6 +17,7 @@
 
 namespace fs = std::filesystem;
 using namespace zugodb;
+using zugodb::testing::CheckRefused;
 
 static fs::path tmp_arrow(const std::string &tag, const std::string &ext = ".arrow") {
     auto p = fs::temp_directory_path() / ("slothdb_arrow_" + tag + ext);
@@ -39,8 +43,7 @@ TEST_CASE("read_arrow() is refused") {
     auto path = tmp_arrow("sql").string();
     Database db;
     Connection conn(db);
-    CHECK_THROWS_AS(conn.Query("SELECT * FROM read_arrow('" + path + "')"),
-                    NotImplementedException);
+    CheckRefused(conn, "SELECT * FROM read_arrow('" + path + "')");
 }
 
 TEST_CASE("A .arrow, .feather or .ipc path is refused") {
@@ -48,7 +51,6 @@ TEST_CASE("A .arrow, .feather or .ipc path is refused") {
     Connection conn(db);
     for (const char *ext : {".arrow", ".feather", ".ipc"}) {
         auto path = tmp_arrow("path", ext).string();
-        CHECK_THROWS_AS(conn.Query("SELECT * FROM '" + path + "'"),
-                        NotImplementedException);
+        CheckRefused(conn, "SELECT * FROM '" + path + "'");
     }
 }

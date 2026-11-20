@@ -1,9 +1,11 @@
 // zuslothdb (pedrobtz/zuslothdb#55): SlothDB's SQLite, Excel and Avro
 // readers are refused, the first two because they returned wrong values
 // against real files, Avro because it is untested; these cases replace the
-// SQLite round trips.
+// SQLite round trips. From SQL, the three now meet the refusal of every
+// file route (Stage 2, #4) first.
 
 #include "doctest.h"
+#include "../refused_files.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/main/database.hpp"
 #include "slothdb/storage/sqlite_scanner.hpp"
@@ -16,6 +18,7 @@
 
 namespace fs = std::filesystem;
 using namespace zugodb;
+using zugodb::testing::CheckRefused;
 
 static std::string tmp_file(const std::string &name, const char *bytes, size_t n) {
     auto p = fs::temp_directory_path() / ("slothdb_refused_" + name);
@@ -39,12 +42,9 @@ TEST_CASE("sqlite_scan(), read_xlsx() and read_avro() are refused") {
     auto av = tmp_file("b.avro", "Obj\1", 4);
     Database db;
     Connection conn(db);
-    CHECK_THROWS_AS(conn.Query("SELECT * FROM sqlite_scan('" + sq + "', 't')"),
-                    NotImplementedException);
-    CHECK_THROWS_AS(conn.Query("SELECT * FROM read_xlsx('" + xl + "')"),
-                    NotImplementedException);
-    CHECK_THROWS_AS(conn.Query("SELECT * FROM read_avro('" + av + "')"),
-                    NotImplementedException);
+    CheckRefused(conn, "SELECT * FROM sqlite_scan('" + sq + "', 't')");
+    CheckRefused(conn, "SELECT * FROM read_xlsx('" + xl + "')");
+    CheckRefused(conn, "SELECT * FROM read_avro('" + av + "')");
 }
 
 TEST_CASE("A .sqlite, .db, .xlsx, .xls or .avro path is refused") {
@@ -52,6 +52,6 @@ TEST_CASE("A .sqlite, .db, .xlsx, .xls or .avro path is refused") {
     Connection conn(db);
     for (const char *ext : {".sqlite", ".sqlite3", ".db", ".xlsx", ".xls", ".avro"}) {
         auto p = tmp_file(std::string("c") + ext, "x", 1);
-        CHECK_THROWS_AS(conn.Query("SELECT * FROM '" + p + "'"), NotImplementedException);
+        CheckRefused(conn, "SELECT * FROM '" + p + "'");
     }
 }

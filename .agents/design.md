@@ -224,6 +224,22 @@ minor version.
   for tests are written by DuckDB's Python package, pinned
   (`duckdb==1.1.3`) in `tools/make_parquet_fixtures.py`, as L7 allows;
   the pin moves to the corpus's tag when LQ1 settles it.
+- **L10 (2026-11-20, Stage 2, Claude's implementation call).** Files from
+  SQL are refused in the parser, where each route's table reference or
+  statement is built, so the refusal holds at any depth (subqueries,
+  CTEs, joins, views, `EXPLAIN`, `INSERT ... SELECT`) without a walk over
+  the parsed tree, before any statement of the batch runs and before
+  anything is opened. One `NotImplementedException`: "Reading or writing
+  files from SQL is not supported: <route>". The list of file table
+  functions holds DuckDB's names as well as the ones the engine read, so
+  each meets the refusal and not a syntax error; a table may still be
+  called `read_csv`. `CREATE LIVE VIEW`, which only ever watched a file,
+  is refused with them. Statements the parser never accepted (`ATTACH`,
+  `EXPORT DATABASE`, `IMPORT DATABASE`, `INSTALL`, `LOAD`) stay syntax
+  errors. Doctests of the Parquet scan operator, including Stage 1's,
+  reach it through a table set up with the catalog's C++ API
+  (`test/unit/parquet_table.hpp`, what `read_parquet()` did), which goes
+  with the reader in Stage 11.
 
 ## 9. Open questions
 
