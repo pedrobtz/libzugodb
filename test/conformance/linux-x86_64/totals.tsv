@@ -1,13 +1,13 @@
 what	files	cases
 run	746	20461
-passed	592	5471
-refused	653	13436
-wrong	99	306
-accepted	45	45
-unreliable	137	902
-crashed	18	18
-hung	3	3
-not_run	20	280
+passed	592	5597
+refused	654	13565
+wrong	100	316
+accepted	47	47
+unreliable	141	936
+crashed	0	0
+hung	0	0
+not_run	0	0
 left out	63	
 left out: a database file	15	
 left out: attaches databases	1	

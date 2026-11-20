@@ -116,7 +116,7 @@ test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test	run	4	2	2	0	0
 test/sql/aggregate/aggregates/test_scalar_aggr.test	run	10	2	7	0	0	1	0	0	0
 test/sql/aggregate/aggregates/test_sem.test	run	9	4	5	0	0	0	0	0	0
 test/sql/aggregate/aggregates/test_simple_filter.test	run	9	5	1	3	0	0	0	0	0
-test/sql/aggregate/aggregates/test_skewness.test	run	23	5	6	0	0	0	1	0	11
+test/sql/aggregate/aggregates/test_skewness.test	run	23	5	17	1	0	0	0	0	0
 test/sql/aggregate/aggregates/test_stddev.test	run	35	18	13	4	0	0	0	0	0
 test/sql/aggregate/aggregates/test_string_agg.test	run	32	13	12	0	0	7	0	0	0
 test/sql/aggregate/aggregates/test_string_agg_big.test	run	4	0	4	0	0	0	0	0	0
@@ -153,13 +153,13 @@ test/sql/aggregate/group/group_by_all_window.test	run	7	3	4	0	0	0	0	0	0
 test/sql/aggregate/group/group_by_limits.test	run	40	14	25	0	0	1	0	0	0
 test/sql/aggregate/group/perfect_hash_max_values.test	run	4	2	2	0	0	0	0	0	0
 test/sql/aggregate/group/perfect_ht_memory_limit.test	run	3	1	2	0	0	0	0	0	0
-test/sql/aggregate/group/test_group_by.test	run	34	28	3	0	0	3	0	0	0
+test/sql/aggregate/group/test_group_by.test	run	34	29	3	0	0	2	0	0	0
 test/sql/aggregate/group/test_group_by_alias.test	run	14	7	3	0	0	4	0	0	0
 test/sql/aggregate/group/test_group_by_error.test	run	5	5	0	0	0	0	0	0	0
 test/sql/aggregate/group/test_group_by_large_string.test	run	3	3	0	0	0	0	0	0	0
 test/sql/aggregate/group/test_group_by_multi_column.test	run	3	3	0	0	0	0	0	0	0
 test/sql/aggregate/group/test_group_by_nested.test	run	53	0	53	0	0	0	0	0	0
-test/sql/aggregate/group/test_group_by_null_length.test	run	12	2	0	0	0	0	1	0	9
+test/sql/aggregate/group/test_group_by_null_length.test	run	12	12	0	0	0	0	0	0	0
 test/sql/aggregate/group/test_group_by_skip_lookups.test	run	1	0	1	0	0	0	0	0	0
 test/sql/aggregate/group/test_group_null.test	run	4	2	1	0	0	1	0	0	0
 test/sql/aggregate/grouping_sets/cube.test	run	16	7	9	0	0	0	0	0	0
@@ -171,11 +171,11 @@ test/sql/aggregate/grouping_sets/grouping_sets_sum_having.test	run	8	0	8	0	0	0	0
 test/sql/aggregate/grouping_sets/issue_3730.test	run	5	4	1	0	0	0	0	0	0
 test/sql/aggregate/grouping_sets/multiple_empty_grouping_sets.test	run	1	0	1	0	0	0	0	0	0
 test/sql/aggregate/grouping_sets/rollup.test	run	14	5	9	0	0	0	0	0	0
-test/sql/aggregate/having/having_alias.test	run	7	2	1	0	0	0	1	0	3
+test/sql/aggregate/having/having_alias.test	run	7	6	1	0	0	0	0	0	0
 test/sql/aggregate/having/having_without_groupby.test	run	4	4	0	0	0	0	0	0	0
 test/sql/aggregate/having/test_having.test	run	13	8	5	0	0	0	0	0	0
 test/sql/aggregate/having/test_scalar_having.test	run	16	16	0	0	0	0	0	0	0
-test/sql/aggregate/qualify/test_qualify.test	run	32	14	5	2	0	1	1	0	9
+test/sql/aggregate/qualify/test_qualify.test	run	32	18	6	2	0	6	0	0	0
 test/sql/aggregate/qualify/test_qualify_macro.test	left out: a database file									
 test/sql/aggregate/qualify/test_qualify_view.test	left out: a database file									
 test/sql/aggregate/qualify/test_qualify_view_no_view_dependencies.test	left out: a database file									
@@ -213,7 +213,7 @@ test/sql/function/date/date_trunc_stats.test	run	6	3	3	0	0	0	0	0	0
 test/sql/function/date/date_trunc_stats_out_of_range.test	run	5	1	1	0	0	3	0	0	0
 test/sql/function/date/strftime_iso_year_range.test	run	2	0	2	0	0	0	0	0	0
 test/sql/function/date/test_date_part.test	run	229	21	178	0	0	30	0	0	0
-test/sql/function/date/test_date_trunc.test	run	76	3	2	0	0	0	1	0	70
+test/sql/function/date/test_date_trunc.test	run	76	16	39	0	0	21	0	0	0
 test/sql/function/date/test_extract.test	run	20	18	1	1	0	0	0	0	0
 test/sql/function/date/test_extract_edge_cases.test	run	66	65	0	1	0	0	0	0	0
 test/sql/function/date/test_extract_month.test	run	2	0	2	0	0	0	0	0	0
@@ -279,13 +279,13 @@ test/sql/function/string/regex_search.test	run	40	20	15	0	0	5	0	0	0
 test/sql/function/string/regex_single_byte.test	run	22	9	3	0	1	9	0	0	0
 test/sql/function/string/regexp_split_to_table.test	run	3	0	3	0	0	0	0	0	0
 test/sql/function/string/regexp_unicode_literal.test	run	9	3	5	0	1	0	0	0	0
-test/sql/function/string/sha1.test	run	9	2	3	1	0	0	1	0	2
-test/sql/function/string/sha256.test	run	7	2	3	1	0	0	1	0	0
+test/sql/function/string/sha1.test	run	9	4	3	1	0	1	0	0	0
+test/sql/function/string/sha256.test	run	7	3	3	1	0	0	0	0	0
 test/sql/function/string/strip_accents.test	run	8	5	3	0	0	0	0	0	0
 test/sql/function/string/test_array_extract.test	run	21	4	17	0	0	0	0	0	0
-test/sql/function/string/test_ascii.test	run	16	8	0	0	0	0	1	0	7
+test/sql/function/string/test_ascii.test	run	16	14	0	0	1	1	0	0	0
 test/sql/function/string/test_bar.test	run	34	6	28	0	0	0	0	0	0
-test/sql/function/string/test_bit_length.test	run	8	6	0	0	0	0	1	0	1
+test/sql/function/string/test_bit_length.test	run	8	8	0	0	0	0	0	0	0
 test/sql/function/string/test_caseconvert.test	run	12	3	6	3	0	0	0	0	0
 test/sql/function/string/test_complex_unicode.test	run	18	3	8	7	0	0	0	0	0
 test/sql/function/string/test_concat.test	run	12	6	1	0	0	5	0	0	0
@@ -316,16 +316,16 @@ test/sql/function/string/test_like.test	run	57	57	0	0	0	0	0	0	0
 test/sql/function/string/test_like_escape.test	run	28	20	5	0	1	2	0	0	0
 test/sql/function/string/test_like_many_wildcards.test	run	7	1	6	0	0	0	0	0	0
 test/sql/function/string/test_mismatches.test	run	35	19	16	0	0	0	0	0	0
-test/sql/function/string/test_pad.test	run	29	2	0	0	0	0	0	1	26
+test/sql/function/string/test_pad.test	run	29	28	1	0	0	0	0	0	0
 test/sql/function/string/test_prefix.test	run	48	46	1	0	0	1	0	0	0
 test/sql/function/string/test_printf.test	run	48	13	35	0	0	0	0	0	0
 test/sql/function/string/test_regex_match_positions.test	run	8	2	5	0	1	0	0	0	0
-test/sql/function/string/test_repeat.test	run	15	10	1	0	0	0	1	0	3
-test/sql/function/string/test_replace.test	run	14	11	0	0	0	0	1	0	2
-test/sql/function/string/test_reverse.test	run	9	2	0	4	0	0	1	0	2
+test/sql/function/string/test_repeat.test	run	15	13	1	0	1	0	0	0	0
+test/sql/function/string/test_replace.test	run	14	14	0	0	0	0	0	0	0
+test/sql/function/string/test_reverse.test	run	9	5	0	4	0	0	0	0	0
 test/sql/function/string/test_right.test	run	41	17	16	2	0	6	0	0	0
 test/sql/function/string/test_similar_to.test	run	27	3	24	0	0	0	0	0	0
-test/sql/function/string/test_split_part.test	run	19	16	0	0	0	0	1	0	2
+test/sql/function/string/test_split_part.test	run	19	19	0	0	0	0	0	0	0
 test/sql/function/string/test_starts_with_function.test	run	12	12	0	0	0	0	0	0	0
 test/sql/function/string/test_starts_with_function_utf8.test	run	11	11	0	0	0	0	0	0	0
 test/sql/function/string/test_starts_with_operator.test	run	12	2	10	0	0	0	0	0	0
@@ -334,12 +334,12 @@ test/sql/function/string/test_string_array_slice.test	run	33	2	31	0	0	0	0	0	0
 test/sql/function/string/test_string_slice.test	run	35	9	26	0	0	0	0	0	0
 test/sql/function/string/test_string_split.test	run	53	11	42	0	0	0	0	0	0
 test/sql/function/string/test_subscript.test	run	19	6	13	0	0	0	0	0	0
-test/sql/function/string/test_substring.test	run	97	60	20	6	1	6	1	0	3
+test/sql/function/string/test_substring.test	run	97	62	22	6	1	6	0	0	0
 test/sql/function/string/test_substring_utf8.test	run	22	5	9	8	0	0	0	0	0
 test/sql/function/string/test_suffix.test	run	43	43	0	0	0	0	0	0	0
 test/sql/function/string/test_to_base.test	run	18	8	10	0	0	0	0	0	0
-test/sql/function/string/test_translate.test	run	24	16	0	5	0	0	1	0	2
-test/sql/function/string/test_trim.test	run	23	17	0	0	0	0	1	0	5
+test/sql/function/string/test_translate.test	run	24	19	0	5	0	0	0	0	0
+test/sql/function/string/test_trim.test	run	23	23	0	0	0	0	0	0	0
 test/sql/function/string/test_unicode.test	run	8	4	4	0	0	0	0	0	0
 test/sql/function/string/test_url_encode.test	run	10	2	8	0	0	0	0	0	0
 test/sql/join/asof/test_asof_arbitrary_condition_optimizer_disabled.test	run	6	0	6	0	0	0	0	0	0
@@ -620,7 +620,7 @@ test/sql/types/blob/test_blob_cast.test	run	14	2	0	5	1	6	0	0	0
 test/sql/types/blob/test_blob_function.test	run	18	15	0	3	0	0	0	0	0
 test/sql/types/blob/test_blob_invalid_utf8.test	run	3	2	1	0	0	0	0	0	0
 test/sql/types/blob/test_blob_operator.test	run	11	5	1	0	0	5	0	0	0
-test/sql/types/blob/test_blob_string.test	run	6	2	0	0	0	0	0	1	3
+test/sql/types/blob/test_blob_string.test	run	6	6	0	0	0	0	0	0	0
 test/sql/types/blob/test_blob_try_cast.test	run	14	2	0	6	1	5	0	0	0
 test/sql/types/date/date_implicit_cast.test	run	16	16	0	0	0	0	0	0	0
 test/sql/types/date/date_limits.test	run	48	37	11	0	0	0	0	0	0
@@ -692,7 +692,7 @@ test/sql/types/numeric/uhugeint_try_cast.test	run	32	14	18	0	0	0	0	0	0
 test/sql/types/numeric/uinteger_try_cast.test	run	31	11	20	0	0	0	0	0	0
 test/sql/types/numeric/usmallint_try_cast.test	run	30	9	21	0	0	0	0	0	0
 test/sql/types/numeric/utinyint_try_cast.test	run	29	7	22	0	0	0	0	0	0
-test/sql/types/string/test_big_strings.test	run	6	2	0	0	0	0	0	1	3
+test/sql/types/string/test_big_strings.test	run	6	6	0	0	0	0	0	0	0
 test/sql/types/string/test_unicode.test	run	9	4	1	4	0	0	0	0	0
 test/sql/types/time/test_time.test	run	14	2	0	2	1	9	0	0	0
 test/sql/types/time/test_time_2411.test	run	5	4	0	1	0	0	0	0	0
@@ -730,7 +730,7 @@ test/sql/types/timestamp/timestamptz_ns_casts.test	run	3	0	3	0	0	0	0	0	0
 test/sql/types/timestamp/utc_offset.test	left out: require icu									
 test/sql/window/parallel_collection_combine.test	run	5	0	5	0	0	0	0	0	0
 test/sql/window/segment_tree_leaf_batches.test	run	26	0	26	0	0	0	0	0	0
-test/sql/window/test_basic_window.test	run	17	7	7	3	0	0	0	0	0
+test/sql/window/test_basic_window.test	run	17	10	4	3	0	0	0	0	0
 test/sql/window/test_boundary_expr.test	run	22	12	10	0	0	0	0	0	0
 test/sql/window/test_constant_orderby.test	left out: directive set									
 test/sql/window/test_cume_dist_orderby.test	run	4	0	4	0	0	0	0	0	0
@@ -751,7 +751,7 @@ test/sql/window/test_list_window.test	run	10	2	8	0	0	0	0	0	0
 test/sql/window/test_mad_window.test	run	14	1	13	0	0	0	0	0	0
 test/sql/window/test_mode_window.test	run	25	0	25	0	0	0	0	0	0
 test/sql/window/test_mode_window_varlen.test	run	3	0	3	0	0	0	0	0	0
-test/sql/window/test_naive_aggregation.test	run	20	3	14	0	0	3	0	0	0
+test/sql/window/test_naive_aggregation.test	run	20	4	13	0	0	3	0	0	0
 test/sql/window/test_negative_range.test	run	10	9	1	0	0	0	0	0	0
 test/sql/window/test_no_default_window_spec.test	run	7	2	4	1	0	0	0	0	0
 test/sql/window/test_nthvalue.test	run	14	4	10	0	0	0	0	0	0
@@ -770,7 +770,7 @@ test/sql/window/test_single_following_frame.test	run	12	6	6	0	0	0	0	0	0
 test/sql/window/test_split_partition_heap.test	run	2	0	2	0	0	0	0	0	0
 test/sql/window/test_streaming_lead_lag.test	run	26	0	26	0	0	0	0	0	0
 test/sql/window/test_streaming_nthvalue.test	run	8	0	8	0	0	0	0	0	0
-test/sql/window/test_streaming_window.test	run	110	4	3	5	0	0	1	0	97
+test/sql/window/test_streaming_window.test	run	110	16	80	14	0	0	0	0	0
 test/sql/window/test_streaming_window_distinct.test	run	6	0	6	0	0	0	0	0	0
 test/sql/window/test_thread_count.test	left out: reads files									
 test/sql/window/test_tpcc_results.test	left out: reads files									
@@ -804,7 +804,7 @@ test/sql/window/test_window_tpcds.test	run	16	11	5	0	0	0	0	0	0
 test/sql/window/test_window_types.test	run	60	0	60	0	0	0	0	0	0
 test/sql/window/test_window_unnest_error.test	run	8	6	2	0	0	0	0	0	0
 test/sql/window/test_window_value_edges.test	run	31	4	27	0	0	0	0	0	0
-test/sql/window/test_window_wisconsin.test	run	25	3	1	0	0	0	1	0	20
+test/sql/window/test_window_wisconsin.test	run	25	13	5	0	0	7	0	0	0
 test/sql/window/window_distinct_memory_limit.test	run	4	2	2	0	0	0	0	0	0
 test/sql/window/window_expression_comparison.test	run	4	2	2	0	0	0	0	0	0
 test/sql/window/window_mtcars.test	run	34	33	1	0	0	0	0	0	0

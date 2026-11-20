@@ -60,7 +60,7 @@ test/sql/aggregate/aggregates/test_scalar_aggr.test	42	unreliable	SELECT NULL as
 test/sql/aggregate/aggregates/test_simple_filter.test	44	wrong	SELECT\n\tSUM(pay) FILTER (WHERE gender = 'male'),\n\tSUM(pay) FILTER (WHERE gender = 'female'),\n\tSUM(pay)\nFROM issue3105;
 test/sql/aggregate/aggregates/test_simple_filter.test	53	wrong	SELECT\n\tSUM(pay),\n\tSUM(pay) FILTER (WHERE gender = 'male'),\n\tSUM(pay) FILTER (WHERE gender = 'female')\nFROM issue3105;
 test/sql/aggregate/aggregates/test_simple_filter.test	62	wrong	SELECT\n\tSUM(pay) FILTER (WHERE gender = 'male'),\n\tSUM(pay),\n\tSUM(pay) FILTER (WHERE gender = 'female')\nFROM issue3105;
-test/sql/aggregate/aggregates/test_skewness.test	72	crashed	select skewness(v2) over (partition by v)\n    from aggr order by v;
+test/sql/aggregate/aggregates/test_skewness.test	72	wrong	select skewness(v2) over (partition by v)\n    from aggr order by v;
 test/sql/aggregate/aggregates/test_stddev.test	164	wrong	select stddev(a) from (values (1.0/0.0), (2.0)) tbl(a)
 test/sql/aggregate/aggregates/test_stddev.test	169	wrong	select var_samp(a) from (values (1.0/0.0), (2.0)) tbl(a)
 test/sql/aggregate/aggregates/test_stddev.test	174	wrong	select var_pop(a) from (values (1.0/0.0), (2.0)) tbl(a)
@@ -93,21 +93,22 @@ test/sql/aggregate/group/group_by_all.test	81	unreliable	SELECT (g+i)%2, SUM(i),
 test/sql/aggregate/group/group_by_all.test	88	unreliable	SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY 1 ORDER BY 1 NULLS FIRST
 test/sql/aggregate/group/group_by_all.test	111	unreliable	SELECT g, i, g%2, SUM(i), SUM(g) FROM integers GROUP BY 1, 2, 3 ORDER BY 1, 2, 3, 4
 test/sql/aggregate/group/group_by_limits.test	60	unreliable	SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
-test/sql/aggregate/group/test_group_by.test	142	unreliable	SELECT 1 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 2;
 test/sql/aggregate/group/test_group_by.test	165	unreliable	SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY 1;
 test/sql/aggregate/group/test_group_by.test	174	unreliable	SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 1;
 test/sql/aggregate/group/test_group_by_alias.test	43	unreliable	SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3;
 test/sql/aggregate/group/test_group_by_alias.test	52	unreliable	SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3;
 test/sql/aggregate/group/test_group_by_alias.test	61	unreliable	SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY i;
 test/sql/aggregate/group/test_group_by_alias.test	78	unreliable	SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY i
-test/sql/aggregate/group/test_group_by_null_length.test	12	crashed	SELECT LENGTH(NULL) FROM t0 GROUP BY NULL;
 test/sql/aggregate/group/test_group_null.test	14	unreliable	SELECT i, SUM(j) FROM integers GROUP BY i ORDER BY i
 test/sql/aggregate/grouping_sets/grouping_sets.test	33	unreliable	select course, type, count(*) from students group by course, type order by 1, 2, 3;
-test/sql/aggregate/having/having_alias.test	22	crashed	select a+1 as a from t1 group by a having a=42;
 test/sql/aggregate/qualify/test_qualify.test	71	wrong	SELECT * FROM exam QUALIFY last_value(mark) OVER (PARTITION BY student ORDER BY mark) >= 85 order by mark
 test/sql/aggregate/qualify/test_qualify.test	108	wrong	SELECT * FROM power QUALIFY rank() OVER (PARTITION BY plant ORDER BY date DESC) = 2 ORDER BY plant
 test/sql/aggregate/qualify/test_qualify.test	131	unreliable	SELECT * FROM qt QUALIFY row_number() OVER (PARTITION BY b ORDER BY c) = (SELECT max(c) FROM qt) ORDER BY b;
-test/sql/aggregate/qualify/test_qualify.test	144	crashed	SELECT unique1 FROM tenk1 QUALIFY cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) = 5 order by four, ten
+test/sql/aggregate/qualify/test_qualify.test	144	unreliable	SELECT unique1 FROM tenk1 QUALIFY cast(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as integer) = 5 order by four, ten
+test/sql/aggregate/qualify/test_qualify.test	152	unreliable	SELECT unique1 FROM tenk1 QUALIFY first_value(ten) OVER (PARTITION BY four ORDER BY ten) = 1 order by four, ten
+test/sql/aggregate/qualify/test_qualify.test	163	unreliable	SELECT unique1 FROM tenk1 qualify lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) = -1 order by four, ten
+test/sql/aggregate/qualify/test_qualify.test	185	unreliable	SELECT * FROM test QUALIFY row_number() OVER (PARTITION BY test.b) = (SELECT max(a) FROM qt GROUP BY qt.b QUALIFY rank() OVER (PARTITION BY qt.b) = 1 order by qt.b limit 1)
+test/sql/aggregate/qualify/test_qualify.test	207	unreliable	SELECT b FROM test QUALIFY avga() > 10
 test/sql/filter/test_obsolete_filters.test	14	unreliable	SELECT * FROM integers WHERE TRUE ORDER BY 1
 test/sql/function/date/date_part_stats.test	143	unreliable	SELECT (t0.c0), WEEKOFYEAR(t0.c0), WEEKOFYEAR(t0.c0) IS NULL FROM t0 ORDER BY c0;
 test/sql/function/date/date_part_stats.test	149	unreliable	SELECT (t0.c0), WEEKDAY(t0.c0), WEEKDAY(t0.c0) IS NULL FROM t0 ORDER BY c0;
@@ -146,7 +147,27 @@ test/sql/function/date/test_date_part.test	372	unreliable	SELECT DAYOFMONTH(d) F
 test/sql/function/date/test_date_part.test	384	unreliable	SELECT WEEKDAY(d) FROM dates;
 test/sql/function/date/test_date_part.test	396	unreliable	SELECT WEEKOFYEAR(d) FROM dates;
 test/sql/function/date/test_date_part.test	408	unreliable	SELECT JULIAN(d) FROM dates;
-test/sql/function/date/test_date_trunc.test	47	crashed	SELECT date_trunc(s, NULL::TIMESTAMP) FROM dates;
+test/sql/function/date/test_date_trunc.test	63	unreliable	SELECT date_trunc(NULL::VARCHAR, NULL::TIMESTAMP) FROM timestamps LIMIT 3;
+test/sql/function/date/test_date_trunc.test	70	unreliable	SELECT date_trunc(s, NULL::TIMESTAMP) FROM timestamps LIMIT 3;
+test/sql/function/date/test_date_trunc.test	77	unreliable	SELECT date_trunc(NULL, d) FROM timestamps LIMIT 3;
+test/sql/function/date/test_date_trunc.test	118	unreliable	SELECT date_trunc('minute', TIMESTAMP '1992-02-02 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	124	unreliable	SELECT date_trunc(s, d) FROM timestamps;
+test/sql/function/date/test_date_trunc.test	144	unreliable	SELECT date_trunc(s, CAST(d as DATE)) FROM timestamps;
+test/sql/function/date/test_date_trunc.test	174	unreliable	SELECT date_trunc('week', TIMESTAMP '2020-01-01 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	179	unreliable	SELECT date_trunc('week', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	184	unreliable	SELECT date_trunc('yearweek', TIMESTAMP '2020-01-01 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	189	unreliable	SELECT date_trunc('yearweek', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	195	unreliable	SELECT date_trunc('quarter', TIMESTAMP '2020-12-02 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	200	unreliable	SELECT date_trunc('quarter', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	205	unreliable	SELECT date_trunc('millennium', TIMESTAMP '1996-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	210	unreliable	SELECT date_trunc('century', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	215	unreliable	SELECT date_trunc('decade', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	220	unreliable	SELECT date_trunc('year', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	225	unreliable	SELECT date_trunc('day', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	230	unreliable	SELECT date_trunc('hour', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	235	unreliable	SELECT date_trunc('milliseconds', TIMESTAMP '2019-01-06 04:03:02.123456') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	246	unreliable	SELECT date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02.5') FROM timestamps LIMIT 1;
+test/sql/function/date/test_date_trunc.test	281	unreliable	SELECT date_trunc('duck', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 test/sql/function/date/test_extract.test	83	wrong	SELECT EXTRACT(WEEK FROM i) FROM dates
 test/sql/function/date/test_extract_edge_cases.test	116	wrong	SELECT EXTRACT(week FROM cast('2006-01-01' AS DATE));
 test/sql/function/date/test_strftime.test	60	unreliable	SELECT strftime(d, '%d/%m/%Y') FROM dates ORDER BY d;
@@ -429,11 +450,10 @@ test/sql/function/string/regex_single_byte.test	92	unreliable	SELECT regexp_repl
 test/sql/function/string/regex_single_byte.test	102	unreliable	SELECT regexp_matches('ä', '\C')
 test/sql/function/string/regexp_unicode_literal.test	49	accepted	select regexp_matches(zipcode, '^00\x{FFFFFFFF}001$') from data
 test/sql/function/string/sha1.test	16	wrong	SELECT sha1('\xff\xff'::BLOB)
-test/sql/function/string/sha1.test	46	crashed	SELECT sha1()
+test/sql/function/string/sha1.test	56	unreliable	SELECT sha1(42)
 test/sql/function/string/sha256.test	16	wrong	SELECT sha256('\xff\xff'::BLOB)
-test/sql/function/string/sha256.test	46	crashed	SELECT sha256()
-test/sql/function/string/test_ascii.test	47	crashed	SELECT ASCII()
-test/sql/function/string/test_bit_length.test	44	crashed	select BIT_LENGTH()
+test/sql/function/string/test_ascii.test	72	accepted	SELECT CHR(-10)
+test/sql/function/string/test_ascii.test	77	unreliable	SELECT CHR(1073741824)
 test/sql/function/string/test_caseconvert.test	6	wrong	select UPPER('áaaá'), UPPER('ö'), LOWER('S̈'), UPPER('ω')
 test/sql/function/string/test_caseconvert.test	12	wrong	SELECT UPPER('Αα Ββ Γγ Δδ Εε Ζζ  Ηη Θθ Ιι Κκ Λλ Μμ Νν Ξξ Οο Ππ Ρρ Σσς Ττ Υυ Φφ Χχ Ψψ Ωω'), LOWER('Αα Ββ Γγ Δδ Εε Ζζ  Ηη Θθ Ιι Κκ Λλ Μμ Νν Ξξ Οο Ππ Ρρ Σσς Ττ Υυ Φφ Χχ Ψψ Ωω')
 test/sql/function/string/test_caseconvert.test	18	wrong	select UPPER(''), UPPER('hello'), UPPER('MotörHead'), UPPER(NULL)
@@ -474,16 +494,13 @@ test/sql/function/string/test_length.test	23	unreliable	SELECT length(s || ' ' |
 test/sql/function/string/test_like_escape.test	22	accepted	SELECT '%' LIKE '*' ESCAPE '*';
 test/sql/function/string/test_like_escape.test	130	unreliable	SELECT 'abcd' LIKE 'abc#' ESCAPE '#';
 test/sql/function/string/test_like_escape.test	135	unreliable	SELECT 'abc' LIKE 'abc#' ESCAPE '#';
-test/sql/function/string/test_pad.test	18	hung	select LPAD('Base', 7, '-'), LPAD('Base', 4, '-'), LPAD('Base', 2, ''), LPAD('Base', -1, '-')
 test/sql/function/string/test_prefix.test	241	unreliable	SELECT c0, prefix(t0.c0, '') FROM t0 WHERE c0 IS NULL OR c0 <> 'b' ORDER BY t0.c0;
 test/sql/function/string/test_regex_match_positions.test	32	accepted	SELECT regexp_extract('abc', p) FROM (VALUES ('(a')) t(p);
-test/sql/function/string/test_repeat.test	71	crashed	select REPEAT()
-test/sql/function/string/test_replace.test	67	crashed	select REPLACE(1)
+test/sql/function/string/test_repeat.test	79	accepted	select REPEAT('hello', 'world')
 test/sql/function/string/test_reverse.test	6	wrong	select REVERSE(''), REVERSE('Hello'), REVERSE('MotörHead'), REVERSE(NULL)
 test/sql/function/string/test_reverse.test	18	wrong	select REVERSE(a) FROM strings
 test/sql/function/string/test_reverse.test	26	wrong	select REVERSE(b) FROM strings
 test/sql/function/string/test_reverse.test	34	wrong	select REVERSE(a) FROM strings WHERE b IS NOT NULL
-test/sql/function/string/test_reverse.test	41	crashed	select REVERSE()
 test/sql/function/string/test_right.test	13	wrong	SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', 1), RIGHT('🦆ab', 2), RIGHT('🦆ab', 3), RIGHT('🦆ab', 4)
 test/sql/function/string/test_right.test	24	wrong	SELECT RIGHT('🦆ab', 0), RIGHT('🦆ab', -1), RIGHT('🦆ab', -2), RIGHT('🦆ab', -3), RIGHT('🦆ab', -4)
 test/sql/function/string/test_right.test	50	unreliable	SELECT RIGHT(a, b) FROM strings
@@ -492,7 +509,6 @@ test/sql/function/string/test_right.test	86	unreliable	SELECT RIGHT(a, b) FROM s
 test/sql/function/string/test_right.test	50	unreliable	SELECT RIGHT_GRAPHEME(a, b) FROM strings
 test/sql/function/string/test_right.test	68	unreliable	SELECT RIGHT_GRAPHEME(a, b) FROM strings
 test/sql/function/string/test_right.test	86	unreliable	SELECT RIGHT_GRAPHEME(a, b) FROM strings
-test/sql/function/string/test_split_part.test	91	crashed	select split_part()
 test/sql/function/string/test_substring.test	129	wrong	SELECT substring(s from -2 for 2) FROM strings
 test/sql/function/string/test_substring.test	147	wrong	SELECT substring(s, 2, -2) FROM strings
 test/sql/function/string/test_substring.test	156	wrong	SELECT substring(s, -2, -2) FROM strings
@@ -506,7 +522,6 @@ test/sql/function/string/test_substring.test	285	unreliable	SELECT substring(s, 
 test/sql/function/string/test_substring.test	290	unreliable	SELECT substring(s, 0, 4294967296) FROM strings
 test/sql/function/string/test_substring.test	295	unreliable	SELECT substring(s, 0, -4294967297) FROM strings
 test/sql/function/string/test_substring.test	129	unreliable	SELECT substring(s from -2 for 2) FROM strings
-test/sql/function/string/test_substring.test	366	crashed	SELECT count(*) FILTER (WHERE substring(v, off, 1) IS NULL),\n       count(*) FILTER (WHERE substring(v, 1, len) IS NULL),\n       count(*) FILTER (WHERE substring(v, off, len) IS NULL)\nFROM nullable_substring_bounds;
 test/sql/function/string/test_substring_utf8.test	11	wrong	SELECT substring(s from 1 for 7) FROM strings
 test/sql/function/string/test_substring_utf8.test	16	wrong	SELECT substring(s from 10 for 7) FROM strings
 test/sql/function/string/test_substring_utf8.test	21	wrong	SELECT substring(s from 15 for 7) FROM strings
@@ -520,8 +535,6 @@ test/sql/function/string/test_translate.test	77	wrong	select TRANSLATE('Äañt�
 test/sql/function/string/test_translate.test	89	wrong	select TRANSLATE(a, 'öHl', 'oA-') FROM strings
 test/sql/function/string/test_translate.test	98	wrong	select TRANSLATE(a, 'loD', '🦆') FROM strings
 test/sql/function/string/test_translate.test	107	wrong	select TRANSLATE(b, 'ÄW🦆l', 'ow🐱') FROM strings
-test/sql/function/string/test_translate.test	124	crashed	select TRANSLATE(1)
-test/sql/function/string/test_trim.test	110	crashed	select LTRIM()
 test/sql/join/full_outer/full_outer_join_union.test	24	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION ALL\nSELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nORDER BY i
 test/sql/join/full_outer/full_outer_join_union.test	37	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nORDER BY i
 test/sql/join/full_outer/full_outer_join_union.test	47	unreliable	SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i+1, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i+2, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i+3, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k\nUNION\nSELECT i+4, j, k, l FROM i...
@@ -737,7 +750,6 @@ test/sql/types/blob/test_blob_operator.test	22	unreliable	SELECT * FROM blobs OR
 test/sql/types/blob/test_blob_operator.test	34	unreliable	SELECT b, SUM(g) FROM blobs GROUP BY b ORDER BY b
 test/sql/types/blob/test_blob_operator.test	50	unreliable	SELECT L.b, SUM(L.g) FROM blobs as L JOIN blobs2 AS R ON L.b=R.b GROUP BY L.b ORDER BY L.b
 test/sql/types/blob/test_blob_operator.test	58	unreliable	SELECT R.b, SUM(R.g) FROM blobs as L, blobs2 AS R WHERE L.b=R.b GROUP BY R.b ORDER BY R.b
-test/sql/types/blob/test_blob_string.test	14	hung	INSERT INTO blobs SELECT b||b||b||b||b||b||b||b||b||b FROM blobs WHERE OCTET_LENGTH(b)=(SELECT MAX(OCTET_LENGTH(b)) FROM blobs)
 test/sql/types/blob/test_blob_try_cast.test	6	wrong	SELECT TRY_CAST('\\' AS BLOB)
 test/sql/types/blob/test_blob_try_cast.test	11	wrong	SELECT TRY_CAST('\\x3' AS BLOB)
 test/sql/types/blob/test_blob_try_cast.test	17	wrong	SELECT TRY_CAST('\\b12' AS BLOB)
@@ -1111,7 +1123,6 @@ test/sql/types/numeric/tinyint_try_cast.test	202	unreliable	SELECT TRY_CAST(i AS
 test/sql/types/numeric/tinyint_try_cast.test	209	unreliable	SELECT TRY_CAST(i AS DECIMAL(9,7))::TINYINT FROM tinyints ORDER BY i
 test/sql/types/numeric/tinyint_try_cast.test	216	unreliable	SELECT TRY_CAST(i AS DECIMAL(18,16))::TINYINT FROM tinyints ORDER BY i
 test/sql/types/numeric/tinyint_try_cast.test	223	unreliable	SELECT TRY_CAST(i AS DECIMAL(38,36))::TINYINT FROM tinyints ORDER BY i
-test/sql/types/string/test_big_strings.test	13	hung	INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a FROM test WHERE LENGTH(a)=(SELECT MAX(LENGTH(a)) FROM test)
 test/sql/types/string/test_unicode.test	20	wrong	SELECT substring(s, 1, 1), substring(s, 2, 1) FROM emojis ORDER BY id
 test/sql/types/string/test_unicode.test	31	wrong	SELECT substring('u🦆', -2, 1);
 test/sql/types/string/test_unicode.test	36	wrong	SELECT substring('A3🦤u🦆f', -3, 3);
@@ -1227,5 +1238,19 @@ test/sql/window/test_streaming_window.test	24	wrong	EXPLAIN\nSELECT i, SUM(i) OV
 test/sql/window/test_streaming_window.test	50	wrong	explain select row_number() over (), i, j from integers
 test/sql/window/test_streaming_window.test	64	wrong	explain select row_number() over (), i, j from integers where i>1
 test/sql/window/test_streaming_window.test	75	wrong	explain select rank() over (), i, j from integers
-test/sql/window/test_streaming_window.test	80	crashed	select rank() over (), i, j from integers
-test/sql/window/test_window_wisconsin.test	28	crashed	SELECT sum(four) OVER (PARTITION BY ten ORDER BY unique2) AS sum_1, ten, four FROM tenk1 WHERE unique2 < 10 order by ten, unique2
+test/sql/window/test_streaming_window.test	88	wrong	explain select dense_rank() over (), i, j from integers
+test/sql/window/test_streaming_window.test	101	wrong	explain select percent_rank() over (), i, j from integers
+test/sql/window/test_streaming_window.test	106	wrong	select percent_rank() over (), i, j from integers
+test/sql/window/test_streaming_window.test	283	wrong	explain select i, j, first_value(i) over (), first_value(j) over () from integers
+test/sql/window/test_streaming_window.test	524	wrong	explain select first_value(i) over (), last_value(i) over () from integers
+test/sql/window/test_streaming_window.test	529	wrong	explain select last_value(i) over (), first_value(i) over () from integers
+test/sql/window/test_streaming_window.test	534	wrong	explain select first_value(i) over (), last_value(i) over (order by j) from integers
+test/sql/window/test_streaming_window.test	539	wrong	explain select last_value(i) over (order by j), first_value(i) over () from integers
+test/sql/window/test_streaming_window.test	578	wrong	WITH RECURSIVE rte AS (\n\tSELECT 1 l, 1::BIGINT r\n\tUNION  ALL\n\tSELECT l+1, row_number() OVER()\n\tFROM rte\n\tWHERE l < 3\n)\nSELECT * FROM rte;
+test/sql/window/test_window_wisconsin.test	157	unreliable	SELECT ntile(4) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
+test/sql/window/test_window_wisconsin.test	186	unreliable	SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
+test/sql/window/test_window_wisconsin.test	214	unreliable	SELECT lag(ten, four) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
+test/sql/window/test_window_wisconsin.test	228	unreliable	SELECT lag(ten, four, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
+test/sql/window/test_window_wisconsin.test	242	unreliable	SELECT lag(ten, four, 0, 0) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
+test/sql/window/test_window_wisconsin.test	261	unreliable	SELECT lead(ten * 2, 1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
+test/sql/window/test_window_wisconsin.test	275	unreliable	SELECT lead(ten * 2, 1, -1) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt
