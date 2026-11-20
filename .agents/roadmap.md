@@ -507,17 +507,21 @@ subset is DuckDB's.
   `TIMESTAMP` values, NULLs after `DESC` (DuckDB's `nulls_last`) and
   under `LIMIT`, `ORDER BY` of two keys under `LIMIT`, recursive CTEs,
   `/` of integers (a double division in DuckDB), `^` (`POWER`), integer
-  overflow (an error), and a `GROUP BY` of a join key. Two decisions
-  were taken with an advisor: the engine holds no NaN, and `CREATE
-  TABLE` returns DuckDB's `Count` (L23); the regular expressions are a
-  subset of RE2's on a Pike VM (L24).
-- Cases that passed and are now refused, 37 on the macOS run: 24 that
-  make or read a NaN (L23), 7 `ORDER BY` shapes (a constant, which
+  overflow (an error; #43 tracks `TINYINT` and `SMALLINT` arithmetic,
+  which still widens where DuckDB overflows), and a `GROUP BY` of a join
+  key. Decided with an advisor: the engine holds no NaN, and `CREATE
+  TABLE` returns DuckDB's `Count` (L23; #42 tracks DuckDB's NaN
+  semantics). Decided by the maintainer, over an advisor's
+  recommendation of a Pike VM, which was built and dropped: every
+  regular expression is refused until a host's RE2 provider (#40)
+  supplies them (L24). #32 closes by refusal.
+- Cases that passed and are now refused, 69 on the macOS run: 35 that
+  use a regular expression (L24; they passed under `std::regex`), 24
+  that make or read a NaN (L23), 7 `ORDER BY` shapes (a constant, which
   DuckDB refuses but the corpus also runs under
   `order_by_non_integer_literal`, a setting the engine refuses; a
   set-operation key that is neither an output name nor position, which
-  passed only because the rows came sorted), 2 with regex option `'k'`,
-  1 `\x` escape, a `LIKE` pattern ending in its escape where DuckDB
+  passed only because the rows came sorted), a `LIKE` pattern ending in its escape where DuckDB
   stops before reaching it, a `BLOB || VARCHAR`, and `mod(42, 0)` under
   `error_on_division_by_zero=false`, a setting the engine refuses. Four
   cases moved from passed or refused to unreliable, each after a setup

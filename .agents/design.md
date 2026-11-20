@@ -75,8 +75,9 @@ What follows from it:
   decimal literal, `10.0 % 0.0`) are fixed or refused one by one.
 - The plan text of `EXPLAIN` is the engine's own, not DuckDB's; the
   conformance runner leaves such queries out (L20).
-- The engine holds no NaN, and its regular expressions are a subset of
-  RE2's (L23, L24): what falls outside is an error, not an approximation.
+- The engine holds no NaN (L23, until #42), and has no regular
+  expressions until a host provides RE2's (L24, #40): both are errors,
+  not approximations.
 
 ## 4. Parser
 
@@ -513,40 +514,26 @@ minor version.
     infinities. Infinities are kept, since IEEE orders them as DuckDB
     does, with DuckDB's values: `x / 0` and `POWER(0, -2)` are
     infinities. The R package decides what `dbWriteTable` of an R `NaN`
-    is (an error from the engine now).
+    is (an error from the engine now). #42 tracks DuckDB's NaN
+    semantics, which would lift this refusal.
   - DuckDB's statement results. `CREATE TABLE AS` returns one row,
     `Count`, the rows it made; `CREATE TABLE` a `Count` column and no
     row; the other DDL is left as it was until a recorded case shows
     its shape. `QueryResult::is_count` marks a result of `INSERT`,
     `UPDATE`, `DELETE` or `CREATE TABLE`, so a caller classifies by it
     rather than by parsing SQL or trusting a column's name.
-- **L24 (2026-11-20, Stage 8, decided with an advisor).** The regular
-  expressions of `regexp_matches`, `regexp_full_match`,
-  `regexp_replace` and `regexp_extract` are a subset of RE2's syntax,
-  compiled to a Pike VM (a Thompson NFA with captures, threads in
-  priority order) over code points: RE2's leftmost-first matches in time
-  linear in the subject, with no recursion, where `std::regex` was
-  ECMAScript over bytes, recursive (a stack overflow on a long subject)
-  and exponential on some patterns. The subset (`regex.hpp`): literals,
-  `\` before punctuation, `\d \D \w \W \s \S \b \B \n \t \r
-  \f \v`, `.`, bracket classes, `( )` and `(?: )`, `* + ? {n} {n,}
-  {n,m}` up to 1000 and their lazy forms, `|`, `^` and `$`. Refused at
-  compile: other `(?` groups, backreferences, `\x \p \Q \A \z \C`
-  and octal, a `{` that is not a repeat, a repeat of what can match
-  empty (RE2's empty-loop rule is its own), POSIX classes, a class
-  starting with `]`, a non-ASCII pattern outside literal mode. Refused at
-  match: option `'i'` over non-ASCII text (RE2 folds non-ASCII letters,
-  `k` with U+212A, `s` with U+017F), `.` over text with a newline unless
-  `'s'` (DuckDB's default `dot_nl` is not recorded in the corpus), and
-  `'m'`, `'n'`, `'p'` over text with a newline. DuckDB's options and
-  argument rules are read as its tests record them: options and the
-  group are constants, `'g'` only for `regexp_replace`, a group past 9 an
-  error and one past the pattern's groups the empty string, an empty
-  string where `regexp_extract` finds nothing. A doctest compares the VM
-  with `std::regex` on random patterns where ECMAScript and RE2 agree.
-  The VM is the engine's own until the host's RE2 arrives through the
-  function providers of #40; what the subset refuses now is what a
-  provider can then accept.
+- **L24 (2026-11-20, Stage 8, the maintainer's decision).** Every regular
+  expression function and operator is refused, at bind time or before
+  (`regexp_matches`, `regexp_full_match`, `regexp_replace`,
+  `regexp_extract`, `regexp_extract_all`, `regexp_split_to_array`,
+  `string_split_regex`, `regexp_escape`, `REGEXP`, `REGEXP_LIKE`,
+  `REGEXP_MATCH`, `SIMILAR TO`, `~`, `!~`), with one error naming #40,
+  until a host-supplied provider gives them RE2's semantics (#40,
+  zuregex#211). `std::regex`, ECMAScript over bytes, gave answers that
+  were not DuckDB's and is gone. A Pike VM over a subset of RE2 was built
+  for this stage on an advisor's recommendation and dropped by the
+  maintainer: the package family has one regex engine, zuregex's RE2,
+  and no second implementation to maintain.
 
 ## 9. Open questions
 

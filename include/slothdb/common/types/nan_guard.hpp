@@ -6,7 +6,8 @@
 // hand-written paths, so a NaN gave answers that were not DuckDB's. NaN
 // is refused where one would be made (text, arithmetic, a function, an
 // aggregate) and, as a backstop, where one would be stored or returned.
-// Infinities are kept: IEEE orders them as DuckDB does.
+// Infinities are kept: IEEE orders them as DuckDB does. #42 tracks
+// DuckDB's NaN semantics.
 
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/types/data_chunk.hpp"
@@ -18,7 +19,8 @@ namespace zugodb {
 
 [[noreturn]] inline void ThrowNaN() {
     throw NotImplementedException(
-        "NaN is not supported: the engine does not order or compare it as DuckDB does");
+        "NaN is not supported: the engine does not order or compare it as DuckDB does "
+        "(libzugodb#42)");
 }
 
 inline void RefuseNaN(const Vector &v, idx_t count) {

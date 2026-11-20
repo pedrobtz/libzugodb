@@ -83,18 +83,16 @@
     a non-`BLOB` other than a string literal, and any function of a
     `BLOB` but `COUNT`, `MIN`, `MAX`, `OCTET_LENGTH`, `MD5`, `SHA1` and
     `SHA256` are errors; `MIN` and `MAX` compare its bytes;
-  - regular expressions (#32) are RE2's, by a Pike VM over a subset of
-    its syntax (design L24), in place of `std::regex`: `regexp_extract`
-    takes group 0 by default, `regexp_replace` the first match unless
-    `'g'`, every option letter is read, an invalid pattern or option is
-    an error, `regexp_full_match` is added, and what the subset does not
-    hold is refused (backreferences, lookaround, inline flags, `'i'` over
-    non-ASCII text, `.` over a newline without `'s'`). `REGEXP`,
-    `REGEXP_LIKE` and `REGEXP_MATCH`, not DuckDB's names, are refused;
+  - regular expressions (#32): every regular expression function and
+    operator (`regexp_matches`, `regexp_replace`, `regexp_extract`,
+    `regexp_full_match`, `regexp_extract_all`, `regexp_split_to_array`,
+    `SIMILAR TO`, `~`, ...) is refused, with an error naming #40, until a
+    host-supplied RE2 provider supplies them (design L24); `std::regex`
+    gave ECMAScript's answers over bytes, and is no longer used;
   - floating point (#33): `/` divides as doubles, as DuckDB's (`7 / 2`
     is 3.5), and by zero gives an infinity, not NULL; `^` is `POWER`, not
     the bitwise exclusive or; `POWER`, `SQRT`, `CBRT` and `ROUND` follow
-    IEEE and DuckDB. The engine holds no NaN (design L23): a NaN is an
+    IEEE and DuckDB. The engine holds no NaN (design L23, until #42): a NaN is an
     error wherever it would be made, stored, read from a database file or
     returned, since DuckDB orders NaN above every number and the engine's
     comparisons are IEEE's. `SUM` of a `FLOAT` is a `DOUBLE` (it was 0,
@@ -130,10 +128,9 @@
   `INSERT`, `UPDATE`, `DELETE` and `CREATE TABLE`, so a caller reads rows
   affected from it rather than from the column's name. zugodb's
   `EngineSend` treats a non-DML `Count` result as a query today, and
-  adapts at its next pin. For `tools/vendor.yaml`, four files are new:
-  `include/slothdb/common/types/blob.hpp`,
-  `include/slothdb/common/types/nan_guard.hpp`,
-  `include/slothdb/execution/regex.hpp` and `src/execution/regex.cpp`.
+  adapts at its next pin. For `tools/vendor.yaml`, two files are new:
+  `include/slothdb/common/types/blob.hpp` and
+  `include/slothdb/common/types/nan_guard.hpp`.
 
   The conformance runner leaves out a query whose expected result is a
   regex in any column (an `EXPLAIN` plan; design L20), and splits a
