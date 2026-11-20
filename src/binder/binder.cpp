@@ -2221,6 +2221,22 @@ BoundExprPtr Binder::BindFunction(const FunctionExpression &expr, BindContext &c
         }
     } else if (name == "IN" || name == "BETWEEN") {
         return_type = LogicalType::BOOLEAN();
+        // The value and the list, or the bounds, compared in one type, as
+        // DuckDB casts them to theirs (#42). The executor compares Values,
+        // and two of different types compared as neither less nor equal:
+        // a BIGINT or DOUBLE BETWEEN 1 AND 10 was true of every row, and
+        // IN (2, 3) of none; a DATE BETWEEN two strings was always true.
+        std::vector<const BoundExpression *> all;
+        for (auto &a : args) all.push_back(a.get());
+        auto common = UnifyTypes(all, name);
+        if (common.id() != LogicalTypeId::SQLNULL) {
+            for (auto &a : args) {
+                if (a->GetReturnType().id() != common.id() &&
+                    a->GetReturnType().id() != LogicalTypeId::SQLNULL) {
+                    a = std::make_unique<BoundCast>(std::move(a), common);
+                }
+            }
+        }
     } else if (name == "NOW" || name == "CURRENT_TIMESTAMP" ||
                name == "LOCALTIMESTAMP" || name == "MAKE_TIMESTAMP" ||
                name == "GETDATE" || name == "FROM_UNIXTIME") {

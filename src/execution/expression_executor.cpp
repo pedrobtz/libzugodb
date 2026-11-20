@@ -2258,11 +2258,18 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             auto v = val_vec.GetValue(i);
             auto lo = low_vec.GetValue(i);
             auto hi = high_vec.GetValue(i);
-            if (v.IsNull() || lo.IsNull() || hi.IsNull()) {
+            // v >= lo AND v <= hi, in three-valued logic: 5 BETWEEN NULL
+            // AND 3 is false, as DuckDB's; it was NULL (#42). The binder
+            // gave the three one type.
+            int ge = (v.IsNull() || lo.IsNull()) ? -1 : !(v < lo);
+            int le = (v.IsNull() || hi.IsNull()) ? -1 : !(hi < v);
+            if (ge == 0 || le == 0) {
+                out[i] = false;
+            } else if (ge == -1 || le == -1) {
                 result.GetValidity().SetInvalid(i);
                 out[i] = false;
             } else {
-                out[i] = !(v < lo) && !(hi < v);
+                out[i] = true;
             }
         }
         return;
