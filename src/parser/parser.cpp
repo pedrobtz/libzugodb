@@ -670,6 +670,20 @@ std::unique_ptr<TableRef> Parser::ParseTableRef() {
         Expect(TokenType::RPAREN, "after column alias list");
         if (ref->subquery && !ref->column_aliases.empty()) {
             auto &sel_list = ref->subquery->select_list;
+            // More aliases than columns is DuckDB's error; it was ignored
+            // (#38). Beside a *, the aliases were set on the * and lost.
+            for (auto &e : sel_list) {
+                if (e->GetExpressionType() == ExpressionType::STAR) {
+                    throw ParserException(
+                        "A column alias list on a subquery whose select list has * "
+                        "is not supported");
+                }
+            }
+            if (ref->column_aliases.size() > sel_list.size()) {
+                throw ParserException("table has " + std::to_string(sel_list.size()) +
+                    " columns available but " + std::to_string(ref->column_aliases.size()) +
+                    " columns specified");
+            }
             for (size_t i = 0; i < ref->column_aliases.size() && i < sel_list.size(); i++) {
                 sel_list[i]->alias = ref->column_aliases[i];
             }

@@ -105,3 +105,19 @@ TEST_CASE("Stage 8: ORDER BY a position of SELECT * over a join") {
     conn.Query("INSERT INTO a VALUES (1, 20), (2, 10)");
     CHECK(Run(conn, "SELECT i, * FROM a ORDER BY 3") == Rows{{"2", "2", "10"}, {"1", "1", "20"}});
 }
+
+// ---------------------------------------------------------------------------
+// subquery/scalar/test_scalar_subquery.test:86 (#38): more column aliases
+// than the subquery has columns were ignored; beside a * they were lost.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: a column alias list longer than the subquery is an error") {
+    Database db;
+    Connection conn(db);
+    CHECK_THROWS(conn.Query("SELECT * FROM (SELECT 42, 41 AS x) v1(a, b, c)"));
+    CHECK_THROWS(conn.Query("SELECT * FROM (VALUES (1, 2)) v(a, b, c)"));
+    conn.Query("CREATE TABLE a(i INT, j INT)");
+    CHECK_THROWS(conn.Query("SELECT * FROM (SELECT * FROM a) v(x, y)"));
+    auto r = conn.Query("SELECT * FROM (SELECT 42, 41 AS x) v1(a)");
+    CHECK(r.column_names == std::vector<std::string>{"a", "x"});
+}
