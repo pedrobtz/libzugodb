@@ -4507,12 +4507,13 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                         unsigned doy1 = (153 * (m_ > 2 ? m_ - 3 : m_ + 9) + 2) / 5 + d_ - 1;
                         unsigned doe1 = yoe1 * 365 + yoe1/4 - yoe1/100 + doy1;
                         int64_t jan1_days = era1 * 146097LL + static_cast<int64_t>(doe1) - 719468;
-                        // Move to thursday of week 1 (the Thursday on
-                        // or after jan 1).
-                        int64_t jan1_dow_zero = floor_mod(jan1_days + 4, 7);
-                        int64_t jan1_iso_dow = ((jan1_dow_zero + 6) % 7) + 1;
-                        int64_t week1_thursday = jan1_days + (4 - jan1_iso_dow);
-                        extracted = (thursday_days - week1_thursday) / 7 + 1;
+                        // The week's Thursday lies in thursday_year, and
+                        // week 1 holds that year's first Thursday, so the
+                        // week is the Thursday's day of the year over 7.
+                        // (Counting from the Thursday of Jan 1's week was
+                        // one too many when Jan 1 is a Friday to Sunday,
+                        // #37.)
+                        extracted = (thursday_days - jan1_days) / 7 + 1;
                     }
                 }
             }

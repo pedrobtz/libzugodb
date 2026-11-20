@@ -228,3 +228,19 @@ TEST_CASE("Stage 8: text that is not a BLOB's is an error, NULL under TRY_CAST")
     CHECK_THROWS(conn.Query("SELECT upper('a'::BLOB)"));
     CHECK_THROWS(conn.Query("SELECT 'a'::BLOB || 'b'::VARCHAR"));
 }
+
+// ---------------------------------------------------------------------------
+// EXTRACT(WEEK) (#37; function/date/test_extract.test,
+// test_extract_edge_cases.test): week 1 was counted from the Thursday of
+// Jan 1's week, one week early when Jan 1 is a Friday, Saturday or Sunday.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: EXTRACT(WEEK) is the ISO week") {
+    Database db;
+    Connection conn(db);
+    CHECK(Run(conn, "SELECT EXTRACT(week FROM cast('2006-01-01' AS DATE)), "
+                    "EXTRACT(week FROM DATE '2006-01-02'), EXTRACT(week FROM DATE '2008-12-29'), "
+                    "EXTRACT(week FROM DATE '2010-01-03'), week(DATE '2004-12-31'), "
+                    "date_part('week', TIMESTAMP '2021-01-03 10:00:00')") ==
+          Rows{{"52", "1", "1", "53", "53", "53"}});
+}
