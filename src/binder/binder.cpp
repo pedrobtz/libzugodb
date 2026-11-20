@@ -1344,7 +1344,21 @@ BoundExprPtr Binder::BindArithmetic(const ArithmeticExpression &expr, BindContex
             "Invalid TIMESTAMP arithmetic: " + left->GetReturnType().ToString() +
             " " + expr.op + " " + right->GetReturnType().ToString());
     }
+    // DuckDB's ^ is POWER, not the bitwise exclusive or (2 ^ 3 gave 1).
+    if (expr.op == "^") {
+        std::vector<BoundExprPtr> pargs;
+        pargs.push_back(std::move(left));
+        pargs.push_back(std::move(right));
+        return std::make_unique<BoundFunction>("POWER", std::move(pargs), LogicalType::DOUBLE(),
+                                               false);
+    }
     auto result_type = ResolveArithmeticType(left->GetReturnType(), right->GetReturnType());
+    // DuckDB's / divides as doubles (integer_division is false by
+    // default): 7 / 2 is 3.5, not 3 (#33).
+    if (expr.op == "/" && result_type.id() != LogicalTypeId::DOUBLE &&
+        result_type.id() != LogicalTypeId::FLOAT) {
+        result_type = LogicalType::DOUBLE();
+    }
     return std::make_unique<BoundArithmetic>(expr.op, std::move(left), std::move(right),
                                              result_type);
 }

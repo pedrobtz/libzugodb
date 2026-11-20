@@ -8,6 +8,7 @@
 #include "slothdb/common/string_util.hpp"
 #include "slothdb/common/types/string_type.hpp"
 #include "slothdb/common/types/blob.hpp"
+#include "slothdb/common/types/nan_guard.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -429,6 +430,9 @@ void ExpressionExecutor::Execute(const BoundExpression &expr, DataChunk &input,
     default:
         throw NotImplementedException("Expression executor for type");
     }
+    // A NaN made by any expression (text, arithmetic, a function) is an
+    // error, under TRY_CAST too (#33, design L23).
+    RefuseNaN(result, count);
 }
 
 // A cast to DATE, TIME or TIMESTAMP (design L19). Text is read by DuckDB's
@@ -1242,12 +1246,10 @@ void ExpressionExecutor::ArithmeticTyped(const std::string &op, Vector &left, Ve
             else if (op == "-")  out[i] = ldata[i] - rdata[i];
             else if (op == "*")  out[i] = ldata[i] * rdata[i];
             else if (op == "/") {
-                if (rdata[i] == T{}) {
-                    result.GetValidity().SetInvalid(i);
-                    out[i] = T{};
-                } else {
-                    out[i] = ldata[i] / rdata[i];
-                }
+                // IEEE 754, as DuckDB's ieee_floating_point_ops default:
+                // x / 0 is an infinity, 0 / 0 a NaN, which the engine
+                // refuses (#33).
+                out[i] = ldata[i] / rdata[i];
             }
             else out[i] = T{};
         }
@@ -2726,9 +2728,19 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
             else if (name == "FLOOR") val = std::floor(val);
             else if (name == "ROUND") {
                 if (has_precision) {
+                    // DuckDB's: a precision past a double's range keeps
+                    // the value, one far below it gives 0 (it was a NaN,
+                    // #33).
                     int32_t p = prec_vec.GetValue(i).GetValue<int32_t>();
-                    double factor = std::pow(10.0, static_cast<double>(p));
-                    val = std::round(val * factor) / factor;
+                    if (p >= 0) {
+                        double factor = std::pow(10.0, static_cast<double>(p));
+                        double r = std::round(val * factor) / factor;
+                        if (!std::isinf(r) && !std::isnan(r)) val = r;
+                    } else {
+                        double factor = std::pow(10.0, -static_cast<double>(p));
+                        double r = std::round(val / factor) * factor;
+                        val = (std::isinf(r) || std::isnan(r)) ? 0.0 : r;
+                    }
                 } else {
                     val = std::round(val);
                 }
@@ -2761,12 +2773,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 else if (tid == LogicalTypeId::TINYINT) d = val.GetValue<int8_t>();
                 else if (tid == LogicalTypeId::FLOAT) d = val.GetValue<float>();
                 else d = val.GetValue<double>();
-                double r = std::cbrt(d);
-                if (std::isnan(r) || std::isinf(r)) {
-                    result.GetValidity().SetInvalid(i);
-                } else {
-                    result.GetData<double>()[i] = r;
-                }
+                result.GetData<double>()[i] = std::cbrt(d);
             }
             return;
         }
@@ -2776,13 +2783,9 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                 if (val.IsNull()) { result.GetValidity().SetInvalid(i); continue; }
                 double d = (val.type().id() == LogicalTypeId::INTEGER)
                     ? val.GetValue<int32_t>() : val.GetValue<double>();
-                // SQRT of a negative produces nan; SQL standard says
-                // this is a domain error -> NULL (matches POWER's
-                // negative-base-with-fractional-exponent guard).
-                if (d < 0.0) {
-                    result.GetValidity().SetInvalid(i);
-                    continue;
-                }
+                // IEEE, as DuckDB: SQRT of a negative is a NaN, which the
+                // engine refuses; a NULL was a value DuckDB never gives
+                // (#33).
                 result.GetData<double>()[i] = std::sqrt(d);
             }
         } else {
@@ -2810,19 +2813,9 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
                     continue;
                 }
                 if (name == "POWER") {
-                    // Domain errors -> NULL per SQL standard:
-                    //   POWER(0, -k)         -> +inf  (was)
-                    //   POWER(negative, frac) -> nan
-                    if ((d1 == 0.0 && d2 < 0.0) || (d1 < 0.0 && std::floor(d2) != d2)) {
-                        result.GetValidity().SetInvalid(i);
-                        continue;
-                    }
-                    double r = std::pow(d1, d2);
-                    if (std::isnan(r) || std::isinf(r)) {
-                        result.GetValidity().SetInvalid(i);
-                    } else {
-                        result.GetData<double>()[i] = r;
-                    }
+                    // IEEE, as DuckDB: POWER(0, -2) is inf, POWER(-1, 0.5)
+                    // a NaN, which the engine refuses (#33).
+                    result.GetData<double>()[i] = std::pow(d1, d2);
                 } else {
                     // MOD(x, 0) -> NULL (was nan). Integer % already
                     // returns NULL via the ExecuteArithmetic %-branch;

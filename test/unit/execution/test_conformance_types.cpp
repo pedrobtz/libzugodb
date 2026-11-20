@@ -244,3 +244,66 @@ TEST_CASE("Stage 8: EXTRACT(WEEK) is the ISO week") {
                     "date_part('week', TIMESTAMP '2021-01-03 10:00:00')") ==
           Rows{{"52", "1", "1", "53", "53", "53"}});
 }
+
+// ---------------------------------------------------------------------------
+// Infinities and NaN (#33; aggregate/aggregates/test_stddev.test,
+// function/numeric/test_pow.test, test_round.test,
+// order/order_by_negative_zero.test, types/float/nan_*.test). Division
+// by zero and POWER(0, -2) gave NULL where DuckDB gives an infinity, and
+// / of integers divided as integers. The engine holds no NaN (design
+// L23): DuckDB orders it above every number and equal to itself, the
+// engine's comparisons are IEEE's.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: division and POWER give DuckDB's infinities") {
+    Database db;
+    Connection conn(db);
+    CHECK(Run(conn, "SELECT 7 / 2, 7 / 0, 7.5::DOUBLE / 0, -7.5::FLOAT / 0") ==
+          Rows{{"3.5", "inf", "inf", "-inf"}});
+    CHECK(Run(conn, "SELECT power(0.0::float8, -2.0::float8), 0.0::float8 ^ -1.0::float8, 2 ^ 3") ==
+          Rows{{"inf", "inf", "8"}});
+    // order_by_negative_zero.test
+    CHECK(Run(conn, "SELECT 1.0 / v FROM (VALUES (-0.0), (1.0)) t(v) ORDER BY v") ==
+          Rows{{"-inf"}, {"1"}});
+    // nan_aggregates.test: SUM of a FLOAT infinity.
+    CHECK(Run(conn, "SELECT SUM('inf'::FLOAT), SUM('-inf'::FLOAT)") == Rows{{"inf", "-inf"}});
+    // test_round.test: a precision past a double's range.
+    CHECK(Run(conn, "SELECT round(42.1235::DOUBLE, 1000), round(42::DOUBLE, -1000), "
+                    "round(1.0::DOUBLE, (-2147483648)::INT), round(42::DOUBLE, -1)") ==
+          Rows{{"42.1235", "0", "0", "40"}});
+}
+
+TEST_CASE("Stage 8: a NaN is refused wherever it would be made") {
+    Database db;
+    Connection conn(db);
+    const char *queries[] = {
+        // nan_cast.test, nan_functions.test, nan_minmax_order.test
+        "SELECT 'nan'::FLOAT::tinyint",
+        "SELECT TRY_CAST('nan' AS DOUBLE)",
+        "SELECT sign('nan'::FLOAT)",
+        "SELECT MIN(f), MAX(f) FROM (VALUES ('nan'::FLOAT), (1::FLOAT), (2::FLOAT)) t(f)",
+        "SELECT SUM('nan'::FLOAT)",
+        // test_stddev.test: DuckDB's answer is a NaN.
+        "select stddev(a) from (values (1.0/0.0), (2.0)) tbl(a)",
+        "select var_pop(a) from (values (1.0/0.0), (2.0)) tbl(a)",
+        "SELECT SUM(x) FROM (VALUES ('inf'::DOUBLE), ('-inf'::DOUBLE)) t(x)",
+        "SELECT 'inf'::DOUBLE - 'inf'::DOUBLE",
+        "SELECT 0.0 / 0.0",
+        "SELECT sqrt(-1)",
+    };
+    for (auto *q : queries) {
+        CAPTURE(q);
+        CHECK_THROWS(conn.Query(q));
+    }
+    // No table holds one, through SQL or the C++ API.
+    conn.Query("CREATE TABLE t(d DOUBLE)");
+    CHECK_THROWS(conn.Query("INSERT INTO t VALUES ('nan')"));
+    DataChunk chunk;
+    chunk.Initialize({LogicalType::DOUBLE()});
+    chunk.SetValue(0, 0, Value::DOUBLE(std::nan("")));
+    chunk.SetCardinality(1);
+    CHECK_THROWS(conn.Append("t", chunk));
+    CHECK(Run(conn, "SELECT count(*) FROM t") == Rows{{"0"}});
+    conn.Query("INSERT INTO t VALUES ('inf'), (1)");
+    CHECK(Run(conn, "SELECT d FROM t ORDER BY d DESC") == Rows{{"inf"}, {"1"}});
+}

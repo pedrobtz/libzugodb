@@ -2,6 +2,7 @@
 #include "slothdb/main/query_materialize.hpp"
 #include "slothdb/common/exception.hpp"
 #include "slothdb/common/types/blob.hpp"
+#include "slothdb/common/types/nan_guard.hpp"
 #include "slothdb/parser/parser.hpp"
 #include "slothdb/binder/binder.hpp"
 #include "slothdb/planner/planner.hpp"
@@ -604,6 +605,25 @@ void MaterializeFromSubqueries(Catalog &catalog, TableRef &tref,
 }
 
 QueryResult Connection::Query(const std::string &sql) {
+    auto result = RunStatements(sql);
+    // The backstop of design L23 (#33): a NaN that a path the expression
+    // executor does not see made (an aggregate over infinities) is an
+    // error, not a value.
+    for (auto &chunk : result.chunks) RefuseNaN(chunk);
+    for (auto &row : result.rows) {
+        for (auto &v : row) {
+            if (v.IsNull()) continue;
+            auto id = v.type().id();
+            if ((id == LogicalTypeId::DOUBLE && std::isnan(v.GetValue<double>())) ||
+                (id == LogicalTypeId::FLOAT && std::isnan(v.GetValue<float>()))) {
+                ThrowNaN();
+            }
+        }
+    }
+    return result;
+}
+
+QueryResult Connection::RunStatements(const std::string &sql) {
     // 1. Parse.
     auto statements = Parser::Parse(sql);
     // Per-statement source slices — used by CREATE VIEW and any other

@@ -122,6 +122,9 @@ public:
     Catalog &GetCatalog() { return db_.GetCatalog(); }
 
 private:
+    // Query's statements; Query then refuses a result holding a NaN.
+    QueryResult RunStatements(const std::string &sql);
+
     Database &db_;
     Transaction *active_txn_ = nullptr;
 };
