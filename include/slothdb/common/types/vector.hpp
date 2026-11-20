@@ -85,6 +85,9 @@ public:
     const_data_ptr_t GetData() const { return data_; }
     ValidityMask &GetValidity() { return validity_; }
     const ValidityMask &GetValidity() const { return validity_; }
+    // The rows this vector's buffers hold, or 0 when it wraps data it does
+    // not own and does not know the size of (libzugodb Stage 10).
+    idx_t GetCapacity() const { return capacity_; }
 
     void SetVectorType(VectorType type) { vector_type_ = type; }
     // Re-tag the logical type WITHOUT touching the backing buffer. Only safe
@@ -107,6 +110,8 @@ public:
     }
 
     // Get/set a single value (slow path, for initialization and testing).
+    // SetValue past the capacity is an InternalException, not a write past
+    // the buffer.
     Value GetValue(idx_t index) const;
     void SetValue(idx_t index, const Value &val);
 
@@ -139,6 +144,7 @@ private:
     LogicalType type_;
     data_ptr_t data_;
     ValidityMask validity_;
+    idx_t capacity_ = 0;
 
     // Owns the data buffer.
     std::shared_ptr<VectorBuffer> buffer_;

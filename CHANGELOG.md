@@ -204,6 +204,40 @@
     DuckDB's files on quoted identifiers and identifier case. For
     `tools/vendor.yaml`, no path under `src/` or `include/` is added or
     moved.
+- No operator writes past a chunk's capacity or drops rows at a chunk
+  boundary (#14, design L27). Every `DataChunk` the engine makes, 88 in
+  all, was audited and found bounded, and each one SQL reaches is driven at
+  2047, 2048, 2049, 4095, 4096 and 4097 rows with NULLs on each side of the
+  boundary (`test/unit/execution/test_chunks.cpp`). A `Vector` now records
+  its capacity, and `Vector::SetValue` or `DataChunk::SetCardinality` past
+  it is an `InternalException` rather than a write past a buffer. The
+  boundary tests found wrong answers at any size, now fixed or refused:
+  - a NULL key was grouped with 0 or `''`: `GROUP BY` one `INTEGER`,
+    `BIGINT` or `VARCHAR` column with `COUNT`, `SUM`, `AVG`, `MIN` or
+    `MAX`, and `PARTITION BY` one such column (#47);
+  - rows that differ were one group, partition or `DISTINCT` row when
+    their texts joined with `|` were the same (`('a|', 'b')` and `('a',
+    '|b')`), or one was NULL and the other the text `'NULL'`; doubles
+    equal to six decimals were one group. Keys are now one tagged,
+    length-prefixed encoding, `include/slothdb/execution/group_key.hpp`
+    (#48);
+  - `UNION`, `INTERSECT` and `EXCEPT` kept rows repeated within their left
+    side; a `PARTITION BY` expression was ignored when two windows had
+    different partitions (#48);
+  - `MERGE` left a `SET` of a constant undone, stored `VALUES` constants
+    as text, matched the first columns for any `ON` but `col = col`,
+    matched NULL with `'NULL'`, ignored the `INSERT` column list, and
+    matched rows it had inserted. It now does one shape and refuses the
+    rest: `ON` a target column `=` a source column, `SET` and `VALUES`
+    from source columns of the same type or `NULL` (#49);
+  - the Parquet fast paths give no rows or crash on a file the engine's
+    `ParquetWriter` wrote (#50). No SQL reaches them, and Stage 11 removes
+    them; they are recorded, not fixed.
+  The conformance subset's counts move only from unreliable to passed (two
+  `GROUP BY` cases with a NULL key). The SQL fuzzer's schema gains a
+  2049-row table. For `tools/vendor.yaml`, one file is added,
+  `include/slothdb/execution/group_key.hpp`, in a directory it already
+  copies.
 
 ## libzugodb 0.2.0
 

@@ -20,8 +20,6 @@ test/sql/aggregate/distinct/rewrite/distinct_aggregate_rewrite.test	211	unreliab
 test/sql/aggregate/distinct/rewrite/distinct_aggregate_rewrite.test	217	unreliable	SELECT g, count(DISTINCT value::INTEGER) FILTER (WHERE keep)\nFROM distinct_rewrite_filter_errors\nGROUP BY g;
 test/sql/aggregate/group/group_by_all.test	56	unreliable	SELECT i%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1
 test/sql/aggregate/group/group_by_all.test	64	unreliable	SELECT i%2, SUM(i), SUM(g) FROM integers GROUP BY 1 ORDER BY 1
-test/sql/aggregate/group/group_by_all.test	81	unreliable	SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY ALL ORDER BY 1 NULLS FIRST
-test/sql/aggregate/group/group_by_all.test	88	unreliable	SELECT (g+i)%2, SUM(i), SUM(g) FROM integers GROUP BY 1 ORDER BY 1 NULLS FIRST
 test/sql/aggregate/group/group_by_all.test	111	unreliable	SELECT g, i, g%2, SUM(i), SUM(g) FROM integers GROUP BY 1, 2, 3 ORDER BY 1, 2, 3, 4
 test/sql/aggregate/group/group_by_limits.test	60	unreliable	SELECT t_k0, COUNT(*) FROM t GROUP BY t_k0 ORDER BY 1;
 test/sql/aggregate/group/test_group_by.test	165	unreliable	SELECT i, SUM(i) FROM integers GROUP BY i ORDER BY 1;

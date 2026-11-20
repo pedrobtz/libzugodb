@@ -37,7 +37,7 @@ issue closed. zugodb then moves its pin.
 | 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | [#29](https://github.com/pedrobtz/libzugodb/pull/29) | 2026-11-20 |
 | 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | [#30](https://github.com/pedrobtz/libzugodb/pull/30), [#41](https://github.com/pedrobtz/libzugodb/pull/41) | 2026-11-20 |
 | 9 | [Parser hardening and the dialect reference](#stage-9--parser-hardening-and-the-dialect-reference) | 0.3.0 | `fuzz` gains a target | [#13](https://github.com/pedrobtz/libzugodb/issues/13) | [#46](https://github.com/pedrobtz/libzugodb/pull/46) | 2026-11-20 |
-| 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | | |
+| 10 | [Chunk capacity audit](#stage-10--chunk-capacity-audit) | 0.3.0 | ci | [#14](https://github.com/pedrobtz/libzugodb/issues/14) | [#52](https://github.com/pedrobtz/libzugodb/pull/52) | 2026-11-20 |
 | 11 | [Cut the engine's file readers](#stage-11--cut-the-engines-file-readers) | 0.4.0 | ci | [#16](https://github.com/pedrobtz/libzugodb/issues/16) | | |
 | 11.1 | [Host-supplied function providers](#stage-111--host-supplied-function-providers) | 0.4.0 | ci | [#40](https://github.com/pedrobtz/libzugodb/issues/40) | | |
 | 12 | [The names become zugodb](#stage-12--the-names-become-zugodb) | 0.4.0 | ci | [#17](https://github.com/pedrobtz/libzugodb/issues/17) | | |
@@ -659,7 +659,41 @@ chunk boundary.
   or is recorded as already correct, with the reason.
 - `v0.3.0` is tagged and released.
 
-**Design.** [zugodb §4.2][zdesign] and [zugodb Stage 8][zroadmap].
+**Deviations (2026-11-20).**
+
+- The audit counts 88 chunks, not 31: every `DataChunk::Initialize` in
+  `src/`, 85 at the default capacity and 3 sized; zugodb's design gave a
+  count of 31 and no list. Each is in L27's table with what
+  bounds it and the case that drives it; none was seen to fail, so each is
+  recorded as already correct with its reason. The sites no SQL reaches
+  (`COPY`, live views, the CSV scans and the SQLite, Avro and Arrow
+  readers) are recorded as unreachable, with what refuses them, not
+  tested: Stage 11 removes them.
+- Beyond the audit, a guard (L27): `Vector::SetValue` and
+  `DataChunk::SetCardinality` past a vector's capacity are an
+  `InternalException`, with doctests at the capacity and one past it.
+- The tests run 4095 and 4096 rows as well, the second boundary's limit
+  and limit minus one. The Parquet table case runs the roadmap's four
+  sizes and leaves out the cases whose fast paths are wrong on a file the
+  engine's writer made, at any size (#50; recorded, not fixed, as Stage 11
+  removes them).
+- The boundary tests found wrong answers that are not capacity bugs, and
+  this stage fixes or refuses them, each with its issue and doctests:
+  NULL keys grouped with 0 or `''` (#47); `|`-joined keys, set operations
+  keeping repeated left rows, and an ignored `PARTITION BY` expression
+  (#48); `MERGE` (#49), narrowed in `docs/dialect.md`.
+- The SQL fuzzer's schema gains a 2049-row table, built through the C++
+  API.
+- `v0.3.0` is tagged and released by the maintainer after the merge, not
+  in the pull request.
+- The counts, alike on both platforms: passed 5,733 → 5,735, unreliable
+  386 → 384; refused 14,236, wrong, accepted, crashed and hung 0, as
+  before. The two are `GROUP BY` of `(g+i)%2` in
+  `aggregate/group/group_by_all`, whose NULL key read a stale value (#47).
+  No case moves from passed to refused.
+
+**Design.** [zugodb §4.2][zdesign] and [zugodb Stage 8][zroadmap], L27 in
+[§8](design.md#8-decisions).
 
 ## Stage 11 — Cut the engine's file readers
 

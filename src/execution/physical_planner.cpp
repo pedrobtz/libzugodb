@@ -23,6 +23,7 @@
 #include "slothdb/execution/literal_emit_filter.hpp"
 #include "slothdb/execution/int_group_agg.hpp"
 #include "slothdb/execution/count_group_agg.hpp"
+#include "slothdb/execution/group_key.hpp"
 #include "slothdb/execution/str_group_distinct.hpp"
 #include "slothdb/execution/substring_search.hpp"
 #include "slothdb/execution/topk_varchar.hpp"
@@ -4879,7 +4880,15 @@ private:
         if (single_col && (tid == LogicalTypeId::INTEGER || tid == LogicalTypeId::BIGINT)) {
             std::unordered_map<int64_t, idx_t> k2p;
             k2p.reserve(n / 4 + 16);
+            // NULLs are one partition of their own; the raw value of a NULL
+            // row put it in the partition of 0, or of whatever was there.
+            idx_t null_pi = INVALID_INDEX;
             for (idx_t i = 0; i < n; i++) {
+                if (input_.IsNull(i, part_col)) {
+                    if (null_pi == INVALID_INDEX) { null_pi = partitions_.size(); partitions_.emplace_back(); }
+                    partitions_[null_pi].push_back(i);
+                    continue;
+                }
                 int64_t k = input_.ReadI64(i, part_col);
                 auto it = k2p.find(k);
                 idx_t pi;
@@ -4897,7 +4906,13 @@ private:
             cache.reserve(64);
             std::unordered_map<std::string, idx_t> overflow; // used if cardinality > cache cap
             const idx_t cache_cap = 256;
+            idx_t null_pi = INVALID_INDEX; // NULL is not '' (see above)
             for (idx_t i = 0; i < n; i++) {
+                if (input_.IsNull(i, part_col)) {
+                    if (null_pi == INVALID_INDEX) { null_pi = partitions_.size(); partitions_.emplace_back(); }
+                    partitions_[null_pi].push_back(i);
+                    continue;
+                }
                 auto &s = input_.GetStr(i, part_col);
                 const char *d = s.GetData();
                 uint32_t l = s.GetSize();
@@ -4957,9 +4972,7 @@ private:
                         ExpressionExecutor::Execute(*p, single, res, 1);
                         v = res.GetValue(0);
                     }
-                    if (v.IsNull()) key += "\x01N";
-                    else key += v.ToString();
-                    key += '|';
+                    AppendKeyValue(key, v);
                 }
                 auto it = k2p.find(key);
                 idx_t pi;
@@ -5742,7 +5755,13 @@ private:
             // Raw int64 key - no Value alloc, no hash on strings.
             std::unordered_map<int64_t, idx_t> key_to_part;
             key_to_part.reserve(n / 4 + 16);
+            idx_t null_part = INVALID_INDEX; // NULLs, a partition of their own
             for (idx_t i = 0; i < n; i++) {
+                if (input.IsNull(i, part_col)) {
+                    if (null_part == INVALID_INDEX) { null_part = partitions_list.size(); partitions_list.emplace_back(); }
+                    partitions_list[null_part].push_back(i);
+                    continue;
+                }
                 int64_t k = input.ReadI64(i, part_col);
                 auto it = key_to_part.find(k);
                 idx_t p_idx;
@@ -5759,7 +5778,13 @@ private:
             // Raw string_t read - no Value/ToString alloc.
             std::unordered_map<std::string, idx_t> key_to_part;
             key_to_part.reserve(n / 4 + 16);
+            idx_t null_part = INVALID_INDEX; // NULL is not ''
             for (idx_t i = 0; i < n; i++) {
+                if (input.IsNull(i, part_col)) {
+                    if (null_part == INVALID_INDEX) { null_part = partitions_list.size(); partitions_list.emplace_back(); }
+                    partitions_list[null_part].push_back(i);
+                    continue;
+                }
                 auto &s = input.GetStr(i, part_col);
                 auto it = key_to_part.find(std::string(s.GetData(), s.GetSize()));
                 idx_t p_idx;
@@ -5776,15 +5801,31 @@ private:
             // Generic: Value::ToString() keyed map (slow but handles multi-col / exotic types).
             std::unordered_map<std::string, idx_t> key_to_part;
             key_to_part.reserve(n / 4 + 16);
+            // A PARTITION BY expression other than a column is evaluated
+            // per row; it added nothing to the key, so the rows were one
+            // partition (Stage 10).
+            bool need_eval = false;
+            for (auto &p : win.partition_by) {
+                if (p->GetExpressionType() != BoundExpressionType::COLUMN_REF) need_eval = true;
+            }
+            DataChunk single;
+            if (need_eval) {
+                single.Initialize(children[0]->GetTypes());
+                single.SetCardinality(1);
+            }
             for (idx_t i = 0; i < n; i++) {
                 std::string key;
+                if (need_eval) {
+                    for (idx_t c = 0; c < input.types.size(); c++) single.SetValue(c, 0, input.Get(i, c));
+                }
                 for (auto &p : win.partition_by) {
                     if (p->GetExpressionType() == BoundExpressionType::COLUMN_REF) {
                         auto &ref = static_cast<BoundColumnRef &>(*p);
-                        auto v = input.Get(i, ref.column_index);
-                        if (v.IsNull()) key += "\x01N";
-                        else key += v.ToString();
-                        key += '|';
+                        AppendKeyValue(key, input.Get(i, ref.column_index));
+                    } else {
+                        Vector res(p->GetReturnType(), 1);
+                        ExpressionExecutor::Execute(*p, single, res, 1);
+                        AppendKeyValue(key, res.GetValue(0));
                     }
                 }
                 auto it = key_to_part.find(key);
@@ -6088,7 +6129,7 @@ public:
                 // Build a key from all column values.
                 std::string key;
                 for (idx_t col = 0; col < input.ColumnCount(); col++) {
-                    key += input.GetValue(col, i).ToString() + "|";
+                    AppendKeyVector(key, input.GetVector(col), i);
                 }
                 if (seen_.insert(key).second) {
                     for (idx_t col = 0; col < input.ColumnCount(); col++) {
@@ -6293,28 +6334,12 @@ private:
         }
     }
 
-    // Fast path: build a group key string from vector data directly.
+    // Fast path: build a group key string from vector data directly, one
+    // tagged part per column (group_key.hpp); "NULL|" and '|'-joined text
+    // made a NULL and the text 'NULL', and ('a|', 'b') and ('a', '|b'), one
+    // group.
     static void AppendGroupKey(std::string &key, const Vector &vec, idx_t row) {
-        auto tid = vec.GetType().id();
-        if (!vec.GetValidity().RowIsValid(row)) { key += "NULL|"; return; }
-        switch (tid) {
-        case LogicalTypeId::INTEGER:
-        case LogicalTypeId::DATE:
-            key += std::to_string(reinterpret_cast<const int32_t *>(vec.GetData())[row]); break;
-        case LogicalTypeId::BIGINT:
-        case LogicalTypeId::TIMESTAMP:
-        case LogicalTypeId::TIMESTAMP_TZ:
-        case LogicalTypeId::TIME:
-            key += std::to_string(reinterpret_cast<const int64_t *>(vec.GetData())[row]); break;
-        case LogicalTypeId::DOUBLE:  key += std::to_string(reinterpret_cast<const double *>(vec.GetData())[row]); break;
-        case LogicalTypeId::VARCHAR: {
-            auto &s = reinterpret_cast<const string_t *>(vec.GetData())[row];
-            key.append(s.GetData(), s.GetSize());
-            break;
-        }
-        default: key += vec.GetValue(row).ToString(); break;
-        }
-        key += '|';
+        AppendKeyVector(key, vec, row);
     }
 
     void ComputeAggregates() {
@@ -7217,6 +7242,9 @@ private:
                 fs->SetProjection(std::move(needed));
             }
 
+            // The NULL group of the chunk loop below, when there is one.
+            std::unique_ptr<std::vector<AggState>> null_group;
+
             // Direct-pointer cache for VARCHAR group keys (low-cardinality optimization).
             // Reserve enough for typical cardinality - pointers remain stable.
             std::vector<std::string> str_cache_keys;
@@ -8056,11 +8084,18 @@ private:
                 auto gtid = gvec.GetType().id();
                 bool is_int = (gtid == LogicalTypeId::INTEGER || gtid == LogicalTypeId::BIGINT);
                 bool is_str = (gtid == LogicalTypeId::VARCHAR);
+                auto &gvalid = gvec.GetValidity();
 
                 for (idx_t i = 0; i < chunk_size; i++) {
                     std::vector<AggState> *states_ptr = nullptr;
 
-                    if (is_int) {
+                    if ((is_int || is_str) && !gvalid.RowIsValid(i)) {
+                        // The NULL group. The raw value of a NULL key put
+                        // its rows in the group of 0 or '', or of whatever
+                        // the slot held.
+                        if (!null_group) null_group = std::make_unique<std::vector<AggState>>(num_aggs);
+                        states_ptr = null_group.get();
+                    } else if (is_int) {
                         int64_t k = (gtid == LogicalTypeId::BIGINT)
                             ? reinterpret_cast<const int64_t *>(gvec.GetData())[i]
                             : static_cast<int64_t>(reinterpret_cast<const int32_t *>(gvec.GetData())[i]);
@@ -8318,6 +8353,15 @@ private:
                 group_states[k] = std::move(str_groups[k]);
                 group_keys[k] = {str_keys[k]};
                 group_order.push_back(k);
+            }
+            if (null_group) {
+                // A key no group of a value holds: those are digits, or the
+                // text itself, so extend it until it is free.
+                std::string sk("\0NULL", 5);
+                while (group_states.count(sk)) sk.push_back('\0');
+                group_states[sk] = std::move(*null_group);
+                group_keys[sk] = {Value()};
+                group_order.push_back(sk);
             }
             } // end !ultrafast
         } else if (is_simple_count_star) {
@@ -13660,8 +13704,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
             for (idx_t j = 0; j < gkeys.size(); j++) {
                 auto &v = build_rows[i][gkeys[j].local];
                 gvals[j] = v;
-                if (v.IsNull()) gkey += "\x01N"; else gkey += v.ToString();
-                gkey += '|';
+                AppendKeyValue(gkey, v);
             }
             auto it = gkey_to_gidx.find(gkey);
             idx_t gidx;
@@ -13913,13 +13956,10 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
                     std::string gkey;
                     for (auto &g : gkeys) {
                         if (g.is_build) {
-                            auto &v = br[g.local];
-                            if (v.IsNull()) gkey += "\x01N"; else gkey += v.ToString();
+                            AppendKeyValue(gkey, br[g.local]);
                         } else {
-                            auto v = pchunk.GetValue(g.local, i);
-                            if (v.IsNull()) gkey += "\x01N"; else gkey += v.ToString();
+                            AppendKeyValue(gkey, pchunk.GetValue(g.local, i));
                         }
-                        gkey += '|';
                     }
                     auto git = group_states.find(gkey);
                     if (git == group_states.end()) {

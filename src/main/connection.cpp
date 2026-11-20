@@ -225,6 +225,29 @@ struct SetOpRowEqual {
 };
 using SetOpRowSet = std::unordered_set<std::vector<Value>, SetOpRowHash, SetOpRowEqual>;
 
+// `rows` OP `right`, for UNION, INTERSECT and EXCEPT: each a set, so a row
+// is kept once. Rows repeated within the left side were all kept (Stage
+// 10): `SELECT 1 FROM (VALUES (1), (1)) UNION SELECT 2` gave three rows.
+static void ApplyDistinctSetOp(const std::string &op, std::vector<std::vector<Value>> &rows,
+                               std::vector<std::vector<Value>> &right) {
+    SetOpRowSet seen;
+    std::vector<std::vector<Value>> kept;
+    if (op == "UNION") {
+        for (auto *side : {&rows, &right}) {
+            for (auto &row : *side) {
+                if (seen.insert(row).second) kept.push_back(std::move(row));
+            }
+        }
+    } else {
+        SetOpRowSet rk(right.begin(), right.end());
+        const bool want = op == "INTERSECT";
+        for (auto &row : rows) {
+            if ((rk.count(row) > 0) == want && seen.insert(row).second) kept.push_back(std::move(row));
+        }
+    }
+    rows = std::move(kept);
+}
+
 // Apply union-level ORDER BY / LIMIT / OFFSET to a row vector.
 //
 // The parser attaches ORDER BY / LIMIT / OFFSET that appear after a UNION /
@@ -556,21 +579,8 @@ std::shared_ptr<DataTable> MaterializeSelectIntoTable(
             const std::string &op = cur->set_op;
             if (op == "UNION ALL") {
                 for (auto &r : right_rows) rows.push_back(std::move(r));
-            } else if (op == "UNION") {
-                SetOpRowSet seen;
-                for (auto &row : rows) seen.insert(row);
-                for (auto &row : right_rows)
-                    if (seen.insert(row).second) rows.push_back(std::move(row));
-            } else if (op == "INTERSECT") {
-                SetOpRowSet rk(right_rows.begin(), right_rows.end());
-                std::vector<std::vector<Value>> kept;
-                for (auto &row : rows) if (rk.count(row)) kept.push_back(std::move(row));
-                rows = std::move(kept);
-            } else if (op == "EXCEPT") {
-                SetOpRowSet rk(right_rows.begin(), right_rows.end());
-                std::vector<std::vector<Value>> kept;
-                for (auto &row : rows) if (!rk.count(row)) kept.push_back(std::move(row));
-                rows = std::move(kept);
+            } else if (op == "UNION" || op == "INTERSECT" || op == "EXCEPT") {
+                ApplyDistinctSetOp(op, rows, right_rows);
             }
             cur = cur->set_right.get();
         }
@@ -1717,73 +1727,161 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                 }
             }
 
-            // For each source row, check if it matches any target row.
-            // Simple approach: extract join columns from ON condition.
-            idx_t target_join_col = 0, source_join_col = 0;
-            if (merge.on_condition &&
-                merge.on_condition->GetExpressionType() == ExpressionType::COMPARISON) {
-                auto &cmp = static_cast<ComparisonExpression &>(*merge.on_condition);
-                if (cmp.left->GetExpressionType() == ExpressionType::COLUMN_REF) {
-                    auto &col = static_cast<ColumnRefExpression &>(*cmp.left);
-                    target_join_col = target->GetColumnIndex(col.column_name);
+            // What the handler can do, and nothing else (Stage 10): ON one
+            // column of the target equal to one of the source, of one type;
+            // SET and VALUES from columns of the source, or NULL in VALUES.
+            // It matched the first columns when ON was anything else, left
+            // a SET of a constant undone, stored a VALUES constant as text
+            // (a number read back 0), matched NULL with the text 'NULL',
+            // put VALUES in the table's column order whatever INSERT named,
+            // and matched later source rows with rows it had inserted.
+            auto refuse = [](const std::string &what) {
+                throw NotImplementedException("MERGE " + what + " is not supported");
+            };
+            if (!target->GetPrimaryKeyColumns().empty()) refuse("into a table with a primary key");
+            auto names = [](const std::string &table, const std::string &alias) {
+                std::vector<std::string> out{StringUtil::Lower(table)};
+                if (!alias.empty()) out.push_back(StringUtil::Lower(alias));
+                return out;
+            };
+            const auto target_names = names(merge.target_table, merge.target_alias);
+            const auto source_names = names(merge.source_table, merge.source_alias);
+            auto names_side = [](const ColumnRefExpression &ref, const std::vector<std::string> &side) {
+                auto q = StringUtil::Lower(ref.table_name);
+                for (auto &n : side) if (n == q) return true;
+                return false;
+            };
+            // A source column, qualified by the source's name or alias.
+            auto source_column = [&](const ParsedExpression &e, const std::string &where) -> idx_t {
+                if (e.GetExpressionType() != ExpressionType::COLUMN_REF) {
+                    refuse("with " + where + " other than a column of the source");
                 }
-                if (cmp.right->GetExpressionType() == ExpressionType::COLUMN_REF) {
-                    auto &col = static_cast<ColumnRefExpression &>(*cmp.right);
-                    source_join_col = source->GetColumnIndex(col.column_name);
-                    if (source_join_col == INVALID_INDEX) source_join_col = 0;
+                auto &ref = static_cast<const ColumnRefExpression &>(e);
+                if (!names_side(ref, source_names)) {
+                    refuse("with " + where + " other than a column of the source, named with its table");
+                }
+                auto idx = source->GetColumnIndex(ref.column_name);
+                if (idx == INVALID_INDEX) {
+                    throw BinderException("Column '" + ref.column_name + "' not found in '" +
+                                          merge.source_table + "'");
+                }
+                return idx;
+            };
+            auto same_type = [&](idx_t target_col, idx_t source_col, const std::string &where) {
+                if (target_types[target_col] != source_types[source_col]) {
+                    refuse("with " + where + " of another type than its target column");
+                }
+            };
+            idx_t target_join_col = INVALID_INDEX, source_join_col = INVALID_INDEX;
+            {
+                if (!merge.on_condition ||
+                    merge.on_condition->GetExpressionType() != ExpressionType::COMPARISON) {
+                    refuse("ON other than a column of the target = a column of the source");
+                }
+                auto &cmp = static_cast<ComparisonExpression &>(*merge.on_condition);
+                if (cmp.op != "=" || cmp.left->GetExpressionType() != ExpressionType::COLUMN_REF ||
+                    cmp.right->GetExpressionType() != ExpressionType::COLUMN_REF) {
+                    refuse("ON other than a column of the target = a column of the source");
+                }
+                auto *l = static_cast<ColumnRefExpression *>(cmp.left.get());
+                auto *r = static_cast<ColumnRefExpression *>(cmp.right.get());
+                if (names_side(*r, target_names) && !names_side(*l, target_names)) std::swap(l, r);
+                if (!names_side(*l, target_names) || !names_side(*r, source_names)) {
+                    refuse("ON other than a column of the target = a column of the source, each named with its table");
+                }
+                target_join_col = target->GetColumnIndex(l->column_name);
+                if (target_join_col == INVALID_INDEX) {
+                    throw BinderException("Column '" + l->column_name + "' not found in '" +
+                                          merge.target_table + "'");
+                }
+                source_join_col = source_column(*r, "ON");
+                if (target_types[target_join_col] != source_types[source_join_col]) {
+                    refuse("ON columns of two types");
+                }
+            }
+            // SET: target column <- source column.
+            std::vector<std::pair<idx_t, idx_t>> sets;
+            for (auto &assign : merge.update_assignments) {
+                auto idx = target->GetColumnIndex(assign.column_name);
+                if (idx == INVALID_INDEX) {
+                    throw BinderException("Column '" + assign.column_name + "' not found in '" +
+                                          merge.target_table + "'");
+                }
+                auto src = source_column(*assign.value, "a SET value");
+                same_type(idx, src, "a SET value");
+                sets.emplace_back(idx, src);
+            }
+            // INSERT: per target column, a source column, or INVALID_INDEX
+            // for NULL (a column not named, or NULL).
+            std::vector<idx_t> inserts(target_types.size(), INVALID_INDEX);
+            if (merge.has_insert) {
+                std::vector<idx_t> cols;
+                if (merge.insert_columns.empty()) {
+                    for (idx_t c = 0; c < target_types.size(); c++) cols.push_back(c);
+                } else {
+                    std::vector<bool> named(target_types.size(), false);
+                    for (auto &name : merge.insert_columns) {
+                        auto idx = target->GetColumnIndex(name);
+                        if (idx == INVALID_INDEX) {
+                            throw BinderException("Column '" + name + "' not found in '" +
+                                                  merge.target_table + "'");
+                        }
+                        if (named[idx]) throw BinderException("Column '" + name + "' named twice in MERGE INSERT");
+                        named[idx] = true;
+                        cols.push_back(idx);
+                    }
+                }
+                if (cols.size() != merge.insert_values.size()) {
+                    throw BinderException("MERGE INSERT has " + std::to_string(cols.size()) +
+                                          " columns but " + std::to_string(merge.insert_values.size()) +
+                                          " values");
+                }
+                for (idx_t c = 0; c < cols.size(); c++) {
+                    auto &e = *merge.insert_values[c];
+                    if (e.GetExpressionType() == ExpressionType::CONSTANT &&
+                        static_cast<const ConstantExpression &>(e).is_null) {
+                        continue;
+                    }
+                    auto src = source_column(e, "an INSERT value");
+                    same_type(cols[c], src, "an INSERT value");
+                    inserts[cols[c]] = src;
                 }
             }
 
             auto new_storage = std::make_shared<DataTable>(target_types);
-            std::vector<bool> target_matched(target_rows.size(), false);
+            const idx_t original_rows = target_rows.size();
+            std::vector<bool> target_matched(original_rows, false);
 
             for (auto &src_row : source_rows) {
                 bool matched = false;
-                for (idx_t t = 0; t < target_rows.size(); t++) {
-                    if (target_rows[t][target_join_col].ToString() ==
-                        src_row[source_join_col].ToString()) {
-                        matched = true;
-                        target_matched[t] = true;
-                        // WHEN MATCHED: update the target row.
-                        if (merge.has_update) {
-                            for (auto &assign : merge.update_assignments) {
-                                auto idx = target->GetColumnIndex(assign.column_name);
-                                if (idx != INVALID_INDEX && assign.value &&
-                                    assign.value->GetExpressionType() == ExpressionType::COLUMN_REF) {
-                                    auto &ref = static_cast<ColumnRefExpression &>(*assign.value);
-                                    auto src_idx = source->GetColumnIndex(ref.column_name);
-                                    if (src_idx != INVALID_INDEX)
-                                        target_rows[t][idx] = src_row[src_idx];
-                                }
-                            }
-                        }
+                const Value &key = src_row[source_join_col];
+                // A NULL key matches nothing. Only the target's own rows are
+                // matched, not those this statement inserts.
+                for (idx_t t = 0; t < original_rows && !key.IsNull(); t++) {
+                    const Value &tk = target_rows[t][target_join_col];
+                    if (tk.IsNull() || !(tk == key)) continue;
+                    if (target_matched[t] && merge.has_update) {
+                        // Which source row's values would it take?
+                        throw InvalidInputException(
+                            "MERGE: a row of the target matches more than one row of the source");
+                    }
+                    matched = true;
+                    target_matched[t] = true;
+                    if (merge.has_update) {
+                        for (auto &set : sets) target_rows[t][set.first] = src_row[set.second];
                     }
                 }
-                // WHEN NOT MATCHED: insert.
                 if (!matched && merge.has_insert) {
                     std::vector<Value> new_row(target_types.size());
-                    for (idx_t c = 0; c < merge.insert_values.size() && c < target_types.size(); c++) {
-                        if (merge.insert_values[c]->GetExpressionType() == ExpressionType::COLUMN_REF) {
-                            auto &ref = static_cast<ColumnRefExpression &>(*merge.insert_values[c]);
-                            auto src_idx = source->GetColumnIndex(ref.column_name);
-                            if (src_idx != INVALID_INDEX) new_row[c] = src_row[src_idx];
-                        } else if (merge.insert_values[c]->GetExpressionType() == ExpressionType::CONSTANT) {
-                            auto &con = static_cast<ConstantExpression &>(*merge.insert_values[c]);
-                            if (!con.is_null) new_row[c] = Value::VARCHAR(con.value);
-                        }
+                    for (idx_t c = 0; c < target_types.size(); c++) {
+                        if (inserts[c] != INVALID_INDEX) new_row[c] = src_row[inserts[c]];
                     }
                     target_rows.push_back(std::move(new_row));
                 }
             }
 
             // Rebuild target table.
-            for (auto &row : target_rows) {
-                DataChunk chunk;
-                chunk.Initialize(target_types);
-                for (idx_t c = 0; c < row.size(); c++)
-                    chunk.SetValue(c, 0, row[c]);
-                new_storage->Append(chunk);
-            }
+            BulkLoadRows(*new_storage, target_types, target_rows);
             target->SetStorage(new_storage);
             continue;
         }
@@ -3191,27 +3289,8 @@ QueryResult Connection::RunStatements(const std::string &sql) {
                         for (auto &row : right_rows) {
                             final_result.rows.push_back(std::move(row));
                         }
-                    } else if (op == "UNION") {
-                        SetOpRowSet seen;
-                        for (auto &row : final_result.rows) seen.insert(row);
-                        for (auto &row : right_rows) {
-                            if (seen.insert(row).second)
-                                final_result.rows.push_back(std::move(row));
-                        }
-                    } else if (op == "INTERSECT") {
-                        SetOpRowSet rk(right_rows.begin(), right_rows.end());
-                        std::vector<std::vector<Value>> kept;
-                        for (auto &row : final_result.rows) {
-                            if (rk.count(row)) kept.push_back(std::move(row));
-                        }
-                        final_result.rows = std::move(kept);
-                    } else if (op == "EXCEPT") {
-                        SetOpRowSet rk(right_rows.begin(), right_rows.end());
-                        std::vector<std::vector<Value>> kept;
-                        for (auto &row : final_result.rows) {
-                            if (!rk.count(row)) kept.push_back(std::move(row));
-                        }
-                        final_result.rows = std::move(kept);
+                    } else if (op == "UNION" || op == "INTERSECT" || op == "EXCEPT") {
+                        ApplyDistinctSetOp(op, final_result.rows, right_rows);
                     }
                     cur = cur->set_right.get();
                 }

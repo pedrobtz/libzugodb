@@ -2,7 +2,9 @@
 //
 // Each input is SQL text, run against a small fixed schema in a new
 // in-memory database: two tables of a few rows with every type a table
-// made by SQL can hold and a NULL in each column, and a view over them.
+// made by SQL can hold and a NULL in each column, a view over them, and
+// t3, of 2049 rows, one past a chunk, with a NULL each side of the
+// boundary (Stage 10).
 // The input runs once with the engine's thread cap at 1 and once, in a
 // second database built the same way, at 2.
 //
@@ -21,6 +23,7 @@
 // Run:   build-fuzz/fuzz/sql_fuzzer fuzz/corpus/sql
 
 #include "slothdb/common/parallel.hpp"
+#include "slothdb/common/types/data_chunk.hpp"
 #include "slothdb/main/connection.hpp"
 #include "slothdb/main/database.hpp"
 
@@ -72,6 +75,24 @@ Outcome RunAt(unsigned cap, const std::string &sql) {
     Database db;
     Connection conn(db);
     for (const char *setup : kSchema) conn.Query(setup);
+    // t3(i BIGINT, k INTEGER, s VARCHAR): i = 0 .. 2048, k = i % 7, s = 's'
+    // || i % 100; rows 2047 and 2048 NULL but for i. Through the C++ API,
+    // so that each input does not parse 2049 rows of VALUES.
+    conn.Query("CREATE TABLE t3(i BIGINT, k INTEGER, s VARCHAR)");
+    for (int64_t base = 0; base < 2049; base += 2048) {
+        int64_t n = base == 0 ? 2048 : 1;
+        DataChunk chunk;
+        chunk.Initialize({LogicalType::BIGINT(), LogicalType::INTEGER(), LogicalType::VARCHAR()});
+        for (int64_t j = 0; j < n; j++) {
+            int64_t v = base + j;
+            bool null = v == 2047 || v == 2048;
+            chunk.SetValue(0, (idx_t)j, Value::BIGINT(v));
+            chunk.SetValue(1, (idx_t)j, null ? Value() : Value::INTEGER((int32_t)(v % 7)));
+            chunk.SetValue(2, (idx_t)j, null ? Value() : Value::VARCHAR("s" + std::to_string(v % 100)));
+        }
+        chunk.SetCardinality((idx_t)n);
+        conn.Append("t3", chunk);
+    }
     Outcome o;
     try {
         auto r = conn.Query(sql);
