@@ -32,7 +32,7 @@ issue closed. zugodb then moves its pin.
 | 2 | [Refuse the CSV, Parquet and JSON table functions](#stage-2--refuse-the-csv-parquet-and-json-table-functions) | 0.2.0 | ci | [#4](https://github.com/pedrobtz/libzugodb/issues/4) | [#21](https://github.com/pedrobtz/libzugodb/pull/21) | 2026-11-20 |
 | 3 | [A checksum for the database file, and format version 1001](#stage-3--a-checksum-for-the-database-file-and-format-version-1001) | 0.2.0 | ci | [#5](https://github.com/pedrobtz/libzugodb/issues/5) | [#22](https://github.com/pedrobtz/libzugodb/pull/22) | 2026-11-20 |
 | 4 | [Harden Checkpoint::Load, with a fuzz harness in CI](#stage-4--harden-checkpointload-with-a-fuzz-harness-in-ci) | 0.2.0 | + `fuzz` | [#6](https://github.com/pedrobtz/libzugodb/issues/6) | [#24](https://github.com/pedrobtz/libzugodb/pull/24) | 2026-11-20 |
-| 5 | [ThreadSanitizer in CI](#stage-5--threadsanitizer-in-ci) | 0.2.0 | + `linux-tsan` | [#7](https://github.com/pedrobtz/libzugodb/issues/7) | | |
+| 5 | [ThreadSanitizer in CI](#stage-5--threadsanitizer-in-ci) | 0.2.0 | + `linux-tsan` | [#7](https://github.com/pedrobtz/libzugodb/issues/7) | [#27](https://github.com/pedrobtz/libzugodb/pull/27) | 2026-11-20 |
 | 6 | [Conformance runner and first counts](#stage-6--conformance-runner-and-first-counts) | 0.3.0 | + `conformance` | [#10](https://github.com/pedrobtz/libzugodb/issues/10) | | |
 | 7 | [No crash and no hang on the pinned subset](#stage-7--no-crash-and-no-hang-on-the-pinned-subset) | 0.3.0 | ci | [#11](https://github.com/pedrobtz/libzugodb/issues/11) | | |
 | 8 | [No wrong answer on the pinned subset](#stage-8--no-wrong-answer-on-the-pinned-subset) | 0.3.0 | ci | [#12](https://github.com/pedrobtz/libzugodb/issues/12) | | |
@@ -313,6 +313,21 @@ of [v0.2.0](https://github.com/pedrobtz/libzugodb/issues/2).
 - `v0.2.0` is tagged and released.
 
 **Design.** [design §5](design.md#5-conformance-and-its-oracles), threads.
+
+**Deviations (2026-11-20).**
+
+- The races TSan found are fixed in this stage's pull request, one commit
+  each with its doctest, not in pull requests of their own: each is a
+  few lines, and the job could not be green without them.
+- Over an in-memory table only the window operator takes worker threads
+  (it sorts partitions on workers from 200,000 rows and two partitions);
+  GROUP BY, DISTINCT, ORDER BY, joins and aggregates run on the query's
+  thread at any size, as the planner's other parallel paths are the
+  Parquet, CSV and JSON scans'. So the loop
+  (`test/unit/execution/test_threads.cpp`) also runs those shapes over a
+  Parquet table set up through the catalog, and `ParallelExecutor`
+  through its API, which no query reaches. Every query's rows at caps 2
+  and 4 must equal those at cap 1, in every CI job.
 
 ## Stage 6 — Conformance runner and first counts
 
