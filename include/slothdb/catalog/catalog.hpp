@@ -8,6 +8,8 @@
 
 namespace zugodb {
 
+class ProviderSet;
+
 // The top-level catalog. Manages schemas, tables, and other metadata.
 // Thread-safe via mutex.
 class Catalog {
@@ -32,7 +34,13 @@ public:
     bool DropTable(const std::string &name,
                    const std::string &schema = DEFAULT_SCHEMA);
 
+    // The owning Database's providers, for the binder; NULL for a catalog
+    // made on its own (tests), which has none.
+    void SetProviders(const ProviderSet *providers) { providers_ = providers; }
+    const ProviderSet *GetProviders() const { return providers_; }
+
 private:
+    const ProviderSet *providers_ = nullptr;
     mutable std::mutex lock_;
     std::unordered_map<std::string, std::unique_ptr<SchemaCatalogEntry>> schemas_;
 };
