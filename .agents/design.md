@@ -112,17 +112,19 @@ targeted.
   files in the subset; a file that needs a directive the runner does not
   implement, an extension, or a file on disk is left out and counted as
   left out.
-- **The runner** is a C++ program in this repository, linked to the
-  engine through `Connection::Query` (L1). It replaces
-  `bench/correctness/sqllogictest/`, which ran SlothDB's published Python
-  wheel against a live DuckDB over DataFusion's corpus and so never
-  tested this tree.
+- **The runner** is a C++ program in this repository, `tools/slt/`,
+  linked to the engine through `Connection::Query` (L1, L14). It replaced
+  `bench/correctness/sqllogictest/` (removed in Stage 6), which ran
+  SlothDB's published Python wheel against a live DuckDB over
+  DataFusion's corpus and so never tested this tree.
 - **Each case is one of:** passed; refused (the engine raised an error
   where DuckDB gave a result); wrong (a result that differs); accepted
   (the engine gave a result where DuckDB raised an error); crashed; hung.
   The bar is zero wrong, crashed and hung. Refused and accepted are
   counted, and accepted cases are read: each is a listed difference or a
-  defect.
+  defect. A wrong or accepted case that follows a failed setup statement
+  of its file is counted apart, as unreliable, and the cases after a crash
+  or a hang as not run (L16).
 - **Isolation.** One file runs in one child process under a time limit,
   so a crash or a hang costs that file's remaining cases and nothing else.
 - **Threads.** The subset runs with the thread cap at 1 and at 2, and the
@@ -143,7 +145,7 @@ Removed, as SlothDB's product and not the engine: the website and
 playground under `docs/`, `packaging/`, `python/`, `cloudflare/`,
 `assets/`, `install.sh`, `scripts/build-wasm.sh`, `tools/playground/`,
 `examples/`, the performance benchmarks under `bench/`
-(`bench/correctness/` stays until Stage 6), the `llama.cpp`
+(`bench/correctness/` went in Stage 6), the `llama.cpp`
 submodule with `SLOTHDB_ASK_MODEL`, the `SLOTHDB_EDGE` and
 `SLOTHDB_BUILD_SHARED` options, and `TODO-2026-04-29.md`. Git history
 keeps all of it.
@@ -314,15 +316,100 @@ minor version.
   `std::stoull` that threw `std::out_of_range` on a length past 64 bits.
   DECIMAL and NUMERIC are not touched here: they bind to DOUBLE, filed for
   0.3.0.
+- **L14 (2026-11-20, Stage 6, Claude's implementation call).** The
+  runner, `tools/slt/`, is a library (`zugodb_slt_lib`, which the doctest
+  suite links) and a program (`zugodb_slt`), built by default except on
+  Windows (`SLOTHDB_BUILD_SLT`). It reads DuckDB's sqllogictest dialect
+  as DuckDB's own runner does at the pinned tag (`test/sqlite/
+  sqllogic_parser.cpp`, `sqllogic_test_runner.cpp`): records separated
+  by empty lines, `statement ok|error|maybe`, `query <types> [nosort|
+  rowsort|valuesort] [label]`, `hash-threshold`, `halt`, `mode skip` and
+  `unskip` (other modes only print), `loop`, `foreach` with the groups
+  `<signed>`, `<unsigned>`, `<integral>`, `<numeric>`, `<alltypes>`,
+  `skipif` and `onlyif` with `duckdb` as the engine's name, `restart` and
+  `load` with no path as a new in-memory database, and `require` where it
+  holds for this runner on 64-bit Linux and macOS alike (`64bit`,
+  `notwindows`, `notmingw`, `notmusl`, `nothreadsan`, `noforcestorage`,
+  `skip_reload`, `no_alternative_verify`, `strinline`,
+  `no_extension_autoloading`, `vector_size` up to DuckDB's 2048). A file
+  is parsed and its loops expanded before anything runs, so the driver
+  knows every case. It is left out, with the reason in `counts.tsv`, when
+  it needs any other `require` (an extension, `longdouble`, `windows`,
+  ...), another directive (`set`, `concurrentloop`, `include`, `unzip`,
+  ...), a database file (`load <path>`), named connections, a condition
+  on a loop variable, results in a file or a regex, or SQL that reads or
+  writes files or attaches databases (the file table functions, a quoted
+  path under `data/` or with a data file's extension, `COPY`, `ATTACH`,
+  DuckDB's test directories, `INSTALL` or `LOAD`).
+- **L15 (2026-11-20, Stage 6, Claude's implementation call).** A query's
+  result is compared as DuckDB's runner compares it (`result_helper.cpp`):
+  each value as DuckDB's cast to `VARCHAR` prints it (NULL as `NULL`, a
+  boolean as `1` or `0`, the empty string as `(empty)`, a NUL byte as
+  `\0`, a DOUBLE or FLOAT as DuckDB's vendored fmt 6.1.2 prints it, a
+  date with ` (BC)`, a time with its trailing zeros cut, a blob with
+  `\xNN` escapes), sorted by the sort mode, compared as a hash when the
+  recorded value is one or the query has a label, otherwise value by
+  value, one value per line or one row per line with tabs, with a column
+  count other than the type string's a wrong result. The rule for a value
+  that does not match as text depends on the engine's column: a boolean
+  matches `true`, `false`, `1` or `0`; a FLOAT or DOUBLE matches any
+  recorded number within DuckDB's tolerance (`ApproxEqual`: 1% of the
+  value plus 1e-8); an integer matches the recorded text with spaces
+  trimmed, or with a fractional part of zeros (`85.000000`), but not
+  DuckDB's own DOUBLE text (`85.0`); anything else is wrong. This is
+  DuckDB's comparison, which casts the recorded text to the result's type,
+  except that an integer column does not take a fraction DuckDB's cast
+  would round (`1.5` for 2) or its DOUBLE text. The type string itself is
+  not checked, as there: the corpus writes `I` for many DOUBLE columns.
+  So a type difference counts only where it changes the text past these
+  rules, and a DECIMAL that the engine computes as a DOUBLE (#26) is
+  wrong only where its value differs.
+- **L16 (2026-11-20, Stage 6, Claude's implementation call).** How the
+  cases of §5 are counted. A `statement ok` that fails is refused, and a
+  `statement error` that succeeds is accepted; either may leave the
+  database other than the file expects, so a later case of that file
+  (until a `restart`) that would be wrong or accepted is counted as
+  unreliable instead, with the line it follows; passed, refused,
+  crashed and hung stay what they are. A `statement maybe` passes either
+  way. A case is crashed when its child process dies during it, and hung
+  when it makes no progress for 30 seconds or its process passes 2 GiB of
+  resident memory (a statement that grows without end, as #23's); the
+  cases after either, in that file, are not run. The committed counts are
+  those of the build the `conformance` job uses: RelWithDebInfo with
+  `-DSLOTHDB_SANITIZERS=ON`, so that a use after free is a crash every
+  time and not by chance (a Release build crashed on different cases from
+  run to run); leak checking is off in the runner, since a leak is not a
+  case's outcome. The thread comparison is by class: the run at cap 2
+  must give every case the class it gets at cap 1, and the cases that do
+  not are committed in `threads.tsv` (a value read from uninitialised
+  memory differs from run to run within a class, so the values are not
+  compared). The counts are the run at cap 1.
+- **L17 (2026-11-20, Stage 6, Claude's implementation call).** A
+  `statement ok` that only sets one of DuckDB's execution settings, which
+  its tests use to reach other code paths with the same answers, is
+  neither run nor counted: `threads`, the verification and
+  `debug_*` settings, the optimizer and join-threshold settings,
+  `memory_limit`, profiling, progress bar, object cache and
+  `explain_output` (the full list is `IsNoOpSetting` in
+  `tools/slt/parser.cpp`). A setting that changes answers
+  (`default_null_order`, `ieee_floating_point_ops`, `timezone`, ...) is
+  run, and refused if the engine refuses it.
 
 ## 9. Open questions
 
-- **LQ1.** Which DuckDB tag is pinned, and which directories of `test/sql`
-  make the first subset? Proposal: the newest release at the time, and the
-  directories that need no extension and no file: `aggregate`, `filter`,
-  `join`, `order`, `subquery`, `window`, `types` for the types of
-  [zugodb §6][zdesign], `function/numeric`, `function/string` and
-  `function/date`. Settled in the runner's stage, with the counts.
+- **LQ1 (settled 2026-11-20, Stage 6).** Which DuckDB tag is pinned, and
+  which directories of `test/sql` make the first subset? DuckDB `v2.0.0`
+  (commit `d54cbbe3df17e8e5ce68312f483b4155836112aa`, released
+  2026-10-21), the newest release at least two weeks old
+  (`test/conformance/duckdb-tag`). The subset is every `.test` file (not
+  `.test_slow`) under `aggregate`, `filter`, `join`, `order`, `subquery`,
+  `window`, `types/{blob,date,decimal,float,null,numeric,string,time,
+  timestamp}` for the types of [zugodb §6][zdesign], `function/numeric`,
+  `function/string` and `function/date`: 809 files
+  (`test/conformance/subset.txt`), of which the runner leaves 63 out by
+  L14's rules and runs 746, with 20,461 cases. The counts are in
+  `test/conformance/totals.tsv` and `counts.tsv`; the job runs well under
+  ten minutes, so the subset is not cut further.
 - **LQ2.** When the engine's readers are cut, what else in `src/storage/`
   still needs zstd, snappy or miniz? [zugodb §7.5][zdesign] says the cut
   is sized first; the sizing is the first work of that stage.

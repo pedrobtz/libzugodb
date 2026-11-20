@@ -1,5 +1,19 @@
 # Changelog
 
+## libzugodb 0.3.0 (in development)
+
+- A conformance runner, `tools/slt/` (`zugodb_slt`), runs DuckDB's own
+  sqllogictest files through `Connection::Query` and classifies each case
+  as passed, refused, wrong, accepted, unreliable, crashed or hung, one
+  child process per file. The pinned subset is DuckDB v2.0.0's
+  `test/sql` under `aggregate`, `filter`, `join`, `order`, `subquery`,
+  `window`, `types` and `function/{numeric,string,date}`; its first counts
+  are committed in `test/conformance/`, and a new CI job, `conformance`,
+  fails when a run's counts differ from them. Nothing in `src/` or
+  `include/` changes.
+- Remove `bench/correctness/`, SlothDB's Python harness, which ran
+  SlothDB's published wheel rather than this tree.
+
 ## libzugodb 0.2.0
 
 A minor version, as the database file's format changes (version 1001,

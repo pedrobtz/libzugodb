@@ -378,6 +378,27 @@ reproducibly, and written down.
   under ten minutes.
 - Every `**Tests.**` line exists and was seen to fail.
 
+**Deviations (2026-11-20).**
+
+- Two counts beside §5's six (design L16): unreliable, a wrong or
+  accepted case after a setup statement of its file failed, and not run,
+  the cases after a crash or a hang in their file.
+- The time limit is per case, 30 seconds without progress, not per file,
+  so a slow file is not a hang; a child past 2 GiB of resident memory is
+  killed and its case hung too (L16).
+- The committed counts are those of an ASan and UBSan build: a Release
+  build crashed on different cases from run to run (a use after free in
+  `PhysicalOrderBy`), so its counts could not be committed (L16).
+- Caps 1 and 2 are compared by each case's class, not its values: a value
+  read from uninitialised memory differs from run to run (L16).
+- A `statement ok` that only sets one of DuckDB's execution settings
+  (`threads`, `debug_*`, optimizer and join thresholds, ...) is not run
+  (L17).
+- A `statement error`'s expected message is not compared: an error is an
+  error.
+- Design L9 moves the Parquet fixtures' `duckdb==` pin to the corpus's tag
+  once LQ1 is settled; the fixtures are not regenerated in this stage.
+
 **Design.** [§5](design.md#5-conformance-and-its-oracles); L1 and L3 in
 [§8](design.md#8-decisions); LQ1 in [§9](design.md#9-open-questions).
 

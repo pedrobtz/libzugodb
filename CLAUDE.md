@@ -37,6 +37,26 @@ build/test/slothdb_tests -ltc               # list test cases
   with high mmap randomisation stops clang 18's TSan at start; the CI job
   sets `vm.mmap_rnd_bits=28`.
 - `-DSLOTHDB_BUILD_SHELL=ON` adds the `slothdb` shell from `tools/shell/`.
+- The conformance runner `zugodb_slt` (`tools/slt/`, design §5 and L14 to
+  L17) is built by default except on Windows (`-DSLOTHDB_BUILD_SLT=OFF`
+  to skip it). The subset is DuckDB's `test/sql` at the tag in
+  `test/conformance/duckdb-tag`:
+
+  ```sh
+  test/conformance/fetch.sh                  # corpus into test/conformance/corpus/
+  cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSLOTHDB_SANITIZERS=ON
+  cmake --build build-asan -j8 --target zugodb_slt
+  test/conformance/run.sh build-asan/tools/slt/zugodb_slt           # compare with the committed counts
+  test/conformance/run.sh build-asan/tools/slt/zugodb_slt --update  # rewrite them
+  build/tools/slt/zugodb_slt file test/conformance/corpus/test/sql/join/test_join.test   # one file: each case that did not pass
+  build/tools/slt/zugodb_slt file <file> --in-process --cap 2       # in this process, for a debugger
+  ```
+
+  The committed counts (`counts.tsv`, `totals.tsv`, `failures.tsv`,
+  `threads.tsv`) come from the ASan and UBSan build, as the `conformance`
+  job's; a change to them is committed with the change that makes it.
+  `CONFORMANCE_OUT=dir` keeps a run's outputs, with `details.tsv` (why
+  each case did not pass).
 - `-DSLOTHDB_FUZZ=ON` (clang with libFuzzer; Apple clang lacks it) builds
   the harnesses in `fuzz/`; `fuzz/run.sh checkpoint_load 120
   src/storage/checkpoint.cpp <floor>` runs one as the `fuzz` CI job does.
@@ -45,10 +65,11 @@ build/test/slothdb_tests -ltc               # list test cases
 
 CI (`.github/workflows/ci.yml`) runs the suite on Linux gcc, Linux with
 ASan and UBSan, Linux with ThreadSanitizer, macOS clang, and MinGW-w64
-UCRT64, the toolchain of R's Rtools. A change must pass all five, and the
+UCRT64, the toolchain of R's Rtools. A change must pass all five, the
 `fuzz` job: libFuzzer over
 the loader, 120 s per pull request and an hour weekly, with a floor on
-its reach.
+its reach, and the `conformance` job on Linux and macOS: the subset's
+counts must equal the committed ones.
 
 ## Names
 
@@ -140,10 +161,6 @@ tag, and a new pin there. Each release gets an entry at the top of
 `CHANGELOG.md`; the entries below the "SlothDB" heading are upstream's.
 
 ## Left over from SlothDB
-
-`bench/correctness/sqllogictest/` compares against DuckDB over DataFusion's
-`.slt` corpus, but it drives the engine through `pip install slothdb`, that
-is upstream's published build and not this tree. Stage 6 replaces it.
 
 `src/main/connection.cpp` and `src/execution/physical_planner.cpp` still
 hold `#ifdef SLOTHDB_EDGE` blocks, and a few comments still mention the
