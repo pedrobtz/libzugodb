@@ -13650,6 +13650,10 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
     std::unordered_map<std::string, std::vector<AggState>> group_states;
     std::unordered_map<std::string, std::vector<Value>> group_keys_map;
     std::vector<std::string> group_order;
+    // The groups above are seeded from every build row, matched or not;
+    // one no probe row joined is no group of the join's result. It was
+    // emitted with COUNT(*) 0 (#38).
+    std::vector<char> gidx_matched(states_by_gidx.size(), 0);
 
     // PARALLEL PATH: large file + build-side GROUP BY -> split into N thread slices.
     // Each thread does full parse + probe + local aggregate into its own state array,
@@ -13675,6 +13679,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
             }
 
             idx_t num_groups = states_by_gidx.size();
+            std::vector<std::vector<char>> thread_matched(nt, std::vector<char>(num_groups, 0));
             std::vector<std::vector<std::vector<AggState>>> thread_states(nt);
             for (auto &ts : thread_states) {
                 ts.resize(num_groups);
@@ -13743,6 +13748,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
                             if (!ml || ml->empty()) continue;
                             for (idx_t build_idx : *ml) {
                                 idx_t gidx = build_to_gidx[build_idx];
+                                thread_matched[t][gidx] = 1;
                                 auto &states = ts[gidx];
                                 auto &br = build_rows[build_idx];
                                 for (idx_t a = 0; a < num_aggs; a++) {
@@ -13797,6 +13803,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
             // Merge thread-local into final states_by_gidx.
             for (unsigned int t = 0; t < nt; t++) {
                 for (idx_t g = 0; g < num_groups; g++) {
+                    if (thread_matched[t][g]) gidx_matched[g] = 1;
                     for (idx_t a = 0; a < num_aggs; a++) {
                         auto &F = states_by_gidx[g][a];
                         auto &P = thread_states[t][g][a];
@@ -13870,6 +13877,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
                 if (all_build_gkeys) {
                     // Direct array indexing - no string hashing in the hot loop.
                     idx_t gidx = build_to_gidx[build_idx];
+                    gidx_matched[gidx] = 1;
                     states_ptr = &states_by_gidx[gidx];
                 } else {
                     std::string gkey;
@@ -13964,6 +13972,7 @@ bool PhysicalHashAggregate::TryComputeFusedJoinAggregate(
         emit_states = &fallback_states;
     }
     for (idx_t gi = 0; gi < emit_group_vals->size(); gi++) {
+        if (all_build_gkeys && !gkeys.empty() && !gidx_matched[gi]) continue;
         auto &states = (*emit_states)[gi];
         auto &gvals = (*emit_group_vals)[gi];
         std::vector<Value> row;

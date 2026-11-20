@@ -163,3 +163,23 @@ TEST_CASE("Stage 8: CREATE TABLE returns DuckDB's Count") {
     CHECK(conn.Query("INSERT INTO other VALUES (1, 2)").is_count);
     CHECK_FALSE(conn.Query("SELECT 1").is_count);
 }
+
+// ---------------------------------------------------------------------------
+// The fused join and aggregate (#38, beside types/blob/
+// test_blob_operator.test:50): its groups were seeded from every build
+// row, and a key no probe row joined came out as a group with COUNT(*) 0.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stage 8: GROUP BY a join key has no group the join did not make") {
+    Database db;
+    Connection conn(db);
+    conn.Query("CREATE TABLE v (b INT, g INTEGER)");
+    conn.Query("INSERT INTO v VALUES (1, 0), (NULL, 0)");
+    conn.Query("CREATE TABLE w (b INT, g INTEGER)");
+    conn.Query("INSERT INTO w VALUES (1, 0), (2, 0)");
+    CHECK(Run(conn, "SELECT L.b, COUNT(*) FROM v L JOIN w R ON L.b=R.b GROUP BY L.b") ==
+          Rows{{"1", "1"}});
+    CHECK(Run(conn, "SELECT L.b, COUNT(*) FROM w L JOIN v R ON L.b=R.b GROUP BY L.b") ==
+          Rows{{"1", "1"}});
+    CHECK(Run(conn, "SELECT COUNT(*) FROM w L JOIN v R ON L.b=R.b WHERE L.b > 5") == Rows{{"0"}});
+}
