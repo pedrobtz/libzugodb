@@ -8,9 +8,9 @@
 
 #include "doctest.h"
 #include "../refused_files.hpp"
-#include "slothdb/catalog/catalog.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/catalog/catalog.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -266,14 +266,14 @@ void cleanup_json() {
 }
 
 std::string tmp_file(const std::string &name, const char *bytes, size_t n) {
-    auto p = fs::temp_directory_path() / ("slothdb_refused_" + name);
+    auto p = fs::temp_directory_path() / ("zugodb_refused_" + name);
     std::ofstream f(p, std::ios::binary);
     f.write(bytes, static_cast<std::streamsize>(n));
     return p.string();
 }
 
 fs::path tmp_arrow(const std::string &tag, const std::string &ext = ".arrow") {
-    auto p = fs::temp_directory_path() / ("slothdb_arrow_" + tag + ext);
+    auto p = fs::temp_directory_path() / ("zugodb_arrow_" + tag + ext);
     std::error_code ec; fs::remove(p, ec);
     // A file that starts as an Arrow IPC file does.
     std::ofstream f(p, std::ios::binary);

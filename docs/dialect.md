@@ -170,7 +170,7 @@ Operators: `+`, `-`, `*`, `/`, `%`, unary `-`, `^` (`power`), `||`,
 ### Functions a host provides
 
 These need a table the engine's host supplies
-(`include/slothdb/main/providers.hpp`, design L25 and L29). Without one
+(`include/zugodb/main/providers.hpp`, design L25 and L29). Without one
 they are refused, with the error of the list below; this repository's
 tests and conformance counts run without one.
 

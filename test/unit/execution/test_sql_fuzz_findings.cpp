@@ -4,7 +4,7 @@
 
 #include "doctest.h"
 #include "../conformance_rows.hpp"
-#include "slothdb/main/database.hpp"
+#include "zugodb/main/database.hpp"
 
 #include <fstream>
 #include <regex>

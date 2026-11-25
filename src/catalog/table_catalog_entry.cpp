@@ -1,8 +1,8 @@
-#include "slothdb/catalog/table_catalog_entry.hpp"
-#include "slothdb/storage/data_table.hpp"
-#include "slothdb/common/types/data_chunk.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/string_util.hpp"
+#include "zugodb/catalog/table_catalog_entry.hpp"
+#include "zugodb/storage/data_table.hpp"
+#include "zugodb/common/types/data_chunk.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/string_util.hpp"
 #include <unordered_set>
 
 namespace zugodb {

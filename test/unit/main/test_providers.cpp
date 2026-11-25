@@ -8,11 +8,11 @@
 
 #include "doctest.h"
 #include "../stub_providers.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/parallel.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/provider_set.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/parallel.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/provider_set.hpp"
 
 #include <algorithm>
 #include <cstdint>

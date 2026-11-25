@@ -1,9 +1,9 @@
 #include "doctest.h"
 #include <cmath>
 #include <limits>
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
-#include "slothdb/storage/checkpoint.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
+#include "zugodb/storage/checkpoint.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -16,7 +16,7 @@
 
 using namespace zugodb;
 
-static const char *TEST_DB_PATH = "test_slothdb.db";
+static const char *TEST_DB_PATH = "test_zugodb.db";
 
 // Clean up test file.
 static void cleanup() {
@@ -308,7 +308,7 @@ void CheckGoldenRows(const std::string &fixture) {
 
 TEST_CASE("Persistence - the golden file reads back its recorded rows") {
     // test/fixtures/golden_v1001.db: tools/db_fixture.sql written by the
-    // slothdb shell at format 1001 (tools/make_db_fixtures.sh).
+    // zugodb shell at format 1001 (tools/make_db_fixtures.sh).
     CheckGoldenRows("golden_v1001.db");
 }
 
@@ -417,7 +417,7 @@ TEST_CASE("Persistence - a bit flipped or a truncation anywhere is refused") {
 
 TEST_CASE("Persistence - an upstream file of format version 1 is refused") {
     // test/fixtures/format_v1.db: tools/db_fixture.sql written by the
-    // slothdb shell at 030f7b8, upstream SlothDB's format (version 1, no
+    // shell at 030f7b8, upstream SlothDB's format (version 1, no
     // checksum): tools/make_db_fixtures.sh v1.
     auto bytes = ReadBytes(FIXTURES + "format_v1.db");
     REQUIRE(bytes.size() > 8);

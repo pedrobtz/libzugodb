@@ -1,6 +1,6 @@
 #include "doctest.h"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
 
 using namespace zugodb;
 

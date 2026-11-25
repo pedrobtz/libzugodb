@@ -1,14 +1,14 @@
-#include "slothdb/execution/expression_executor.hpp"
-#include "slothdb/binder/binder.hpp"
-#include "slothdb/planner/planner.hpp"
-#include "slothdb/execution/physical_planner.hpp"
-#include "slothdb/main/query_materialize.hpp"
-#include "slothdb/catalog/catalog.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/string_util.hpp"
-#include "slothdb/common/types/string_type.hpp"
-#include "slothdb/common/types/blob.hpp"
-#include "slothdb/common/types/float_order.hpp"
+#include "zugodb/execution/expression_executor.hpp"
+#include "zugodb/binder/binder.hpp"
+#include "zugodb/planner/planner.hpp"
+#include "zugodb/execution/physical_planner.hpp"
+#include "zugodb/main/query_materialize.hpp"
+#include "zugodb/catalog/catalog.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/string_util.hpp"
+#include "zugodb/common/types/string_type.hpp"
+#include "zugodb/common/types/blob.hpp"
+#include "zugodb/common/types/float_order.hpp"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -41,10 +41,10 @@ static bool ParseFloatText(const std::string &s, double &out) {
     return pos == s.size();
 }
 
-// zuslothdb: RANDOM() and UUID() draw from this rather than rand(), which a
+// zugodb: RANDOM() and UUID() draw from this rather than rand(), which a
 // package must not call (CRAN's compiled-code check). One generator per
 // thread, seeded once from std::random_device.
-static std::mt19937_64 &SlothRng() {
+static std::mt19937_64 &EngineRng() {
     thread_local std::mt19937_64 rng{std::random_device{}()};
     return rng;
 }
@@ -2691,7 +2691,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         return;
     }
 
-    // OCTET_LENGTH(s) — byte count, identical to LENGTH today (slothdb
+    // OCTET_LENGTH(s) — byte count, identical to LENGTH today (SlothDB
     // is byte-oriented). BIT_LENGTH(s) returns byte_count * 8.
     if (name == "OCTET_LENGTH" || name == "BIT_LENGTH") {
         auto *out = result.GetData<int32_t>();
@@ -2716,7 +2716,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
 
     // ASCII(s) — code point of first byte (1-byte semantics; multibyte
-    // returns the first byte's value, matching slothdb's byte-oriented
+    // returns the first byte's value, matching SlothDB's byte-oriented
     // LEFT/RIGHT/SUBSTRING). NULL -> NULL; empty -> 0.
     if (name == "ASCII") {
         // Return the Unicode CODEPOINT of the first character (DuckDB/PG),
@@ -3767,7 +3767,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
 
     if (name == "RANDOM" || name == "RAND") {
         for (idx_t i = 0; i < count; i++) {
-            result.GetData<double>()[i] = std::uniform_real_distribution<double>(0.0, 1.0)(SlothRng());
+            result.GetData<double>()[i] = std::uniform_real_distribution<double>(0.0, 1.0)(EngineRng());
         }
         return;
     }
@@ -4014,7 +4014,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     };
 
     // AGE(ts1, ts2) — microsecond difference (ts1 - ts2) as BIGINT.
-    // Postgres returns INTERVAL; slothdb has no INTERVAL type so the
+    // Postgres returns INTERVAL; the engine has no INTERVAL type so the
     // microsecond BIGINT is the natural substitute (callers can /1e6
     // for seconds, divide by 86400e6 for days, etc.). Accepts DATE
     // and TIMESTAMP for either arg.
@@ -4242,7 +4242,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         // column), treat it as the format (Postgres / MySQL
         // DATE_FORMAT order). Otherwise it's the timestamp first
         // (DuckDB STRFTIME order).
-        // zuslothdb: the two arguments are read below without a check, so
+        // zugodb: the two arguments are read below without a check, so
         // STRFTIME(t) read past the argument list and crashed (upstream's
         // own "Advanced - STRFTIME" case). Refuse it, as AGE does.
         if (expr.arguments.size() != 2) {
@@ -4329,7 +4329,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     if (name == "CURRENT_USER" || name == "SESSION_USER" ||
         name == "USER") {
         for (idx_t i = 0; i < count; i++) {
-            result.SetValue(i, Value::VARCHAR("slothdb"));
+            result.SetValue(i, Value::VARCHAR("zugodb"));
         }
         return;
     }
@@ -4341,13 +4341,13 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
     }
     if (name == "CURRENT_DATABASE") {
         for (idx_t i = 0; i < count; i++) {
-            result.SetValue(i, Value::VARCHAR("slothdb"));
+            result.SetValue(i, Value::VARCHAR("zugodb"));
         }
         return;
     }
     if (name == "VERSION") {
         for (idx_t i = 0; i < count; i++) {
-            result.SetValue(i, Value::VARCHAR("slothdb"));
+            result.SetValue(i, Value::VARCHAR("zugodb"));
         }
         return;
     }
@@ -4435,7 +4435,7 @@ void ExpressionExecutor::ExecuteFunction(const BoundFunction &expr, DataChunk &i
         static const char hex[] = "0123456789abcdef";
         for (idx_t i = 0; i < count; i++) {
             unsigned char b[16];
-            for (int k = 0; k < 16; k++) b[k] = static_cast<unsigned char>(SlothRng()() & 0xff);
+            for (int k = 0; k < 16; k++) b[k] = static_cast<unsigned char>(EngineRng()() & 0xff);
             b[6] = (b[6] & 0x0f) | 0x40; // version 4
             b[8] = (b[8] & 0x3f) | 0x80; // variant 1
             char buf[37];

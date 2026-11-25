@@ -1,6 +1,6 @@
-#include "slothdb/execution/agg_emit_helpers.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/common/types/float_order.hpp"
+#include "zugodb/execution/agg_emit_helpers.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/common/types/float_order.hpp"
 
 #include <algorithm>
 #include <cmath>

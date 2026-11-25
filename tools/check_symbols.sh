@@ -3,7 +3,7 @@
 # zstd, snappy, fastpforlib and miniz went with the file readers. Run from
 # the repository root, after a build:
 #
-#   tools/check_symbols.sh build/src/libslothdb.a
+#   tools/check_symbols.sh build/src/libzugodb.a
 #
 # nm's output is not demangled: a C++ namespace (snappy, FastPForLib) is in
 # every mangled name it holds, defined or undefined. The vendored paths
@@ -11,7 +11,7 @@
 
 set -eu
 
-lib=${1:?usage: $0 <path to libslothdb.a>}
+lib=${1:?usage: $0 <path to libzugodb.a>}
 
 status=0
 

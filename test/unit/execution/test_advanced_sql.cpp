@@ -1,6 +1,6 @@
 #include "doctest.h"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
 
 using namespace zugodb;
 
@@ -190,7 +190,7 @@ TEST_CASE("Advanced - STRFTIME") {
     conn.Query("CREATE TABLE ts (t TIMESTAMP, b BIGINT)");
     conn.Query("INSERT INTO ts VALUES (TIMESTAMP '2024-06-15 12:30:00', 1718451000000000)");
 
-    // zuslothdb patch 0005: the one-argument form is refused, not a crash.
+    // zugodb patch 0005: the one-argument form is refused, not a crash.
     CHECK_THROWS(conn.Query("SELECT STRFTIME(t) FROM ts"));
     auto r = conn.Query("SELECT STRFTIME(t, '%Y-%m-%d') FROM ts");
     CHECK(r.GetValue(0, 0).GetValue<std::string>() == "2024-06-15");

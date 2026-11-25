@@ -1,8 +1,8 @@
 #include "doctest.h"
-#include "slothdb/common/thread_pool.hpp"
-#include "slothdb/execution/parallel_executor.hpp"
-#include "slothdb/main/database.hpp"
-#include "slothdb/main/connection.hpp"
+#include "zugodb/common/thread_pool.hpp"
+#include "zugodb/execution/parallel_executor.hpp"
+#include "zugodb/main/database.hpp"
+#include "zugodb/main/connection.hpp"
 #include <atomic>
 
 using namespace zugodb;

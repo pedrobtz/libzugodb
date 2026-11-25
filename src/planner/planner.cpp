@@ -1,5 +1,5 @@
-#include "slothdb/planner/planner.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/planner/planner.hpp"
+#include "zugodb/common/exception.hpp"
 
 namespace zugodb {
 

@@ -1,8 +1,8 @@
 #include "doctest.h"
-#include "slothdb/binder/binder.hpp"
-#include "slothdb/parser/parser.hpp"
-#include "slothdb/common/exception.hpp"
-#include "slothdb/storage/data_table.hpp"
+#include "zugodb/binder/binder.hpp"
+#include "zugodb/parser/parser.hpp"
+#include "zugodb/common/exception.hpp"
+#include "zugodb/storage/data_table.hpp"
 
 using namespace zugodb;
 

@@ -1,5 +1,5 @@
-#include "slothdb/storage/block_manager.hpp"
-#include "slothdb/common/exception.hpp"
+#include "zugodb/storage/block_manager.hpp"
+#include "zugodb/common/exception.hpp"
 #include <cstring>
 
 namespace zugodb {
@@ -26,15 +26,15 @@ void BlockManager::OpenFile(const std::string &path) {
                            "-byte header");
     }
     auto header = ReadHeader();
-    if (header.magic != SLOTHDB_MAGIC) {
+    if (header.magic != ZUGODB_MAGIC) {
         throw IOException(ErrorCode::CORRUPT_DATA,
                            "Invalid database file: bad magic number (expected \"BDLS\")");
     }
-    if (header.version != SLOTHDB_VERSION) {
+    if (header.version != ZUGODB_VERSION) {
         throw IOException(ErrorCode::CORRUPT_DATA,
                            "Unsupported database file format version " +
                            std::to_string(header.version) + "; this engine reads version " +
-                           std::to_string(SLOTHDB_VERSION) + " only");
+                           std::to_string(ZUGODB_VERSION) + " only");
     }
     // By subtraction, so a hostile header cannot overflow the sum.
     if (header.catalog_offset > file_size ||

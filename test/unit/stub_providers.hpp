@@ -24,7 +24,7 @@
 // continuation bytes, counts code points, and fails with
 // ZUGODB_PROVIDER_ERR_OTHER on text that holds the byte 0x01.
 
-#include "slothdb/main/providers.hpp"
+#include "zugodb/main/providers.hpp"
 
 #include <atomic>
 #include <cctype>

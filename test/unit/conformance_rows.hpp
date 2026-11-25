@@ -3,7 +3,7 @@
 // Rows of a query result as text, for the conformance doctests (libzugodb
 // Stages 7 and 8): NULL as "NULL", every other value as Value::ToString.
 
-#include "slothdb/main/connection.hpp"
+#include "zugodb/main/connection.hpp"
 
 #include <string>
 #include <vector>

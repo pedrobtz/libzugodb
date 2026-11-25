@@ -1,5 +1,5 @@
 #include "doctest.h"
-#include "slothdb/common/types/value.hpp"
+#include "zugodb/common/types/value.hpp"
 
 using namespace zugodb;
 
