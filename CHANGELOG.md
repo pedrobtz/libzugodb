@@ -1,6 +1,6 @@
 # Changelog
 
-## libzugodb 0.4.0 (in development)
+## libzugodb 0.4.0
 
 - The names become zugodb (Stage 12, #17; design L31). Nothing a user of
   the library sees is named after SlothDB but the credit (`LICENSE`, the
