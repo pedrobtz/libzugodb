@@ -107,6 +107,9 @@ What hardening means:
 - Every statement either parses to a tree the binder handles or is a
   parser error with a position; nothing is skipped silently.
 - A fuzz harness over SQL text, with the oracle of §5.
+- An expression is at most 256 levels high, parentheses and subqueries
+  included, so nothing that recurses over the tree overflows the stack
+  (L32).
 - Table function names leave the parser, the tokenizer and
   `connection.cpp` for one registry, when table sources arrive
   ([zugodb §16][zdesign]); not before.
@@ -964,6 +967,33 @@ minor version.
     equal.
   - Never-defined macros (`SLOTHDB_CUDA`, `SLOTHDB_METAL`) are renamed,
     not deleted with their code: removing dead code is not this stage's.
+- **L32 (2026-11-27, #65).** An expression's height is bounded.
+  - The limit is `MAX_EXPR_DEPTH`, 256, the one parentheses already had,
+    so there is one limit and one message ("Expression nesting too deep
+    (limit: 256)"). A tree of height 256 is accepted and one of 257
+    refused. A chain of 2,000 `+` answered and one of 3,000 overflowed
+    an 8 MB stack before this, so 256 leaves room for ASan's frames and
+    for worker threads, whose stacks are smaller.
+  - The height is the tree's, not the parser's recursion. A chain of
+    binary operators is built in a loop, so a counter of recursion never
+    sees it, and a counter per loop iteration misses the ancestors a
+    left-deep chain adds after a nested part is parsed:
+    `(1 + ... + (1 + ...)) + ...` multiplies across levels. Each node
+    records its height in its constructor (`ParsedExpression::height`),
+    and a subquery expression is one more than the tallest expression in
+    its statement (`Parser::ParseSubquery`), as SQLite counts a
+    subquery's height.
+  - Each loop checks the node it builds, so a chain is refused one level
+    past the limit: a tree of 2,000,000 levels, built whole and then
+    refused, overflowed the stack in its own destructor. `ParseExpression`
+    checks its result, which bounds the forms that add a constant
+    number of levels (a comparison, `IS NULL`, `LIKE`). Prefix
+    operators (`NOT`, unary `-` and `+`) count against the recursion
+    limit, since the parser itself recurses for each.
+  - Wide is not deep: an `IN` list, a `CASE`, an argument list or a
+    select list is one level however long.
+  - Statements nested in statements and long set-operation chains are
+    not bounded here; #66 has them.
 
 ## 9. Open questions
 
