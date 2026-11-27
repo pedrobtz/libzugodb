@@ -224,6 +224,11 @@ does:
 - **Unicode case** (design L22, #39): `upper` and `lower` of text past
   ASCII, `ILIKE` with a pattern past ASCII, and `length` or `reverse`
   where a grapheme cluster may span several code points.
+- **Deep expressions** (design L32, #65): an expression more than 256
+  levels high, such as 256 `+` in a row, 256 nested parentheses or
+  `NOT`s, or a subquery holding an expression 256 high. Each operator is
+  a level, and a subquery one more than the tallest expression in it; a
+  long `IN` list, `CASE` or argument list is one level.
 - **Files**: no statement reads or writes a file (design §2): the file
   table functions (`read_csv`, `read_parquet`, `read_json`, ...), a path
   used as a table, `DESCRIBE` of either, `COPY`, `ATTACH`, `INSTALL`,

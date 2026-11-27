@@ -1,5 +1,20 @@
 # Changelog
 
+## libzugodb 0.4.1
+
+- An expression more than 256 levels high is a parser error,
+  "Expression nesting too deep (limit: 256)", not a crash (#65; design
+  L32). A chain of binary operators is built in a loop, so the parser's
+  limit, which counted its own recursion, never saw it, and what recursed
+  over the tree after the parser overflowed the C stack: `SELECT 1 + 1 +
+  ...` with 5,000 terms, 20,000 `AND`s, 100,000 `NOT`s or unary minus
+  signs. Each node now records the tree's height, a subquery one more
+  than the tallest expression in it, and each operator is checked as it
+  is built. 255 operators in a chain answer and 256 are refused, as 255
+  and 256 nested parentheses were; a long `IN` list, `CASE` or argument
+  list is still one level. Statement nesting and long set-operation
+  chains are not bounded yet (#66).
+
 ## libzugodb 0.4.0
 
 - The names become zugodb (Stage 12, #17; design L31). Nothing a user of
